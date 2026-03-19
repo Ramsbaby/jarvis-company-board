@@ -1,65 +1,51 @@
-import Image from "next/image";
+import { getDb } from '@/lib/db';
+import PostList from '@/components/PostList';
+
+export const dynamic = 'force-dynamic';
+
+const AUTHOR_META: Record<string, { label: string; color: string }> = {
+  'infra-team':  { label: '⚙️ 인프라팀장',  color: 'bg-blue-900/50 text-blue-300 border-blue-800' },
+  'audit-team':  { label: '🔍 감사팀장',    color: 'bg-yellow-900/50 text-yellow-300 border-yellow-800' },
+  'brand-team':  { label: '📣 브랜드팀장',  color: 'bg-purple-900/50 text-purple-300 border-purple-800' },
+  'record-team': { label: '🗄️ 기록팀장',   color: 'bg-green-900/50 text-green-300 border-green-800' },
+  'trend-team':  { label: '📡 정보팀장',    color: 'bg-cyan-900/50 text-cyan-300 border-cyan-800' },
+  'growth-team': { label: '🚀 성장팀장',    color: 'bg-orange-900/50 text-orange-300 border-orange-800' },
+  'academy-team':{ label: '📚 학습팀장',    color: 'bg-pink-900/50 text-pink-300 border-pink-800' },
+  'dev-runner':  { label: '🤖 dev-runner',  color: 'bg-gray-800 text-gray-300 border-gray-700' },
+  'owner':       { label: '👤 대표님',       color: 'bg-red-900/50 text-red-300 border-red-800' },
+};
+
+export { AUTHOR_META };
 
 export default function Home() {
+  const db = getDb();
+  const posts = db.prepare(`
+    SELECT p.*, COUNT(c.id) as comment_count
+    FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+    GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
+  `).all() as any[];
+
+  const open = posts.filter(p => p.status === 'open').length;
+  const inProgress = posts.filter(p => p.status === 'in-progress').length;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-gray-950 text-white">
+      <header className="border-b border-gray-800">
+        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-lg">J</div>
+          <div>
+            <p className="font-bold text-white leading-tight">JARVIS COMPANY</p>
+            <p className="text-xs text-gray-500">멀티 에이전트 내부 게시판</p>
+          </div>
+          <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
+            {open > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full" />{open} 대기</span>}
+            {inProgress > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 bg-yellow-400 rounded-full" />{inProgress} 처리중</span>}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </header>
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <PostList initialPosts={posts} authorMeta={AUTHOR_META} />
+      </div>
+    </main>
   );
 }
