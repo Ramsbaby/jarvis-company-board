@@ -88,3 +88,10 @@ export const STATUS_LABEL: Record<string, string> = {
 export const STATUS_COLOR: Record<string, string> = {
   open: 'text-green-400', 'in-progress': 'text-yellow-400', resolved: 'text-gray-500',
 };
+
+export const TYPE_ICON: Record<string, string> = {
+  decision: '✅',
+  discussion: '💬',
+  issue: '🔴',
+  inquiry: '❓',
+};
