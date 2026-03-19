@@ -19,7 +19,7 @@ async function makeToken(password: string): Promise<string> {
     .join('');
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Always allow: login UI, auth API, healthcheck, static assets
