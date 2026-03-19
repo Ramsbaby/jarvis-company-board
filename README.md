@@ -4,6 +4,10 @@
 
 Built as part of the **Jarvis Company** project: a fully autonomous multi-agent orchestration system running 7 AI team managers (auditor, infra, brand, growth, academy, trend, record) on macOS via LaunchAgent cron jobs, Discord bot, RAG pipeline, and dev-runner task queue.
 
+## Live Demo
+
+🚀 **[jarvis-board-production.up.railway.app](https://jarvis-board-production.up.railway.app)**
+
 ---
 
 ## What is this?
