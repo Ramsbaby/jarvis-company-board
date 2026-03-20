@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
@@ -75,7 +75,8 @@ function PostListInner({
   const [authorFilter, setAuthorFilter] = useState(searchParams.get('author') || '');
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || '');
   const [channelFilter, setChannelFilter] = useState(searchParams.get('channel') || '');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments'>('newest');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments' | 'priority'>('newest');
+  const [visibleCount, setVisibleCount] = useState(10);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
 
   // Shared 1-second clock — drives all countdown cards
@@ -130,6 +131,7 @@ function PostListInner({
   // #1 Debounced search
   useEffect(() => {
     clearTimeout(searchDebounce.current);
+    setVisibleCount(10);
     if (!searchQuery.trim()) {
       setSearchResults(null);
       setSearching(false);
@@ -165,6 +167,7 @@ function PostListInner({
     setAuthorFilter(searchParams.get('author') || '');
     setTagFilter(searchParams.get('tag') || '');
     setChannelFilter(searchParams.get('channel') || '');
+    setVisibleCount(10);
   }, [searchParams]);
 
   useEffect(() => {
@@ -249,8 +252,19 @@ function PostListInner({
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'comments') return (b.comment_count || 0) - (a.comment_count || 0);
     if (sortBy === 'oldest') return new Date(a.created_at + 'Z').getTime() - new Date(b.created_at + 'Z').getTime();
+    if (sortBy === 'priority') {
+      const order = { urgent: 0, high: 1, medium: 2, low: 3 };
+      return (order[a.priority as keyof typeof order] ?? 4) - (order[b.priority as keyof typeof order] ?? 4);
+    }
     return new Date(b.created_at + 'Z').getTime() - new Date(a.created_at + 'Z').getTime();
   });
+
+  const uniqueAuthors = useMemo(() =>
+    [...new Set(posts.map((p: any) => p.author))].filter(a => authorMeta[a as string]),
+    [posts, authorMeta]
+  );
+
+  const visible = sorted.slice(0, visibleCount);
 
   const hasFilter = !!(typeFilter || statusFilter || authorFilter || tagFilter || channelFilter || showBookmarksOnly);
   const isSearching = !!searchQuery.trim();
@@ -262,6 +276,7 @@ function PostListInner({
     setTagFilter('');
     setChannelFilter('');
     setShowBookmarksOnly(false);
+    setVisibleCount(10);
     router.replace('/', { scroll: false });
   }
 
@@ -396,6 +411,29 @@ function PostListInner({
             )}
           </div>
 
+          {/* Row 1b — Agent filter chips */}
+          {uniqueAuthors.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap">
+              {uniqueAuthors.slice(0, 8).map((author: string) => {
+                const meta = authorMeta[author];
+                if (!meta) return null;
+                return (
+                  <button
+                    key={author}
+                    onClick={() => { setAuthorFilter(authorFilter === author ? '' : author); pushFilter(typeFilter, statusFilter, authorFilter === author ? '' : author, tagFilter); setVisibleCount(10); }}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+                      authorFilter === author
+                        ? 'bg-indigo-100 border-indigo-300 text-indigo-700'
+                        : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-300'
+                    }`}
+                  >
+                    {meta.emoji} {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Row 2 — 상태 + 정렬/알림/북마크 */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide shrink-0 w-7">상태</span>
@@ -448,12 +486,13 @@ function PostListInner({
               )}
               <select
                 value={sortBy}
-                onChange={e => setSortBy(e.target.value as any)}
+                onChange={e => { setSortBy(e.target.value as any); setVisibleCount(10); }}
                 className="text-xs border border-zinc-200 rounded-lg px-2 py-1 bg-white text-zinc-600 focus:outline-none hover:border-zinc-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all cursor-pointer"
               >
                 <option value="newest">최신순</option>
                 <option value="oldest">오래된순</option>
                 <option value="comments">댓글 많은순</option>
+                <option value="priority">우선순위순</option>
               </select>
             </div>
           </div>
@@ -506,7 +545,7 @@ function PostListInner({
           </div>
         ) : (
           <div className="space-y-2">
-            {sorted.map((post: any) => {
+            {visible.map((post: any) => {
               const meta = authorMeta[post.author] ?? {
                 label: post.author_display || post.author,
                 color: 'bg-zinc-100 text-zinc-600 border-zinc-200',
@@ -721,6 +760,16 @@ function PostListInner({
             })}
           </div>
         )}
+        {/* Load-more button */}
+        {sorted.length > visibleCount && (
+          <button
+            onClick={() => setVisibleCount(n => n + 10)}
+            className="w-full py-3 text-sm text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 rounded-xl bg-white hover:bg-indigo-50 transition-all font-medium"
+          >
+            더 보기 ({sorted.length - visibleCount}개 남음)
+          </button>
+        )}
+
         {/* #5 Infinite scroll sentinel */}
         {!searchQuery.trim() && (
           <div ref={sentinelRef} className="py-4 text-center">
