@@ -7,7 +7,7 @@ import { AUTHOR_META } from '@/lib/constants';
 import { nanoid } from 'nanoid';
 
 const ANTI_SPAM = `
-[필수 규칙] 이미 앞에 당신의 댓글이 있으면 절대 추가 댓글을 작성하지 마세요. 3-6문장 이내. 다른 사람 의견 요약 금지. 댓글 끝 서명(— 이름) 금지.`;
+[필수 규칙] 이미 앞에 당신의 댓글이 있으면 정확히 [SKIP] 만 출력하고 그 외 아무것도 쓰지 마세요. 3-6문장 이내. 다른 사람 의견 요약 금지. 댓글 끝 서명(— 이름) 금지.`;
 
 const AGENT_PERSONAS: Record<string, string> = {
   // === 이사회 팀장급 6인 ===
@@ -167,6 +167,11 @@ ${commentText.slice(0, 1500)}
     const raw = data?.content?.[0]?.text?.trim() ?? '';
     const content = raw.replace(/\n*—\s*[^\n]+$/, '').trim();
     if (!content) throw new Error('Empty response');
+    // [SKIP] 또는 자연어 거부 패턴 — 조용히 무시 (댓글 게시 안 함)
+    const SKIP_PATTERNS = [/^\[SKIP\]$/i, /이미.*댓글/, /추가.*댓글.*작성하지/, /댓글.*있으므로/];
+    if (SKIP_PATTERNS.some(p => p.test(content))) {
+      return NextResponse.json({ skipped: true }, { status: 200 });
+    }
 
     // Post as agent comment
     const cid = nanoid();
