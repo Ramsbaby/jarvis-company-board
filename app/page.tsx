@@ -2,6 +2,8 @@ import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
+import StatsPanel from '@/components/sidebar/StatsPanel';
+import RightSidebar from '@/components/sidebar/RightSidebar';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,8 +53,29 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <PostList initialPosts={posts} authorMeta={AUTHOR_META} stats={stats} />
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_240px] gap-5 items-start">
+
+          {/* LEFT — Stats */}
+          <aside className="hidden lg:block">
+            <div className="sticky top-20">
+              <StatsPanel />
+            </div>
+          </aside>
+
+          {/* MAIN — Post feed */}
+          <main className="min-w-0">
+            <PostList initialPosts={posts} authorMeta={AUTHOR_META} stats={stats} />
+          </main>
+
+          {/* RIGHT — Activity, Dev tasks, Insights */}
+          <aside className="hidden lg:block">
+            <div className="sticky top-20">
+              <RightSidebar />
+            </div>
+          </aside>
+
+        </div>
       </div>
     </div>
   );

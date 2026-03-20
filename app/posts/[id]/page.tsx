@@ -8,6 +8,7 @@ import { makeToken } from '@/lib/auth';
 import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
 import CountdownTimer from '@/components/CountdownTimer';
+import RelatedPosts from '@/components/sidebar/RelatedPosts';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     <main className="bg-gray-50 min-h-screen">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href="/"
             className="text-gray-500 hover:text-gray-900 flex items-center gap-1.5 text-sm transition-colors"
@@ -65,69 +66,111 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        {/* Post card */}
-        <article className="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm">
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-5 items-start">
 
-          {/* Type context banner */}
-          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-4 ${TYPE_COLOR[post.type] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-            <span>{TYPE_ICON[post.type]}</span>
-            <span className="font-medium">{TYPE_LABELS[post.type]}</span>
-            <span className="opacity-40">·</span>
-            <span className="opacity-70">{TYPE_CONTEXT[post.type]}</span>
-          </div>
+          {/* Main content */}
+          <div className="min-w-0">
+            {/* Post card */}
+            <article className="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm">
 
-          {/* Author + status */}
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium bg-gray-100 text-gray-700 border-gray-200">
-              {meta.emoji} {meta.label}
-            </span>
-            {meta.description && (
-              <span className="text-xs text-gray-400">{meta.description}</span>
-            )}
-            <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${STATUS_STYLE[post.status] ?? 'text-gray-500 bg-gray-100 border-gray-200'}`}>
-              {STATUS_LABEL[post.status]}
-            </span>
-          </div>
-
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-gray-900 mb-3 leading-snug">{post.title}</h1>
-
-          {/* Meta line */}
-          <p className="text-gray-400 text-sm mb-4">
-            {timeAgo(post.created_at)} · {post.created_at.slice(0, 10)} 작성
-          </p>
-
-          {/* Countdown banner (active posts only) */}
-          {isActive && (
-            <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 mb-6">
-              <CountdownTimer expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()} variant="ring" />
-              <div>
-                <p className="text-gray-800 font-semibold">토론 진행 중</p>
-                <p className="text-gray-500 text-sm mt-0.5">남은 시간 안에 의견을 나눠주세요</p>
+              {/* Type context banner */}
+              <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-4 ${TYPE_COLOR[post.type] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                <span>{TYPE_ICON[post.type]}</span>
+                <span className="font-medium">{TYPE_LABELS[post.type]}</span>
+                <span className="opacity-40">·</span>
+                <span className="opacity-70">{TYPE_CONTEXT[post.type]}</span>
               </div>
-            </div>
-          )}
 
-          {/* Tags */}
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              {tags.map((tag: string) => (
-                <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md border border-gray-200">
-                  #{tag}
+              {/* Author + status */}
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium bg-gray-100 text-gray-700 border-gray-200">
+                  {meta.emoji} {meta.label}
                 </span>
-              ))}
-            </div>
-          )}
+                {meta.description && (
+                  <span className="text-xs text-gray-400">{meta.description}</span>
+                )}
+                <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${STATUS_STYLE[post.status] ?? 'text-gray-500 bg-gray-100 border-gray-200'}`}>
+                  {STATUS_LABEL[post.status]}
+                </span>
+              </div>
 
-          {/* Content — markdown */}
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
-            <MarkdownContent content={post.content} />
+              {/* Title */}
+              <h1 className="text-2xl font-bold text-gray-900 mb-3 leading-snug">{post.title}</h1>
+
+              {/* Meta line */}
+              <p className="text-gray-400 text-sm mb-4">
+                {timeAgo(post.created_at)} · {post.created_at.slice(0, 10)} 작성
+              </p>
+
+              {/* Countdown banner (active posts only) */}
+              {isActive && (
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 mb-6">
+                  <CountdownTimer expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()} variant="ring" />
+                  <div>
+                    <p className="text-gray-800 font-semibold">토론 진행 중</p>
+                    <p className="text-gray-500 text-sm mt-0.5">남은 시간 안에 의견을 나눠주세요</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {tags.map((tag: string) => (
+                    <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md border border-gray-200">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Content — markdown */}
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
+                <MarkdownContent content={post.content} />
+              </div>
+            </article>
+
+            {/* Comments */}
+            <PostComments postId={id} initialComments={comments} isOwner={isOwner} />
           </div>
-        </article>
 
-        {/* Comments */}
-        <PostComments postId={id} initialComments={comments} isOwner={isOwner} />
+          {/* Right sidebar */}
+          <aside className="hidden lg:block">
+            <div className="sticky top-20 space-y-3">
+              {/* Post quick stats */}
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">포스트 정보</p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">유형</span>
+                    <span className="font-medium text-gray-700">{TYPE_LABELS[post.type] ?? post.type}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">상태</span>
+                    <span className="font-medium text-gray-700">{STATUS_LABEL[post.status]}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">댓글</span>
+                    <span className="font-medium text-gray-700">{comments.length}개</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">작성자</span>
+                    <span className="font-medium text-gray-700">{post.author_display}</span>
+                  </div>
+                  {post.resolved_at && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">결론일</span>
+                      <span className="font-medium text-gray-700">{post.resolved_at.slice(0, 10)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <RelatedPosts postId={id} />
+            </div>
+          </aside>
+
+        </div>
       </div>
     </main>
   );

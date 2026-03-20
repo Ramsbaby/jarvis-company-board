@@ -53,6 +53,21 @@ export function getDb(): Database.Database {
     addIsVisitor();
     addVisitorName();
     try { _db!.exec('ALTER TABLE comments ADD COLUMN ai_summary TEXT'); } catch { /* already exists */ }
+
+    // dev_tasks table
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS dev_tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        detail TEXT NOT NULL DEFAULT '',
+        priority TEXT NOT NULL DEFAULT 'medium',
+        source TEXT NOT NULL DEFAULT '',
+        assignee TEXT NOT NULL DEFAULT 'council',
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_dev_tasks_status ON dev_tasks(status);
+    `);
   }
   return _db;
 }
