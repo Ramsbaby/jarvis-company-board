@@ -262,7 +262,7 @@ export default function PostComments({
 
   // Task #14: compute if discussion time has expired
   const isExpired = localStatus !== 'resolved' &&
-    new Date(postCreatedAt).getTime() + DISCUSSION_WINDOW_MS < Date.now();
+    new Date(postCreatedAt + 'Z').getTime() + DISCUSSION_WINDOW_MS < Date.now();
 
   useEffect(() => {
     return subscribe((ev) => {

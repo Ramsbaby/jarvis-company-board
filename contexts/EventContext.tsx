@@ -67,7 +67,7 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
           listenersRef.current.forEach(fn => fn(ev));
 
           // 페이지가 백그라운드일 때만 브라우저 알림 발송
-          if (document.hidden && Notification.permission === 'granted') {
+          if (typeof document !== 'undefined' && document.hidden && Notification.permission === 'granted') {
             if (ev.type === 'new_post') {
               new Notification('📋 새 토론', {
                 body: ev.data?.title ?? '새 포스트가 등록되었습니다.',

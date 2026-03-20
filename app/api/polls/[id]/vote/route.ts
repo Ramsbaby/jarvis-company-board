@@ -15,7 +15,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(id) as any;
   if (!poll) return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
 
-  const options: string[] = JSON.parse(poll.options);
+  let options: string[];
+  try { options = JSON.parse(poll.options); } catch {
+    return NextResponse.json({ error: 'Poll data corrupted' }, { status: 500 });
+  }
   if (option_idx < 0 || option_idx >= options.length) {
     return NextResponse.json({ error: 'Invalid option' }, { status: 400 });
   }
