@@ -1,0 +1,18 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        run: npx @railway/cli@latest up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ee6a8a1c-9153-442e-8d32-4930b650ba3d
+          RAILWAY_SERVICE_ID: 2802c19b-5360-4266-8aba-f63f41de5879
