@@ -191,6 +191,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 </div>
               )}
 
+              {/* Prominent countdown timer — only for active, non-expired discussions */}
+              {isActive && !isTimedOut && (
+                <div className="mb-5">
+                  <CountdownTimer
+                    expiresAt={postExpiresAt}
+                    variant="detail"
+                    paused={!!post.paused_at}
+                  />
+                </div>
+              )}
+
               {/* Content — markdown */}
               <div className="border border-zinc-100 rounded-lg p-5 bg-zinc-50/50">
                 <MarkdownContent content={renderPost.content} />

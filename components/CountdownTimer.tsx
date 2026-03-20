@@ -4,7 +4,7 @@ import { DISCUSSION_WINDOW_MS } from '@/lib/constants';
 
 interface CountdownTimerProps {
   expiresAt: string;
-  variant?: 'badge' | 'bar' | 'ring';
+  variant?: 'badge' | 'bar' | 'ring' | 'detail' | 'strip';
   className?: string;
   expiredLabel?: string;  // default '토론 종료'
   paused?: boolean;       // shows paused state
@@ -72,6 +72,70 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
         <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
         ⏱ {info.label} 남음
       </span>
+    );
+  }
+
+  /* ── Strip variant (for post cards — visible countdown line) ── */
+  if (variant === 'strip') {
+    if (info.expired || paused) return null;
+    const color = isCritical
+      ? 'bg-red-50 border-red-200 text-red-700'
+      : info.color === 'amber' ? 'bg-amber-50 border-amber-200 text-amber-700'
+      : 'bg-emerald-50 border-emerald-200 text-emerald-700';
+    const dot = isCritical ? 'bg-red-500 animate-ping' : info.color === 'amber' ? 'bg-amber-400' : 'bg-emerald-500';
+    return (
+      <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold tabular-nums ${color} ${className}`}>
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+        ⏱ {info.label} 남음
+      </div>
+    );
+  }
+
+  /* ── Detail variant (full-width banner, for post detail content area) ── */
+  if (variant === 'detail') {
+    if (paused) {
+      return (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 ${className}`}>
+          <span className="text-xl">⏸</span>
+          <div>
+            <p className="text-xs font-semibold text-amber-700">토론 일시정지</p>
+            <p className="text-xs text-amber-500">대표님이 재개하면 계속됩니다</p>
+          </div>
+        </div>
+      );
+    }
+    if (info.expired) return null;
+    const sec = (info as any).sec ?? 0;
+    const bgGrad = isCritical
+      ? 'bg-gradient-to-r from-red-500 to-rose-600'
+      : info.color === 'amber' ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+      : 'bg-gradient-to-r from-emerald-500 to-teal-600';
+    const radius = 14;
+    const circ = 2 * Math.PI * radius;
+    const dash = (info.pct / 100) * circ;
+    return (
+      <div className={`relative flex items-center justify-between px-5 py-3 rounded-xl text-white overflow-hidden ${bgGrad} ${isCritical ? 'animate-pulse' : ''} ${className}`}>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">⏱</span>
+          <div>
+            <p className="text-[11px] font-medium opacity-80">토론 마감까지</p>
+            <p className={`font-bold tabular-nums tracking-tight leading-none ${isCritical ? 'text-3xl' : 'text-2xl'}`}>
+              {String(info.min).padStart(2, '0')}:{String(sec).padStart(2, '0')}
+            </p>
+          </div>
+        </div>
+        <svg className="w-12 h-12 -rotate-90 opacity-80" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r={radius} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
+          <circle cx="18" cy="18" r={radius} fill="none" stroke="white" strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${circ}`}
+            style={{ transition: 'stroke-dasharray 1s linear' }}
+          />
+        </svg>
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/15">
+          <div className="h-full bg-white/50 transition-all duration-1000" style={{ width: `${info.pct}%` }} />
+        </div>
+      </div>
     );
   }
 

@@ -308,14 +308,40 @@ export default function PostComments({
       replyMap[c.parent_id].push(c);
     }
   }
+
+  // Reaction rankings — top 3 non-resolution root comments by total reaction count
+  const reactionTotals: Record<string, number> = {};
+  for (const [cid, emojiMap] of Object.entries(reactions)) {
+    reactionTotals[cid] = Object.values(emojiMap).reduce((s, { count }) => s + count, 0);
+  }
+  const rankMap: Record<string, 1 | 2 | 3> = {};
+  comments
+    .filter(c => !c.parent_id && !c.is_resolution && (reactionTotals[c.id] ?? 0) > 0)
+    .sort((a, b) => (reactionTotals[b.id] ?? 0) - (reactionTotals[a.id] ?? 0))
+    .slice(0, 3)
+    .forEach((c, i) => { rankMap[c.id] = (i + 1) as 1 | 2 | 3; });
+
+  const RANK_MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const RANK_STYLE: Record<number, string> = {
+    1: 'border-yellow-300 bg-yellow-50/60',
+    2: 'border-slate-300 bg-slate-50/60',
+    3: 'border-amber-300 bg-amber-50/40',
+  };
+
   // #18 AI vs 인간 탭
   const [viewTab, setViewTab] = useState<'all' | 'ai' | 'human'>('all');
 
-  const rootComments = comments.filter(c => {
+  const baseRootComments = comments.filter(c => {
     if (c.parent_id) return false;
     if (viewTab === 'ai') return !c.is_visitor;
     if (viewTab === 'human') return !!c.is_visitor;
     return true;
+  });
+  // Ranked comments float to top
+  const rootComments = [...baseRootComments].sort((a, b) => {
+    const ra = rankMap[a.id] ?? 99;
+    const rb = rankMap[b.id] ?? 99;
+    return ra - rb;
   });
 
   const agentComments = comments.filter(c => !c.is_visitor);
@@ -374,6 +400,7 @@ export default function PostComments({
     }
 
     const isBest = Boolean(c.is_best);
+    const rank = rankMap[c.id];
     const isOwnerComment = c.author === 'owner';
     const badgeClass = isOwnerComment
       ? 'bg-amber-50 text-amber-700 border-amber-200'
@@ -391,6 +418,8 @@ export default function PostComments({
         className={`flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${
           isReply
             ? 'ml-8 mt-2 border border-l-2 border-l-indigo-200 border-gray-100'
+            : rank
+            ? `border border-l-4 ${RANK_STYLE[rank]} ${rank === 1 ? 'border-l-yellow-400' : rank === 2 ? 'border-l-slate-400' : 'border-l-amber-500'}`
             : isBest
             ? 'border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/30'
             : `border border-gray-100 border-l-4 ${accentBorder} hover:border-gray-200`
@@ -432,6 +461,15 @@ export default function PostComments({
                 )}
               </>
             ) : null}
+            {rank && (
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold border ${
+                rank === 1 ? 'bg-yellow-50 border-yellow-300 text-yellow-700' :
+                rank === 2 ? 'bg-slate-50 border-slate-300 text-slate-600' :
+                'bg-amber-50 border-amber-300 text-amber-700'
+              }`}>
+                {RANK_MEDAL[rank]} {rank === 1 ? '금' : rank === 2 ? '은' : '동'}
+              </span>
+            )}
             {isBest && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-semibold">
                 ⭐ 베스트
@@ -578,6 +616,38 @@ export default function PostComments({
           <div className="flex-1">
             <p className="font-semibold text-amber-800 text-sm">토론 일시정지 중</p>
             <p className="text-amber-600 text-xs mt-0.5">에이전트 댓글이 차단됩니다. 대표님이 재개하면 토론이 계속됩니다.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Best comment leaderboard — shown when discussion has reaction votes */}
+      {Object.keys(rankMap).length > 0 && postStatus !== 'resolved' && (
+        <div className="mb-4 rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900">
+            <span className="text-sm">🏆</span>
+            <span className="text-white font-semibold text-sm">반응 TOP {Object.keys(rankMap).length}</span>
+            <span className="ml-auto text-zinc-400 text-xs">리액션 기준 자동 집계</span>
+          </div>
+          <div className="divide-y divide-zinc-100 bg-white">
+            {Object.entries(rankMap)
+              .sort(([, a], [, b]) => a - b)
+              .map(([cid, r]) => {
+                const c = comments.find(x => x.id === cid);
+                if (!c) return null;
+                const total = reactionTotals[cid] ?? 0;
+                return (
+                  <div key={cid} className={`flex items-start gap-3 px-4 py-3 ${r === 1 ? 'bg-yellow-50/60' : r === 2 ? 'bg-slate-50/60' : 'bg-amber-50/40'}`}>
+                    <span className="text-xl mt-0.5 flex-shrink-0">{RANK_MEDAL[r]}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-zinc-500 font-medium mb-0.5">{c.author_display}</p>
+                      <p className="text-sm text-zinc-800 line-clamp-2">{c.content?.replace(/[#*`]/g, '').slice(0, 120)}</p>
+                    </div>
+                    <span className="flex-shrink-0 text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded-full">
+                      👍 {total}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}

@@ -522,6 +522,13 @@ function PostListInner({
                         <p className="text-xs text-zinc-500 leading-relaxed mb-3 line-clamp-2">{preview}</p>
                       )}
 
+                      {/* Countdown strip — visible real-time countdown for active posts */}
+                      {!isResolved && !isTimedOut && (
+                        <div className="mb-2.5">
+                          <CountdownTimer expiresAt={expiresAt} variant="strip" paused={post.paused_at != null} />
+                        </div>
+                      )}
+
                       {/* #2 Tags */}
                       {tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-2">
@@ -581,13 +588,6 @@ function PostListInner({
                           <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_EXTRA[displayStatus] ?? STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
                           {STATUS_LABEL_KO[displayStatus]}
                         </span>
-                        {!isResolved && !isTimedOut && (
-                          <CountdownTimer
-                            expiresAt={expiresAt}
-                            variant="badge"
-                            paused={post.paused_at != null}
-                          />
-                        )}
                         {post.status !== 'resolved' ? (
                           <span className="ml-auto text-xs px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-500 flex items-center gap-1">
                             💬 {post.comment_count || 0}개 의견
