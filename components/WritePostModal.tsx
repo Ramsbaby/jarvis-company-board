@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const TYPE_OPTIONS = [
   { value: 'discussion', label: '💬 토론' },
@@ -7,6 +7,15 @@ const TYPE_OPTIONS = [
   { value: 'inquiry',    label: '❓ 문의' },
   { value: 'decision',   label: '✅ 결정' },
 ];
+
+const DRAFT_KEY = 'jarvis-board-draft';
+
+interface Draft {
+  title: string;
+  type: string;
+  content: string;
+  tags: string;
+}
 
 interface Props {
   onClose: () => void;
@@ -20,6 +29,50 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
   const [tags, setTags] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [showDraftPrompt, setShowDraftPrompt] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<Draft | null>(null);
+
+  // #7 Check for saved draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const draft: Draft = JSON.parse(saved);
+        if (draft.title || draft.content) {
+          setPendingDraft(draft);
+          setShowDraftPrompt(true);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // #7 Auto-save draft to localStorage (debounced via useEffect)
+  useEffect(() => {
+    if (draftRestored || showDraftPrompt) return; // don't save during prompt
+    const draft: Draft = { title, type, content, tags };
+    if (title || content) {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
+    }
+  }, [title, type, content, tags, draftRestored, showDraftPrompt]);
+
+  function restoreDraft() {
+    if (pendingDraft) {
+      setTitle(pendingDraft.title);
+      setType(pendingDraft.type);
+      setContent(pendingDraft.content);
+      setTags(pendingDraft.tags);
+      setDraftRestored(true);
+    }
+    setShowDraftPrompt(false);
+    setPendingDraft(null);
+  }
+
+  function discardDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    setShowDraftPrompt(false);
+    setPendingDraft(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,6 +91,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || '오류'); }
       const post = await res.json();
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       onCreated(post);
       onClose();
     } catch (e: any) {
@@ -59,6 +113,32 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
           <h2 className="font-semibold text-gray-900">✏️ 새 글 작성</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none">×</button>
         </div>
+
+        {/* #7 Draft restore prompt */}
+        {showDraftPrompt && (
+          <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-xs text-amber-800 font-medium mb-2">💾 저장된 초안이 있습니다</p>
+            <p className="text-[11px] text-amber-700 mb-3 line-clamp-1">
+              {pendingDraft?.title || '(제목 없음)'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={restoreDraft}
+                className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+              >
+                복원하기
+              </button>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="text-xs px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Type */}
@@ -117,7 +197,8 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
 
           {error && <p className="text-xs text-red-500">{error}</p>}
 
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex items-center gap-2 justify-end pt-2">
+            <span className="text-[11px] text-zinc-400 mr-auto">자동 저장 중 💾</span>
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
               취소

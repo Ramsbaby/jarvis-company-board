@@ -40,6 +40,21 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
+  // /api/guest → set guest cookie and redirect home (handled here in Edge runtime,
+  // not in the route handler, to avoid redirect+Set-Cookie instability in Next.js)
+  if (pathname === '/api/guest') {
+    const gt = guestToken ?? 'public';
+    const homeUrl = new URL('/', req.url); // req.url has correct public origin from Railway
+    const res = NextResponse.redirect(homeUrl);
+    res.cookies.set(GUEST_COOKIE, gt, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+      path: '/',
+    });
+    return res;
+  }
+
   // Allow guest cookie holders to pass (read-only access)
   // GUEST_TOKEN defaults to 'public' if not set — guest mode always works
   const effectiveGuestToken = guestToken ?? 'public';

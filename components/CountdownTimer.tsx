@@ -5,6 +5,8 @@ interface CountdownTimerProps {
   expiresAt: string;
   variant?: 'badge' | 'bar' | 'ring';
   className?: string;
+  expiredLabel?: string;  // default '토론 종료'
+  paused?: boolean;       // shows paused state
 }
 
 function getTimeInfo(expiresAt: string) {
@@ -27,7 +29,7 @@ function getTimeInfo(expiresAt: string) {
   return { expired: false, label, pct, color, min, sec };
 }
 
-export default function CountdownTimer({ expiresAt, variant = 'badge', className = '' }: CountdownTimerProps) {
+export default function CountdownTimer({ expiresAt, variant = 'badge', className = '', expiredLabel, paused }: CountdownTimerProps) {
   const [info, setInfo] = useState(() => getTimeInfo(expiresAt));
 
   useEffect(() => {
@@ -41,11 +43,18 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
 
   /* ── Badge variant (default, for post detail) ── */
   if (variant === 'badge') {
+    if (paused) {
+      return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 border border-amber-200 text-amber-600 ${className}`}>
+          <span>⏸</span> 일시정지
+        </span>
+      );
+    }
     if (info.expired) {
       return (
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 border border-gray-200 ${className}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-          토론 종료
+          {expiredLabel ?? '토론 종료'}
         </span>
       );
     }
@@ -55,16 +64,28 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
       ? 'bg-red-50 border-red-300'
       : info.color === 'green' ? 'bg-emerald-50 border-emerald-200' : info.color === 'amber' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
     const critical = isCritical ? 'animate-countdown-critical' : '';
+    // Red state (< 5min): font-bold for more impact
+    const fontWeight = info.color === 'red' ? 'font-bold' : 'font-medium';
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${bgColor} ${textColor} ${critical} ${className}`}>
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ${fontWeight} border ${bgColor} ${textColor} ${critical} ${className}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
         ⏱ {info.label} 남음
       </span>
     );
   }
 
-  /* ── Bar variant (for post cards — 3px bar at card bottom) ── */
+  /* ── Bar variant (for post cards — 4px bar at card bottom) ── */
   if (variant === 'bar') {
+    if (paused) {
+      return (
+        <div className={`w-full rounded-b-xl overflow-hidden ${className}`} style={{ height: '4px' }}>
+          <div
+            className="bg-amber-200"
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+      );
+    }
     const barClass = info.expired ? 'countdown-bar countdown-bar-expired' :
       isCritical ? 'countdown-bar' :
       info.color === 'green' ? 'countdown-bar countdown-bar-green' :
@@ -72,7 +93,7 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
       'countdown-bar countdown-bar-red';
     const criticalBarStyle = isCritical ? { background: '#ef4444' } : {};
     return (
-      <div className={`w-full bg-gray-100 rounded-b-xl overflow-hidden ${className}`} style={{ height: '3px' }}>
+      <div className={`w-full bg-gray-100 rounded-b-xl overflow-hidden ${className}`} style={{ height: '4px' }}>
         <div
           className={`${barClass} ${isCritical ? 'animate-countdown-critical' : ''}`}
           style={{ width: info.expired ? '100%' : `${info.pct}%`, height: '100%', transition: 'width 1s linear', ...criticalBarStyle }}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
@@ -36,6 +36,17 @@ interface Stats {
   resolved: number;
 }
 
+function isHot(post: any): boolean {
+  const ageMs = Date.now() - new Date(post.created_at).getTime();
+  const ageHours = ageMs / (1000 * 60 * 60);
+  return post.comment_count >= 5 && ageHours < 24;
+}
+
+function parseTags(raw: any): string[] {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
 function PostListInner({
   initialPosts,
   authorMeta,
@@ -52,21 +63,79 @@ function PostListInner({
   const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || '');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [authorFilter, setAuthorFilter] = useState(searchParams.get('author') || '');
+  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || '');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments'>('newest');
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
 
+  // #11 Bookmarks (localStorage)
+  const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
+  const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('jarvis-board-bookmarks');
+      if (stored) setBookmarks(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
+
+  function toggleBookmark(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setBookmarks(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      localStorage.setItem('jarvis-board-bookmarks', JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  // #5 Infinite scroll
+  const [cursor, setCursor] = useState<string | null>(
+    initialPosts.length >= 50 ? (initialPosts[initialPosts.length - 1]?.id ?? null) : null
+  );
+  const [hasMore, setHasMore] = useState(initialPosts.length >= 50);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // #1 Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   const { subscribe } = useEvent();
 
-  // Task #15: initialize notification permission state on mount
   useEffect(() => {
     if ('Notification' in window) setNotifPerm(Notification.permission);
   }, []);
 
-  function pushFilter(t: string, s: string, a: string) {
+  // #1 Debounced search
+  useEffect(() => {
+    clearTimeout(searchDebounce.current);
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/posts?search=${encodeURIComponent(searchQuery.trim())}`);
+        const data = await res.json();
+        setSearchResults(data.posts ?? data);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(searchDebounce.current);
+  }, [searchQuery]);
+
+  function pushFilter(t: string, s: string, a: string, tag: string) {
     const p = new URLSearchParams();
     if (t) p.set('type', t);
     if (s) p.set('status', s);
     if (a) p.set('author', a);
+    if (tag) p.set('tag', tag);
     const q = p.toString();
     router.replace(q ? `/?${q}` : '/', { scroll: false });
   }
@@ -75,14 +144,13 @@ function PostListInner({
     setTypeFilter(searchParams.get('type') || '');
     setStatusFilter(searchParams.get('status') || '');
     setAuthorFilter(searchParams.get('author') || '');
+    setTagFilter(searchParams.get('tag') || '');
   }, [searchParams]);
 
-  // Task #11/#12: use singleton SSE via EventContext
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'new_post') {
         setPosts(p => [{ ...ev.data, comment_count: 0 }, ...p]);
-        // Task #15: browser notification
         if (notifPerm === 'granted') {
           new Notification('새 토론 📋', { body: ev.data?.title, icon: '/favicon.ico' });
         }
@@ -95,175 +163,310 @@ function PostListInner({
     });
   }, [subscribe, notifPerm]);
 
+  // #5 Load more posts
+  async function loadMore() {
+    if (!cursor || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/posts?cursor=${cursor}&limit=50`);
+      const data = await res.json();
+      const newPosts: any[] = data.posts ?? [];
+      setPosts(prev => {
+        const ids = new Set(prev.map((p: any) => p.id));
+        return [...prev, ...newPosts.filter((p: any) => !ids.has(p.id))];
+      });
+      setCursor(data.nextCursor ?? null);
+      setHasMore(!!data.nextCursor);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  // #5 IntersectionObserver
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMore(); },
+      { rootMargin: '200px' }
+    );
+    obs.observe(sentinelRef.current);
+    return () => obs.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor, hasMore, loadingMore]);
+
   const typeCounts = Object.fromEntries(
     TYPES.map(t => [t, posts.filter((p: any) => p.type === t).length])
   );
 
-  const filtered = posts.filter((p: any) => {
+  // Determine display list: search overrides local filtering
+  const baseList = searchQuery.trim() && searchResults !== null ? searchResults : posts;
+
+  const filtered = baseList.filter((p: any) => {
+    if (showBookmarksOnly && !bookmarks.has(p.id)) return false;
+    if (searchQuery.trim()) return true; // search results already filtered server-side
     if (typeFilter && p.type !== typeFilter) return false;
     if (statusFilter && p.status !== statusFilter) return false;
     if (authorFilter && p.author !== authorFilter) return false;
+    if (tagFilter) {
+      const tags = parseTags(p.tags);
+      if (!tags.includes(tagFilter)) return false;
+    }
     return true;
   });
 
-  // Task #22: client-side sort
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'comments') return (b.comment_count || 0) - (a.comment_count || 0);
     if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const hasFilter = !!(typeFilter || statusFilter || authorFilter);
+  const hasFilter = !!(typeFilter || statusFilter || authorFilter || tagFilter);
+  const isSearching = !!searchQuery.trim();
 
   function clearFilters() {
     setTypeFilter('');
     setStatusFilter('');
     setAuthorFilter('');
+    setTagFilter('');
     router.replace('/', { scroll: false });
   }
 
+  // Collect all tags from posts for tag cloud
+  const allTags = Array.from(
+    new Set(posts.flatMap((p: any) => parseTags(p.tags)))
+  ).slice(0, 12);
+
   return (
     <div>
+      {/* ── SEARCH BAR ── */}
+      <div className="mb-4 relative">
+        <div className="relative flex items-center">
+          <svg className="absolute left-3 w-4 h-4 text-zinc-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="제목, 내용, 태그 검색..."
+            className="w-full pl-9 pr-4 py-2 text-sm border border-zinc-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+          />
+          {searching && (
+            <div className="absolute right-3 w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+          )}
+          {searchQuery && !searching && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 text-zinc-400 hover:text-zinc-600">
+              ×
+            </button>
+          )}
+        </div>
+        {/* Keyboard hint */}
+        <p className="mt-1 text-[11px] text-zinc-400 pl-1">FTS5 전문 검색 지원</p>
+      </div>
+
+      {/* ── TAG CLOUD ── */}
+      {!isSearching && allTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {allTags.map(tag => (
+            <button
+              key={tag}
+              onClick={() => {
+                const next = tagFilter === tag ? '' : tag;
+                setTagFilter(next);
+                pushFilter(typeFilter, statusFilter, authorFilter, next);
+              }}
+              className={`text-[11px] px-2 py-0.5 rounded-full border transition-all ${
+                tagFilter === tag
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-zinc-500 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600'
+              }`}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── FILTER BAR ── */}
-      <div className="flex items-center gap-2 flex-wrap mb-5">
-        {/* Type tabs */}
-        <button
-          onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter); }}
-          className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-            !typeFilter
-              ? 'bg-zinc-900 text-white'
-              : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
-          }`}
-        >
-          전체
-        </button>
-        {TYPES.map(t => (
+      {!isSearching && (
+        <div className="flex items-center gap-2 flex-wrap mb-5">
           <button
-            key={t}
-            onClick={() => {
-              const next = typeFilter === t ? '' : t;
-              setTypeFilter(next);
-              pushFilter(next, statusFilter, authorFilter);
-            }}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-              typeFilter === t
+            onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
+            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+              !typeFilter
                 ? 'bg-zinc-900 text-white'
                 : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === t ? 'bg-white' : (TYPE_DOT[t] ?? 'bg-zinc-400')}`} />
-            {TYPE_LABELS[t]}
-            {typeCounts[t] > 0 && (
-              <span className={`${typeFilter === t ? 'opacity-70' : 'text-zinc-400'}`}>{typeCounts[t]}</span>
-            )}
+            전체
           </button>
-        ))}
+          {TYPES.map(t => (
+            <button
+              key={t}
+              onClick={() => {
+                const next = typeFilter === t ? '' : t;
+                setTypeFilter(next);
+                pushFilter(next, statusFilter, authorFilter, tagFilter);
+              }}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                typeFilter === t
+                  ? 'bg-zinc-900 text-white'
+                  : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === t ? 'bg-white' : (TYPE_DOT[t] ?? 'bg-zinc-400')}`} />
+              {TYPE_LABELS[t]}
+              {typeCounts[t] > 0 && (
+                <span className={`${typeFilter === t ? 'opacity-70' : 'text-zinc-400'}`}>{typeCounts[t]}</span>
+              )}
+            </button>
+          ))}
 
-        {/* Divider */}
-        <span className="w-px h-5 bg-zinc-200 mx-1" />
+          <span className="w-px h-5 bg-zinc-200 mx-1" />
 
-        {/* Status chips */}
-        {STATUSES.map(s => (
+          {STATUSES.map(s => (
+            <button
+              key={s}
+              onClick={() => {
+                const next = statusFilter === s ? '' : s;
+                setStatusFilter(next);
+                pushFilter(typeFilter, next, authorFilter, tagFilter);
+              }}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all ${
+                statusFilter === s
+                  ? 'bg-zinc-900 text-white font-medium'
+                  : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
+              {STATUS_LABEL_KO[s]}
+            </button>
+          ))}
+
+          {authorFilter && (
+            <button
+              onClick={() => { setAuthorFilter(''); pushFilter(typeFilter, statusFilter, '', tagFilter); }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium"
+            >
+              {authorFilter} ×
+            </button>
+          )}
+
+          {tagFilter && (
+            <button
+              onClick={() => { setTagFilter(''); pushFilter(typeFilter, statusFilter, authorFilter, ''); }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-indigo-600 text-white font-medium"
+            >
+              #{tagFilter} ×
+            </button>
+          )}
+
+          {hasFilter && (
+            <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+              초기화 ×
+            </button>
+          )}
+
+          {/* #11 Bookmark filter */}
           <button
-            key={s}
-            onClick={() => {
-              const next = statusFilter === s ? '' : s;
-              setStatusFilter(next);
-              pushFilter(typeFilter, next, authorFilter);
-            }}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all ${
-              statusFilter === s
-                ? 'bg-zinc-900 text-white font-medium'
-                : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300'
+            onClick={() => setShowBookmarksOnly(p => !p)}
+            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${
+              showBookmarksOnly
+                ? 'bg-amber-500 text-white border-amber-500'
+                : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
-            {STATUS_LABEL_KO[s]}
+            🔖 {showBookmarksOnly ? `북마크 ${bookmarks.size}` : '북마크'}
           </button>
-        ))}
 
-        {/* Author filter chip */}
-        {authorFilter && (
-          <button
-            onClick={() => { setAuthorFilter(''); pushFilter(typeFilter, statusFilter, ''); }}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium"
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as any)}
+            className="ml-auto text-xs border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none focus:border-zinc-400"
           >
-            {authorFilter} ×
-          </button>
-        )}
+            <option value="newest">최신순</option>
+            <option value="oldest">오래된순</option>
+            <option value="comments">댓글 많은순</option>
+          </select>
 
-        {hasFilter && (
-          <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
-            초기화 ×
-          </button>
-        )}
+          {notifPerm === 'default' && (
+            <button
+              onClick={async () => {
+                const perm = await Notification.requestPermission();
+                setNotifPerm(perm);
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-all"
+            >
+              알림 받기
+            </button>
+          )}
+        </div>
+      )}
 
-        {/* Task #22: Sort dropdown */}
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value as any)}
-          className="ml-auto text-xs border border-zinc-200 rounded-lg px-2 py-1.5 bg-white text-zinc-600 focus:outline-none focus:border-zinc-400"
-        >
-          <option value="newest">최신순</option>
-          <option value="oldest">오래된순</option>
-          <option value="comments">댓글 많은순</option>
-        </select>
-
-        {/* Task #15: Notification permission button */}
-        {notifPerm === 'default' && (
-          <button
-            onClick={async () => {
-              const perm = await Notification.requestPermission();
-              setNotifPerm(perm);
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-all"
-          >
-            알림 받기
+      {/* Search mode header */}
+      {isSearching && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-zinc-500">
+            {searching ? '검색 중...' : `"${searchQuery}" 검색 결과 ${sorted.length}개`}
+          </span>
+          <button onClick={() => setSearchQuery('')} className="text-xs text-indigo-500 hover:underline">
+            검색 취소
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── MAIN FEED ── */}
       <main>
-        {/* Result bar */}
         <div className="flex items-center justify-between mb-3 px-0.5">
-          <span className="text-zinc-400 text-xs">
-            {hasFilter ? `${sorted.length}개 결과` : `전체 ${posts.length}개`}
-          </span>
+          {!isSearching && (
+            <span className="text-zinc-400 text-xs">
+              {hasFilter ? `${sorted.length}개 결과` : `전체 ${posts.length}개`}
+            </span>
+          )}
         </div>
 
-        {sorted.length === 0 ? (
+        {sorted.length === 0 && !searching ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-100 flex items-center justify-center">
               <svg className="w-8 h-8 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">해당 조건의 포스트가 없습니다</p>
-            <p className="text-xs text-zinc-400 mb-4">다른 필터를 선택하거나 조건을 변경해보세요</p>
-            <button
-              onClick={clearFilters}
-              className="text-xs px-3 py-1.5 border border-zinc-200 text-zinc-600 rounded-lg hover:bg-zinc-50 transition-colors"
-            >
-              필터 초기화
-            </button>
+            <p className="text-sm font-medium text-zinc-500 mb-1">
+              {isSearching ? '검색 결과가 없습니다' : '해당 조건의 포스트가 없습니다'}
+            </p>
+            <p className="text-xs text-zinc-400 mb-4">
+              {isSearching ? '다른 키워드로 검색해보세요' : '다른 필터를 선택하거나 조건을 변경해보세요'}
+            </p>
+            {!isSearching && (
+              <button
+                onClick={clearFilters}
+                className="text-xs px-3 py-1.5 border border-zinc-200 text-zinc-600 rounded-lg hover:bg-zinc-50 transition-colors"
+              >
+                필터 초기화
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
             {sorted.map((post: any) => {
               const meta = authorMeta[post.author] ?? {
-                label: post.author_display,
+                label: post.author_display || post.author,
                 color: 'bg-zinc-100 text-zinc-600 border-zinc-200',
                 emoji: '',
+                isAgent: true, // unknown authors default to AI
               };
               const preview = truncate(post.content, 140);
               const isResolved = post.status === 'resolved';
+              const hot = isHot(post);
+              const tags = parseTags(post.tags);
+              const isAgentAuthor = meta.isAgent !== false; // default true for AI agents
 
               return (
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
-                  <article className={`bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm rounded-lg overflow-hidden transition-all duration-150 ${isResolved ? 'opacity-60' : ''}`}>
+                  <article className={`bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm rounded-lg overflow-hidden transition-all duration-150 ${isResolved ? 'opacity-60' : ''} ${isAgentAuthor ? 'border-l-2 border-l-indigo-200' : ''}`}>
                     <div className="p-4">
-                      {/* Type + priority + time */}
+                      {/* Type + priority + HOT + time */}
                       <div className="flex items-center gap-2 mb-2">
                         <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border font-medium bg-zinc-50 text-zinc-700 border-zinc-200">
                           <span className={`w-1.5 h-1.5 rounded-full ${TYPE_DOT[post.type] ?? 'bg-zinc-400'}`} />
@@ -271,6 +474,12 @@ function PostListInner({
                         </span>
                         {PRIORITY_BADGE[post.priority] && (
                           <span className="text-xs text-zinc-500">{PRIORITY_BADGE[post.priority]}</span>
+                        )}
+                        {/* #6 HOT badge */}
+                        {hot && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-600 border border-orange-200 font-medium">
+                            🔥 HOT
+                          </span>
                         )}
                         <span className="ml-auto text-zinc-400 text-xs shrink-0">{timeAgo(post.created_at)}</span>
                       </div>
@@ -285,20 +494,57 @@ function PostListInner({
                         <p className="text-xs text-zinc-500 leading-relaxed mb-3 line-clamp-2">{preview}</p>
                       )}
 
+                      {/* #2 Tags */}
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {tags.map((tag: string) => (
+                            <span
+                              key={tag}
+                              onClick={e => {
+                                e.preventDefault();
+                                const next = tagFilter === tag ? '' : tag;
+                                setTagFilter(next);
+                                pushFilter(typeFilter, statusFilter, authorFilter, next);
+                              }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
+                                tagFilter === tag
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600'
+                              }`}
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Footer */}
                       <div className="flex items-center gap-2 flex-wrap">
+                        {/* #11 Bookmark button */}
+                        <button
+                          onClick={e => toggleBookmark(post.id, e)}
+                          className={`text-sm transition-colors ${bookmarks.has(post.id) ? 'text-amber-500' : 'text-zinc-300 hover:text-amber-400'}`}
+                          title={bookmarks.has(post.id) ? '북마크 해제' : '북마크'}
+                        >
+                          {bookmarks.has(post.id) ? '🔖' : '📑'}
+                        </button>
+                        {/* Author + #3 AI badge */}
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] ${meta.color}`}>
                           {meta.emoji ? `${meta.emoji} ` : ''}{meta.label}
+                          {isAgentAuthor && (
+                            <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded bg-violet-100 text-violet-600 font-semibold border border-violet-200">AI</span>
+                          )}
                         </span>
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] ${STATUS_STYLE[post.status]}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
                           {STATUS_LABEL_KO[post.status]}
                         </span>
-                        {/* Countdown visible badge — only for open/in-progress */}
                         {post.status !== 'resolved' && (
                           <CountdownTimer
                             expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
                             variant="badge"
+                            expiredLabel="⏰ 시간 초과"
+                            paused={post.paused_at != null}
                           />
                         )}
                         {post.status !== 'resolved' ? (
@@ -315,17 +561,31 @@ function PostListInner({
                       </div>
                     </div>
 
-                    {/* Countdown bar — full width at bottom */}
                     {post.status !== 'resolved' && (
                       <CountdownTimer
                         expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
                         variant="bar"
+                        paused={post.paused_at != null}
                       />
                     )}
                   </article>
                 </Link>
               );
             })}
+          </div>
+        )}
+        {/* #5 Infinite scroll sentinel */}
+        {!searchQuery.trim() && (
+          <div ref={sentinelRef} className="py-4 text-center">
+            {loadingMore && (
+              <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
+                <div className="w-3 h-3 border-2 border-zinc-300 border-t-indigo-400 rounded-full animate-spin" />
+                더 불러오는 중...
+              </div>
+            )}
+            {!hasMore && posts.length > 50 && (
+              <span className="text-xs text-zinc-300">모든 포스트를 불러왔습니다</span>
+            )}
           </div>
         )}
       </main>

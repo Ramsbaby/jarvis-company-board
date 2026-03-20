@@ -33,20 +33,27 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
 
   if (!summary) return null;
 
-  const lines = summary.split('\n').filter(l => l.trim());
+  const lines = summary.split('\n').filter(l => l.trim()).slice(0, 3);
 
   return (
-    <div className="mb-4 bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-4">
-      <div className="flex items-center gap-1.5 mb-2.5 text-xs font-semibold text-violet-700">
-        <span>✨</span> 토론 요약
+    <div className="mb-5 rounded-xl border-2 border-violet-200 overflow-hidden">
+      <div className="bg-violet-600 px-4 py-2.5 flex items-center gap-2">
+        <span className="text-white text-sm">✨</span>
+        <span className="text-white font-semibold text-sm">AI 토론 요약</span>
+        <span className="ml-auto text-violet-200 text-xs">{lines.length}개 핵심 포인트</span>
       </div>
-      <ul className="space-y-1.5">
+      <div className="bg-white px-4 py-3 space-y-2.5">
         {lines.map((line, i) => (
-          <li key={i} className="text-xs text-gray-700 leading-relaxed">
-            {line.startsWith('•') ? line : `• ${line}`}
-          </li>
+          <div key={i} className="flex gap-3 items-start">
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center mt-0.5">
+              {i + 1}
+            </span>
+            <p className="text-sm text-zinc-700 leading-relaxed">
+              {line.replace(/^[•\-]\s*/, '')}
+            </p>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -63,6 +70,81 @@ const PERSONA_BADGE: Record<string, string> = {
   'council-team':     'bg-yellow-50 text-yellow-800 border-yellow-200',
 };
 
+const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '🤔'];
+
+type ReactionMap = Record<string, Record<string, { count: number; authors: string[] }>>;
+
+function getVisitorId(isOwner: boolean): string {
+  if (isOwner) return 'owner';
+  if (typeof window === 'undefined') return 'anon';
+  const stored = localStorage.getItem('jarvis-board-visitor');
+  if (stored) return stored;
+  const id = 'v-' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('jarvis-board-visitor', id);
+  return id;
+}
+
+// #4 Reactions bar component
+function CommentReactions({
+  commentId,
+  reactions,
+  myId,
+  onToggle,
+}: {
+  commentId: string;
+  reactions: Record<string, { count: number; authors: string[] }>;
+  myId: string;
+  onToggle: (commentId: string, emoji: string) => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+
+  const existing = Object.entries(reactions);
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-2">
+      {existing.map(([emoji, { count, authors }]) => {
+        const mine = authors.includes(myId);
+        return (
+          <button
+            key={emoji}
+            onClick={() => onToggle(commentId, emoji)}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs transition-all ${
+              mine
+                ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            {emoji} <span className="font-medium">{count}</span>
+          </button>
+        );
+      })}
+
+      {/* Add reaction button */}
+      <div className="relative">
+        <button
+          onClick={() => setShowPicker(p => !p)}
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-dashed border-gray-300 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-all"
+        >
+          + 😊
+        </button>
+        {showPicker && (
+          <div className="absolute left-0 bottom-full mb-1 z-10 flex gap-1 p-1.5 bg-white border border-gray-200 rounded-xl shadow-lg">
+            {QUICK_EMOJIS.map(e => (
+              <button
+                key={e}
+                onClick={() => { onToggle(commentId, e); setShowPicker(false); }}
+                className="w-7 h-7 flex items-center justify-center text-base rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 export default function PostComments({
   postId,
@@ -70,25 +152,54 @@ export default function PostComments({
   isOwner,
   postCreatedAt,
   postStatus,
+  pausedAt,
 }: {
   postId: string;
   initialComments: any[];
   isOwner: boolean;
   postCreatedAt: string;
   postStatus: string;
+  pausedAt: string | null;
 }) {
   const [comments, setComments] = useState(initialComments);
   const [toast, setToast] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [paused, setPaused] = useState(!!pausedAt);
+  const [pauseLoading, setPauseLoading] = useState(false);
+
+  // #4 Reactions state
+  const [reactions, setReactions] = useState<ReactionMap>({});
+  const [myId, setMyId] = useState('anon');
+
+  // #21 Typing indicators
+  const [typingAgents, setTypingAgents] = useState<Array<{ agent: string; label: string }>>([]);
+  const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // #8 Thread reply state
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [replyLoading, setReplyLoading] = useState(false);
 
   const { subscribe } = useEvent();
+
+  // #4 Get visitor ID on mount
+  useEffect(() => {
+    setMyId(getVisitorId(isOwner));
+  }, [isOwner]);
+
+  // #4 Fetch reactions for this post
+  useEffect(() => {
+    fetch(`/api/reactions?post_id=${postId}`)
+      .then(r => r.json())
+      .then(data => setReactions(data))
+      .catch(() => {});
+  }, [postId]);
 
   // Task #14: compute if discussion time has expired
   const isExpired = postStatus !== 'resolved' &&
     new Date(postCreatedAt).getTime() + 30 * 60 * 1000 < Date.now();
 
-  // Task #11/#12: use singleton SSE via EventContext
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'new_comment' && ev.post_id === postId) {
@@ -96,15 +207,266 @@ export default function PostComments({
           prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data]
         );
         setNewIds(prev => new Set(prev).add(ev.data.id));
+        // Clear typing indicator for this agent
+        if (ev.data?.author) {
+          setTypingAgents(prev => prev.filter(a => a.agent !== ev.data.author));
+          clearTimeout(typingTimers.current[ev.data.author]);
+        }
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast(`💬 ${ev.data?.author_display || '팀원'}이 댓글을 달았습니다`);
         toastTimerRef.current = setTimeout(() => setToast(null), 5000);
       }
+      // #21 Typing indicator
+      if (ev.type === 'agent_typing' && ev.post_id === postId) {
+        setTypingAgents(prev => {
+          const next = prev.filter(a => a.agent !== ev.data?.agent);
+          return [...next, { agent: ev.data?.agent, label: ev.data?.label ?? ev.data?.agent }];
+        });
+        clearTimeout(typingTimers.current[ev.data?.agent]);
+        typingTimers.current[ev.data?.agent] = setTimeout(() => {
+          setTypingAgents(prev => prev.filter(a => a.agent !== ev.data?.agent));
+        }, 10000);
+      }
     });
   }, [subscribe, postId]);
 
+  // #4 Toggle reaction handler
+  async function handleReaction(commentId: string, emoji: string) {
+    const prev = reactions;
+    // Optimistic update
+    setReactions(r => {
+      const updated = { ...r };
+      if (!updated[commentId]) updated[commentId] = {};
+      const slot = updated[commentId][emoji] ?? { count: 0, authors: [] };
+      const mine = slot.authors.includes(myId);
+      if (mine) {
+        updated[commentId][emoji] = {
+          count: slot.count - 1,
+          authors: slot.authors.filter(a => a !== myId),
+        };
+        if (updated[commentId][emoji].count === 0) delete updated[commentId][emoji];
+      } else {
+        updated[commentId][emoji] = {
+          count: slot.count + 1,
+          authors: [...slot.authors, myId],
+        };
+      }
+      return { ...updated };
+    });
+
+    try {
+      await fetch('/api/reactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_id: commentId, emoji, author: myId }),
+      });
+    } catch {
+      setReactions(prev); // rollback
+    }
+  }
+
+  // #8 Submit reply
+  async function handleReply(parentId: string) {
+    const trimmed = replyContent.trim();
+    if (trimmed.length < 2) return;
+    setReplyLoading(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: trimmed, parent_id: parentId }),
+      });
+      if (res.ok) {
+        const comment = await res.json();
+        setComments(prev => [...prev, comment]);
+        setReplyContent('');
+        setReplyingTo(null);
+      }
+    } finally {
+      setReplyLoading(false);
+    }
+  }
+
+  // #8 Build reply map
+  const replyMap: Record<string, any[]> = {};
+  for (const c of comments) {
+    if (c.parent_id) {
+      if (!replyMap[c.parent_id]) replyMap[c.parent_id] = [];
+      replyMap[c.parent_id].push(c);
+    }
+  }
+  // #18 AI vs 인간 탭
+  const [viewTab, setViewTab] = useState<'all' | 'ai' | 'human'>('all');
+
+  const rootComments = comments.filter(c => {
+    if (c.parent_id) return false;
+    if (viewTab === 'ai') return !c.is_visitor;
+    if (viewTab === 'human') return !!c.is_visitor;
+    return true;
+  });
+
   const agentComments = comments.filter(c => !c.is_visitor);
   const humanComments = comments.filter(c => c.is_visitor);
+
+  function renderComment(c: any, isReply = false) {
+    const isVisitor = Boolean(c.is_visitor);
+    const isResolution = Boolean(c.is_resolution);
+    const isNew = newIds.has(c.id);
+    const meta = !isVisitor
+      ? (AUTHOR_META[c.author as keyof typeof AUTHOR_META] ?? {
+          label: c.author_display,
+          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          emoji: '💬',
+        })
+      : null;
+
+    // Resolution hero card
+    if (isResolution) {
+      return (
+        <div key={c.id} className={isNew ? 'animate-slide-in' : ''}>
+          <div className="flex items-center gap-3 my-6 text-xs text-gray-400">
+            <div className="flex-1 border-t border-gray-200" />
+            <span>── 토론 종료 ──</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+          <div className="resolution-hero p-5 my-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">🏆</span>
+              <span className="text-emerald-700 font-bold text-base">최종 토론 결론</span>
+              <div className="flex-1 h-px bg-emerald-200 ml-2" />
+            </div>
+            <div className="flex gap-3">
+              <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${meta?.color?.includes('from-') ? meta.color : 'from-emerald-500 to-teal-600'} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
+                {meta?.emoji || c.author_display?.charAt(0) || '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  {isVisitor ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-gray-600 text-sm">
+                      👤 {c.author_display}
+                    </span>
+                  ) : meta ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-sm bg-emerald-50 text-emerald-700 border-emerald-200">
+                      {meta.emoji} {meta.label}
+                    </span>
+                  ) : null}
+                  <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
+                </div>
+                <MarkdownContent content={c.content} />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const isBest = Boolean(c.is_best);
+    const isOwnerComment = c.author === 'owner';
+    const badgeClass = isOwnerComment
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : (PERSONA_BADGE[c.author] ?? (meta?.color?.includes('from-') ? 'bg-gray-100 text-gray-700 border-gray-200' : (meta?.color ?? 'bg-gray-100 text-gray-700 border-gray-200')));
+
+    const commentReactions = reactions[c.id] ?? {};
+
+    return (
+      <div
+        key={c.id}
+        className={`flex gap-3 p-4 rounded-xl bg-white border hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${isReply ? 'ml-8 mt-2 border-l-2 border-l-indigo-100 border-gray-100' : isBest ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100 hover:border-indigo-200'}`}
+      >
+        {/* Avatar */}
+        {isVisitor ? (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+            {c.author_display?.charAt(0) || '?'}
+          </div>
+        ) : isOwnerComment ? (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+            {meta?.emoji || '👑'}
+          </div>
+        ) : (
+          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${
+            meta?.color?.includes('from-') ? meta.color : 'from-gray-400 to-gray-500'
+          } flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}>
+            {meta?.emoji || c.author_display?.charAt(0) || '?'}
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            {isVisitor ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-600 text-xs">
+                👤 {c.author_display}
+              </span>
+            ) : meta ? (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs ${badgeClass}`}>
+                {meta.emoji} {meta.label}
+              </span>
+            ) : null}
+            {isBest && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-semibold">
+                ⭐ 베스트
+              </span>
+            )}
+            <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
+          </div>
+
+          <MarkdownContent content={c.content} />
+
+          {/* #4 Reactions */}
+          <CommentReactions
+            commentId={c.id}
+            reactions={commentReactions}
+            myId={myId}
+            onToggle={handleReaction}
+          />
+
+          {/* Owner actions: reply + best toggle */}
+          {!isReply && isOwner && (
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={() => setReplyingTo(replyingTo === c.id ? null : c.id)}
+                className="text-[11px] text-gray-400 hover:text-indigo-500 transition-colors"
+              >
+                {replyingTo === c.id ? '취소' : '↩ 답글'}
+              </button>
+              {/* #12 Best comment toggle */}
+              <button
+                onClick={async () => {
+                  const res = await fetch(`/api/comments/${c.id}`, { method: 'PATCH' });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setComments(prev => prev.map(cm => cm.id === c.id ? { ...cm, is_best: data.is_best } : cm));
+                  }
+                }}
+                className={`text-[11px] transition-colors ${c.is_best ? 'text-amber-500 hover:text-amber-600' : 'text-gray-400 hover:text-amber-400'}`}
+              >
+                {c.is_best ? '⭐ 베스트' : '☆ 베스트 선정'}
+              </button>
+            </div>
+          )}
+
+          {/* Inline reply form */}
+          {replyingTo === c.id && (
+            <div className="mt-2 flex gap-2">
+              <textarea
+                value={replyContent}
+                onChange={e => setReplyContent(e.target.value)}
+                placeholder="답글 작성..."
+                rows={2}
+                className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 resize-none bg-gray-50"
+              />
+              <button
+                onClick={() => handleReply(c.id)}
+                disabled={replyLoading || replyContent.trim().length < 2}
+                className="self-end px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {replyLoading ? '...' : '게시'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="space-y-3 relative">
@@ -123,21 +485,63 @@ export default function PostComments({
         </div>
       )}
 
-      {/* Comment count header */}
-      <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-gray-900 font-semibold text-base">
+      {/* Comment count header + #18 view tabs + pause button */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <h3 className="text-zinc-900 font-semibold text-base">
           💬 토론 참여 ({comments.length})
         </h3>
-        {agentComments.length > 0 && (
-          <span className="text-gray-400 text-sm">· 에이전트 {agentComments.length}</span>
-        )}
-        {humanComments.length > 0 && (
-          <span className="text-gray-400 text-sm">· 방문자 {humanComments.length}</span>
+        {/* #18 View tabs */}
+        <div className="flex items-center gap-1 ml-1">
+          {([['all', '전체'], ['ai', `🤖 AI ${agentComments.length}`], ['human', `👤 인간 ${humanComments.length}`]] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setViewTab(tab)}
+              className={`text-[11px] px-2 py-0.5 rounded-full border transition-all ${
+                viewTab === tab
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-zinc-500 border-zinc-200 hover:border-indigo-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {isOwner && postStatus !== 'resolved' && (
+          <button
+            onClick={async () => {
+              setPauseLoading(true);
+              try {
+                const res = await fetch(`/api/posts/${postId}/pause`, { method: 'PATCH' });
+                const data = await res.json();
+                setPaused(data.paused);
+              } catch { /* ignore */ }
+              finally { setPauseLoading(false); }
+            }}
+            disabled={pauseLoading}
+            className={`ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
+              paused
+                ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                : 'bg-zinc-50 border-zinc-300 text-zinc-600 hover:bg-zinc-100'
+            }`}
+          >
+            {paused ? '▶ 토론 재개' : '⏸ 토론 일시정지'}
+          </button>
         )}
       </div>
 
-      {/* Task #14: Expired CTA for owner */}
-      {isExpired && isOwner && (
+      {/* Paused banner */}
+      {paused && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-300 rounded-xl mb-2">
+          <span className="text-xl">⏸</span>
+          <div className="flex-1">
+            <p className="font-semibold text-amber-800 text-sm">토론 일시정지 중</p>
+            <p className="text-amber-600 text-xs mt-0.5">에이전트 댓글이 차단됩니다. 대표님이 재개하면 토론이 계속됩니다.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Expired CTA for owner */}
+      {isExpired && !paused && isOwner && (
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl mb-2 text-sm">
           <span>⏰</span>
           <div className="flex-1">
@@ -153,118 +557,31 @@ export default function PostComments({
         </div>
       )}
 
-      {/* Auto discussion summary */}
+      {/* Discussion summary — prominent 3-line summary for quick reading */}
       <DiscussionSummary postId={postId} commentCount={comments.length} />
 
-      {/* Comment list */}
-      {comments.map((c: any) => {
-        const isVisitor = Boolean(c.is_visitor);
-        const isResolution = Boolean(c.is_resolution);
-        const isNew = newIds.has(c.id);
-        const meta = !isVisitor
-          ? (AUTHOR_META[c.author as keyof typeof AUTHOR_META] ?? {
-              label: c.author_display,
-              color: 'bg-gray-100 text-gray-700 border-gray-200',
-              emoji: '💬',
-            })
-          : null;
+      {/* #8 Threaded comment list */}
+      {rootComments.map((c: any) => (
+        <div key={c.id}>
+          {renderComment(c, false)}
+          {/* Replies */}
+          {(replyMap[c.id] ?? []).map((reply: any) => renderComment(reply, true))}
+        </div>
+      ))}
 
-        // Resolution hero card
-        if (isResolution) {
-          return (
-            <div key={c.id} className={isNew ? 'animate-slide-in' : ''}>
-              {/* Section divider: 토론 종료 */}
-              <div className="flex items-center gap-3 my-6 text-xs text-gray-400">
-                <div className="flex-1 border-t border-gray-200" />
-                <span>── 토론 종료 ──</span>
-                <div className="flex-1 border-t border-gray-200" />
-              </div>
-
-              {/* Hero card */}
-              <div className="resolution-hero p-5 my-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">🏆</span>
-                  <span className="text-emerald-700 font-bold text-base">최종 토론 결론</span>
-                  <div className="flex-1 h-px bg-emerald-200 ml-2" />
-                </div>
-
-                <div className="flex gap-3">
-                  {/* Avatar */}
-                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${meta?.color?.includes('from-') ? meta.color : 'from-emerald-500 to-teal-600'} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
-                    {meta?.emoji || c.author_display?.charAt(0) || '?'}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      {isVisitor ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-gray-600 text-sm">
-                          👤 {c.author_display}
-                        </span>
-                      ) : meta ? (
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-sm bg-emerald-50 text-emerald-700 border-emerald-200`}>
-                          {meta.emoji} {meta.label}
-                        </span>
-                      ) : null}
-                      <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
-                    </div>
-                    <MarkdownContent content={c.content} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        }
-
-        // Owner comment — crown avatar
-        const isOwnerComment = c.author === 'owner';
-
-        // Badge class based on persona or owner
-        const badgeClass = isOwnerComment
-          ? 'bg-amber-50 text-amber-700 border-amber-200'
-          : (PERSONA_BADGE[c.author] ?? (meta?.color?.includes('from-') ? 'bg-gray-100 text-gray-700 border-gray-200' : (meta?.color ?? 'bg-gray-100 text-gray-700 border-gray-200')));
-
-        // Regular comment card
-        return (
-          <div
-            key={c.id}
-            className={`flex gap-3 p-4 rounded-xl bg-white border border-gray-100 hover:border-indigo-200 hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''}`}
-          >
-            {/* Avatar */}
-            {isVisitor ? (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                {c.author_display?.charAt(0) || '?'}
-              </div>
-            ) : isOwnerComment ? (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                {meta?.emoji || '👑'}
-              </div>
-            ) : (
-              <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${
-                meta?.color?.includes('from-') ? meta.color : 'from-gray-400 to-gray-500'
-              } flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
-                {meta?.emoji || c.author_display?.charAt(0) || '?'}
-              </div>
-            )}
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                {isVisitor ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-600 text-xs">
-                    👤 {c.author_display}
-                  </span>
-                ) : meta ? (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs ${badgeClass}`}>
-                    {meta.emoji} {meta.label}
-                  </span>
-                ) : null}
-                <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
-              </div>
-
-              <MarkdownContent content={c.content} />
-            </div>
+      {/* #21 Typing indicators */}
+      {typingAgents.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl">
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
           </div>
-        );
-      })}
+          <span className="text-xs text-indigo-600">
+            {typingAgents.map(a => a.label).join(', ')}이 응답 작성 중...
+          </span>
+        </div>
+      )}
 
       {/* Comment submission form */}
       <div id="comment-form">

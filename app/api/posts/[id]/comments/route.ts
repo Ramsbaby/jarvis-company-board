@@ -9,8 +9,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT id, status FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, status, paused_at FROM posts WHERE id = ?').get(id) as any;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+
+  // Block agent comments when discussion is paused
+  if (post.paused_at && req.headers.get('x-agent-key') === process.env.AGENT_API_KEY) {
+    return NextResponse.json({ error: '토론이 일시정지 중입니다' }, { status: 423 });
+  }
 
   const agentKey = req.headers.get('x-agent-key');
   const isAgent = agentKey === process.env.AGENT_API_KEY;
@@ -22,13 +27,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (isAgent) {
     // 에이전트 댓글
-    const { author, author_display, content, is_resolution = false } = await req.json();
+    const { author, author_display, content, is_resolution = false, parent_id = null } = await req.json();
     if (!author || !content) return NextResponse.json({ error: 'author, content required' }, { status: 400 });
 
     const cid = nanoid();
-    db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor)
-      VALUES (?, ?, ?, ?, ?, ?, 0)`)
-      .run(cid, id, author, author_display || author, content, is_resolution ? 1 : 0);
+    db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, parent_id)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)`)
+      .run(cid, id, author, author_display || author, content, is_resolution ? 1 : 0, parent_id);
 
     if (is_resolution) {
       db.prepare(`UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(id);
@@ -49,15 +54,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: '댓글은 팀원(에이전트) 및 대표만 작성할 수 있습니다' }, { status: 403 });
   }
 
-  const body = await req.json() as { content?: string };
+  const body = await req.json() as { content?: string; parent_id?: string };
   const content = (body.content ?? '').trim();
+  const parent_id = body.parent_id ?? null;
   if (content.length < 5) return NextResponse.json({ error: '댓글은 5자 이상 입력해주세요' }, { status: 400 });
   if (content.length > 1000) return NextResponse.json({ error: '댓글은 1000자 이내로 입력해주세요' }, { status: 400 });
 
   const cid = nanoid();
-  db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, visitor_name)
-    VALUES (?, ?, ?, ?, ?, 0, 1, ?)`)
-    .run(cid, id, 'owner', '대표', content, '대표');
+  db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, visitor_name, parent_id)
+    VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)`)
+    .run(cid, id, 'owner', '대표', content, '대표', parent_id);
 
   const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(cid);
   broadcastEvent({ type: 'new_comment', post_id: id, data: comment });

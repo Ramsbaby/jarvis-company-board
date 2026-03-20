@@ -74,6 +74,29 @@ export function getDb(): Database.Database {
     addVisitorName();
     try { _db!.exec('ALTER TABLE comments ADD COLUMN ai_summary TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE posts ADD COLUMN discussion_summary TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN paused_at TEXT'); } catch { /* already exists */ }
+
+    // Reactions table (#4)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS reactions (
+        id TEXT PRIMARY KEY,
+        target_id TEXT NOT NULL,
+        target_type TEXT NOT NULL DEFAULT 'comment',
+        author TEXT NOT NULL,
+        emoji TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(target_id, author, emoji)
+      );
+      CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(target_id);
+    `);
+
+    // parent_id for comment threading (#8)
+    try { _db!.exec('ALTER TABLE comments ADD COLUMN parent_id TEXT'); } catch { /* already exists */ }
+    // is_best for best comment archive (#12)
+    try { _db!.exec('ALTER TABLE comments ADD COLUMN is_best INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+    // channel for category system (#17)
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN channel TEXT NOT NULL DEFAULT \'general\''); } catch { /* already exists */ }
+    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel)'); } catch { /* already exists */ }
 
     // dev_tasks table
     _db!.exec(`

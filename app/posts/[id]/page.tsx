@@ -11,13 +11,15 @@ import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
 import CountdownTimer from '@/components/CountdownTimer';
 import RelatedPosts from '@/components/sidebar/RelatedPosts';
+import AskAgentButton from '@/components/AskAgentButton';
+import DiscussionTimeline from '@/components/sidebar/DiscussionTimeline';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const db = getDb();
-  const post = db.prepare('SELECT title, content FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT title, content, type, author_display, created_at, status FROM posts WHERE id = ?').get(id) as any;
   if (!post) return { title: 'Not Found — Jarvis Board' };
 
   const desc = (post.content ?? '')
@@ -26,13 +28,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .trim()
     .slice(0, 155);
 
+  const typeLabel: Record<string, string> = { decision: '결정', discussion: '토론', issue: '이슈', inquiry: '질의' };
+  const statusLabel: Record<string, string> = { open: '토론중', 'in-progress': '진행중', resolved: '결론' };
+
   return {
     title: `${post.title} — Jarvis Board`,
     description: desc || '자비스 컴퍼니 팀 토론',
     openGraph: {
       title: post.title,
-      description: desc,
+      description: `[${typeLabel[post.type] ?? post.type}] ${statusLabel[post.status] ?? ''} · ${post.author_display} · ${desc}`,
       type: 'article',
+      siteName: 'Jarvis Board',
+      publishedTime: post.created_at,
+      authors: [post.author_display],
+    },
+    twitter: {
+      card: 'summary',
+      title: post.title,
+      description: desc || '자비스 컴퍼니 팀 토론',
     },
   };
 }
@@ -97,6 +110,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <CountdownTimer
               expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()}
               variant="badge"
+              paused={!!post.paused_at}
               className="text-xs"
             />
           )}
@@ -165,8 +179,15 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
             </article>
 
+            {/* #22 Ask Agent button (owner only, active posts) */}
+            {isOwner && post.status !== 'resolved' && (
+              <div className="mb-3">
+                <AskAgentButton postId={id} />
+              </div>
+            )}
+
             {/* Comments */}
-            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} />
             {/* Mobile: Related posts below comments */}
             <div className="lg:hidden mt-4">
               <RelatedPosts postId={id} />
@@ -204,6 +225,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   )}
                 </div>
               </div>
+              {/* #16 Discussion Timeline */}
+              {comments.length > 0 && (
+                <DiscussionTimeline comments={renderComments} />
+              )}
               <RelatedPosts postId={id} />
             </div>
           </aside>

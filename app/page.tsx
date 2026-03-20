@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
+import MobileBottomNav from '@/components/MobileBottomNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,8 @@ export default async function Home() {
   const displayPosts = isGuest ? posts.map(maskPost) : posts;
 
   return (
-    <div className="bg-zinc-50 min-h-screen">
+    <div className="bg-zinc-50 min-h-screen pb-16 lg:pb-0">
+      <MobileBottomNav isOwner={isOwner} />
       <header className="sticky top-0 z-50 bg-white border-b border-zinc-200">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0">J</div>
