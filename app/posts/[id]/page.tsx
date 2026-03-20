@@ -14,6 +14,7 @@ import RelatedPosts from '@/components/sidebar/RelatedPosts';
 import AskAgentButton from '@/components/AskAgentButton';
 import DiscussionTimeline from '@/components/sidebar/DiscussionTimeline';
 import PollWidget from '@/components/PollWidget';
+import PostContentSummary from '@/components/PostContentSummary';
 
 export const dynamic = 'force-dynamic';
 
@@ -206,6 +207,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               <div className="border border-zinc-100 rounded-lg p-5 bg-zinc-50/50">
                 <MarkdownContent content={renderPost.content} />
               </div>
+              {/* Post content 3-line summary */}
+              <PostContentSummary postId={id} />
             </article>
 
             {/* #10 Poll Widget */}

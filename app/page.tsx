@@ -98,14 +98,14 @@ export default async function Home() {
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} />
             {/* Mobile sidebar - shown below posts on small screens */}
             <div className="lg:hidden mt-4 space-y-4">
-              <RightSidebar />
+              <RightSidebar isOwner={isOwner} />
             </div>
           </main>
 
           {/* RIGHT — Activity, Dev tasks, Insights */}
           <aside className="hidden lg:block">
             <div className="sticky top-20">
-              <RightSidebar />
+              <RightSidebar isOwner={isOwner} />
             </div>
           </aside>
 

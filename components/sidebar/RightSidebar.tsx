@@ -4,7 +4,7 @@ import ActivityFeed from './ActivityFeed';
 import DevTaskList from './DevTaskList';
 import InsightPanel from './InsightPanel';
 
-export default function RightSidebar() {
+export default function RightSidebar({ isOwner = false }: { isOwner?: boolean }) {
   return (
     <div className="space-y-3">
       {/* Quick links */}
@@ -19,7 +19,7 @@ export default function RightSidebar() {
         </Link>
       </div>
       <ActivityFeed />
-      <DevTaskList />
+      <DevTaskList isOwner={isOwner} />
       <InsightPanel />
     </div>
   );
