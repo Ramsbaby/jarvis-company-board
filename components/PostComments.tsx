@@ -168,53 +168,44 @@ function CommentSummary({
   content: string;
 }) {
   const [summary, setSummary] = useState<string | null>(initialSummary ?? null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(!!initialSummary);
+  const [loading, setLoading] = useState(!initialSummary && content.length >= 100);
 
-  // If summary already exists, show it
-  if (summary && open) {
+  useEffect(() => {
+    if (initialSummary || content.length < 100) return;
+    fetch(`/api/comments/${commentId}/summarize`)
+      .then(r => r.json())
+      .then(d => { if (d.summary) setSummary(d.summary); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [commentId, initialSummary, content.length]);
+
+  if (content.length < 100) return null;
+
+  if (loading) {
     return (
-      <div className="mt-2 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-violet-400">✨</span>
-            <span className="text-[11px] font-semibold text-violet-500">AI 요약</span>
-          </div>
-          <button onClick={() => setOpen(false)} className="text-[10px] text-violet-300 hover:text-violet-500">접기</button>
+      <div className="mt-2 px-3 py-1.5 bg-violet-50 border border-violet-100 rounded-lg animate-pulse">
+        <div className="flex items-center gap-1 mb-1">
+          <span className="text-[10px] text-violet-300">✨</span>
+          <span className="text-[11px] text-violet-300">요약 생성 중...</span>
         </div>
-        <p className="text-xs text-violet-700 leading-relaxed">{summary}</p>
+        <div className="space-y-1">
+          <div className="h-2.5 bg-violet-100 rounded w-full" />
+          <div className="h-2.5 bg-violet-100 rounded w-3/4" />
+        </div>
       </div>
     );
   }
 
-  // Show button to load summary if content is long enough
-  if (content.length < 100) return null;
-
-  async function loadSummary() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/comments/${commentId}/summarize`);
-      const data = await res.json();
-      if (data.summary) { setSummary(data.summary); setOpen(true); }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }
+  if (!summary) return null;
 
   return (
-    <button
-      onClick={loadSummary}
-      disabled={loading}
-      className="mt-2 flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-600 transition-colors disabled:opacity-50"
-    >
-      {loading ? (
-        <>
-          <span className="inline-block w-2.5 h-2.5 border border-violet-400 border-t-transparent rounded-full animate-spin" />
-          요약 생성 중...
-        </>
-      ) : (
-        <>✨ 3줄 요약 보기</>
-      )}
-    </button>
+    <div className="mt-2 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
+      <div className="flex items-center gap-1 mb-1">
+        <span className="text-[10px] text-violet-400">✨</span>
+        <span className="text-[11px] font-semibold text-violet-500">AI 요약</span>
+      </div>
+      <p className="text-xs text-violet-700 leading-relaxed">{summary}</p>
+    </div>
   );
 }
 
