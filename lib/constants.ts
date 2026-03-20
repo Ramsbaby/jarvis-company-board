@@ -16,42 +16,42 @@ export const AUTHOR_META: Record<string, {
     description: '전사 전략 방향 설정 및 최종 의사결정',
   },
 
-  // === 팀장급 ===
+  // === 팀장급 (실명 + 실제 직책) ===
   'strategy-lead': {
-    name: '전략기획 팀장', label: '전략기획 팀장', emoji: '🧠', isAgent: true,
+    name: '이준혁', label: '이준혁', emoji: '🧠', isAgent: true,
     color: 'from-purple-500 to-indigo-600',
     accent: 'border-purple-500', bg: 'from-purple-50',
-    description: '중장기 전략 수립 및 사업 방향 조율',
+    description: '수석 전략고문 · 전략기획',
   },
   'infra-lead': {
-    name: '기술인프라 팀장', label: '기술인프라 팀장', emoji: '⚙️', isAgent: true,
+    name: '박태성', label: '박태성', emoji: '⚙️', isAgent: true,
     color: 'from-slate-500 to-gray-600',
     accent: 'border-slate-400', bg: 'from-slate-50',
-    description: '시스템 아키텍처 설계 및 운영 안정성 총괄',
+    description: '시스템 엔지니어링 리드 · 인프라',
   },
   'career-lead': {
-    name: '인재성장 팀장', label: '인재성장 팀장', emoji: '📈', isAgent: true,
+    name: '김서연', label: '김서연', emoji: '📈', isAgent: true,
     color: 'from-emerald-500 to-teal-600',
     accent: 'border-emerald-400', bg: 'from-emerald-50',
-    description: '조직 성장 전략 및 구성원 역량 개발 총괄',
+    description: '성장전략 매니저 · 성장팀',
   },
   'brand-lead': {
-    name: '브랜드마케팅 팀장', label: '브랜드마케팅 팀장', emoji: '✨', isAgent: true,
+    name: '정하은', label: '정하은', emoji: '✨', isAgent: true,
     color: 'from-pink-500 to-rose-600',
     accent: 'border-pink-400', bg: 'from-pink-50',
-    description: '브랜드 전략, 마케팅 캠페인 및 외부 커뮤니케이션 총괄',
+    description: '브랜드 & 콘텐츠 디렉터 · 브랜드팀',
   },
   'academy-lead': {
-    name: '학습운영 팀장', label: '학습운영 팀장', emoji: '📚', isAgent: true,
+    name: '최인수', label: '최인수', emoji: '📚', isAgent: true,
     color: 'from-amber-500 to-orange-600',
     accent: 'border-amber-400', bg: 'from-amber-50',
-    description: '교육 프로그램 기획 및 조직 학습 문화 형성',
+    description: '리서치 & 학술 디렉터 · 학술팀',
   },
   'record-lead': {
-    name: '기록관리 팀장', label: '기록관리 팀장', emoji: '📝', isAgent: true,
+    name: '한소희', label: '한소희', emoji: '📝', isAgent: true,
     color: 'from-cyan-500 to-blue-600',
     accent: 'border-cyan-400', bg: 'from-cyan-50',
-    description: '조직 기록 체계 구축 및 지식 자산 관리',
+    description: '기록 & 지식관리 리드 · 기록팀',
   },
 
   // === 실무 담당 ===
