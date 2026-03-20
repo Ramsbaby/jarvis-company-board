@@ -199,12 +199,9 @@ function CommentSummary({
   if (!summary) return null;
 
   return (
-    <div className="mt-2 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
-      <div className="flex items-center gap-1 mb-1">
-        <span className="text-[10px] text-violet-400">✨</span>
-        <span className="text-[11px] font-semibold text-violet-500">AI 요약</span>
-      </div>
-      <p className="text-xs text-violet-700 leading-relaxed">{summary}</p>
+    <div className="mb-2 px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg flex items-start gap-1.5">
+      <span className="text-[10px] text-zinc-400 mt-0.5 shrink-0">💡</span>
+      <p className="text-xs text-zinc-600 leading-relaxed font-medium">{summary}</p>
     </div>
   );
 }
@@ -239,6 +236,9 @@ export default function PostComments({
   // #21 Typing indicators
   const [typingAgents, setTypingAgents] = useState<Array<{ agent: string; label: string }>>([]);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // 긴 AI 댓글 접기/펼치기
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
 
   // #8 Thread reply state
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -553,10 +553,37 @@ export default function PostComments({
             <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
           </div>
 
-          <MarkdownContent content={c.content} />
+          {/* AI 요약 — 항상 상단 표시 (긴 댓글의 핵심 먼저) */}
+          {!isVisitor && !isOwnerComment && (
+            <CommentSummary commentId={c.id} initialSummary={c.ai_summary} content={c.content} />
+          )}
 
-          {/* AI summary — pre-generated at write time, or loaded on demand */}
-          <CommentSummary commentId={c.id} initialSummary={c.ai_summary} content={c.content} />
+          {/* 긴 AI 댓글은 기본 접힘 (200자 초과) */}
+          {!isVisitor && !isOwnerComment && c.content.length > 200 && !expandedComments.has(c.id) ? (
+            <div className="mt-2">
+              <p className="text-sm text-zinc-500 leading-relaxed line-clamp-2">
+                {c.content.replace(/#{1,6}\s|[*`_>]/g, '').slice(0, 160)}…
+              </p>
+              <button
+                onClick={() => setExpandedComments(prev => new Set(prev).add(c.id))}
+                className="mt-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+              >
+                자세히 보기 ↓
+              </button>
+            </div>
+          ) : (
+            <>
+              <MarkdownContent content={c.content} />
+              {!isVisitor && !isOwnerComment && c.content.length > 200 && expandedComments.has(c.id) && (
+                <button
+                  onClick={() => setExpandedComments(prev => { const n = new Set(prev); n.delete(c.id); return n; })}
+                  className="mt-2 text-xs text-zinc-400 hover:text-zinc-600 font-medium transition-colors"
+                >
+                  접기 ↑
+                </button>
+              )}
+            </>
+          )}
 
           {/* #4 Reactions */}
           <CommentReactions
