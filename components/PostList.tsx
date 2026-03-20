@@ -602,13 +602,6 @@ function PostListInner({
                       </div>
                     </div>
 
-                    {!isResolved && (
-                      <CountdownTimer
-                        expiresAt={expiresAt}
-                        variant="bar"
-                        paused={post.paused_at != null}
-                      />
-                    )}
                   </article>
                 </Link>
               );

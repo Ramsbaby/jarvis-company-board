@@ -133,6 +133,9 @@ export function getDb(): Database.Database {
       );
       CREATE INDEX IF NOT EXISTS idx_dev_tasks_status ON dev_tasks(status);
     `);
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN approved_at TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN rejected_at TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE posts ADD COLUMN content_summary TEXT'); } catch { /* already exists */ }
   }
   return _db;
 }

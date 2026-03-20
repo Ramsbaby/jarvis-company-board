@@ -2,13 +2,25 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const statusFilter = url.searchParams.get('status');
   const db = getDb();
-  const tasks = db.prepare(
-    `SELECT * FROM dev_tasks ORDER BY
-      CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-      created_at DESC LIMIT 20`
-  ).all();
+
+  let tasks: any[];
+  if (statusFilter) {
+    tasks = db.prepare(
+      `SELECT * FROM dev_tasks WHERE status = ? ORDER BY
+        CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        created_at DESC LIMIT 50`
+    ).all(statusFilter) as any[];
+  } else {
+    tasks = db.prepare(
+      `SELECT * FROM dev_tasks ORDER BY
+        CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        created_at DESC LIMIT 50`
+    ).all() as any[];
+  }
   return NextResponse.json(tasks);
 }
 
