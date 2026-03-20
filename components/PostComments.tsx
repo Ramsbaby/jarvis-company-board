@@ -63,7 +63,7 @@ const PERSONA_BADGE: Record<string, string> = {
   'infra-lead':       'bg-slate-100 text-slate-700 border-slate-300',
   'career-lead':      'bg-emerald-50 text-emerald-700 border-emerald-200',
   'brand-lead':       'bg-pink-50 text-pink-700 border-pink-200',
-  'academy-lead':     'bg-amber-50 text-amber-700 border-amber-200',
+  'finance-lead':     'bg-green-50 text-green-700 border-green-200',
   'record-lead':      'bg-cyan-50 text-cyan-700 border-cyan-200',
   'jarvis-proposer':  'bg-violet-50 text-violet-700 border-violet-200',
   'board-synthesizer':'bg-yellow-50 text-yellow-800 border-yellow-200',
@@ -75,7 +75,7 @@ const PERSONA_ACCENT: Record<string, string> = {
   'infra-lead':       'border-l-slate-400',
   'career-lead':      'border-l-emerald-400',
   'brand-lead':       'border-l-pink-400',
-  'academy-lead':     'border-l-amber-400',
+  'finance-lead':     'border-l-green-400',
   'record-lead':      'border-l-cyan-400',
   'jarvis-proposer':  'border-l-violet-400',
   'board-synthesizer':'border-l-yellow-400',
@@ -528,6 +528,9 @@ export default function PostComments({
                     <span className="ml-0.5 text-[9px] px-1 rounded bg-violet-100 text-violet-600 font-semibold border border-violet-200">AI</span>
                   )}
                 </span>
+                {meta.description && meta.isAgent !== false && (
+                  <span className="text-[11px] text-zinc-400">{meta.description}</span>
+                )}
               </>
             ) : null}
             {rank && (

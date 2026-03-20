@@ -543,26 +543,22 @@ function PostListInner({
                     {/* ── Countdown header — only for non-resolved posts ── */}
                     {!isResolved && (
                       <div className={`select-none overflow-hidden ${
-                        isTimedOut ? 'bg-red-500' :
-                        isUrgent   ? 'bg-red-600' :
-                        isWarning  ? 'bg-amber-500' :
-                        isPaused   ? 'bg-amber-400' :
-                                     'bg-indigo-600'
+                        isTimedOut ? 'bg-gradient-to-r from-red-600 to-red-800' :
+                        isUrgent   ? 'bg-gradient-to-r from-red-500 to-rose-700' :
+                        isWarning  ? 'bg-gradient-to-r from-amber-400 to-orange-500' :
+                        isPaused   ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
+                                     'bg-gradient-to-r from-indigo-500 to-indigo-700'
                       } ${isUrgent ? 'animate-pulse' : ''}`}>
                         {/* Main timer row */}
-                        <div className="relative flex items-center gap-3 px-4 pt-2.5 pb-1.5 overflow-hidden">
-                          {/* Progress fill overlay (dark right side) */}
+                        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+                          {/* Pulsing live dot */}
                           {isActiveNow && !isPaused && (
-                            <div className="absolute inset-y-0 right-0 bg-black/20 transition-none pointer-events-none"
-                              style={{ width: `${100 - countPct}%` }} />
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isUrgent ? 'bg-white animate-ping' : 'bg-white/60 animate-pulse'}`} />
                           )}
 
                           {/* Big timer number */}
-                          <span className={`relative z-10 font-black tabular-nums tracking-tight leading-none ${
-                            isTimedOut ? 'text-white text-base' :
-                            isUrgent   ? 'text-white text-2xl' :
-                            isWarning  ? 'text-white text-xl' :
-                                         'text-white text-2xl'
+                          <span className={`font-black tabular-nums tracking-tight leading-none text-white ${
+                            isTimedOut ? 'text-xl' : 'text-4xl'
                           }`}>
                             {isTimedOut
                               ? '🔴 마감됨'
@@ -573,30 +569,20 @@ function PostListInner({
                           </span>
 
                           {isActiveNow && !isPaused && (
-                            <span className="relative z-10 text-white/70 text-xs font-medium">남음</span>
+                            <span className="text-white/80 text-sm font-semibold">남음</span>
                           )}
 
                           {/* Right label */}
-                          <span className={`relative z-10 ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                            isTimedOut ? 'bg-red-700/60 text-white' :
-                            isUrgent   ? 'bg-red-800/50 text-white' :
-                            isWarning  ? 'bg-amber-600/50 text-white' :
-                            isPaused   ? 'bg-amber-600/50 text-white' :
-                                         'bg-indigo-700/50 text-white/90'
-                          }`}>
-                            {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '논의 진행중'}
+                          <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white whitespace-nowrap">
+                            {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '🟢 진행중'}
                           </span>
                         </div>
 
                         {/* Progress bar strip */}
                         {isActiveNow && !isPaused && (
-                          <div className="h-1 bg-black/20 mx-4 mb-2 rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-white/20 mx-4 mb-3 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-none ${
-                                isUrgent  ? 'bg-white/90' :
-                                isWarning ? 'bg-white/80' :
-                                            'bg-white/70'
-                              }`}
+                              className="h-full rounded-full bg-white/80 transition-none"
                               style={{ width: `${countPct}%` }}
                             />
                           </div>
