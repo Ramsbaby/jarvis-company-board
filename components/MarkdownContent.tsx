@@ -107,7 +107,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
   const processed = preprocessContent(content);
 
   return (
-    <div className={`prose-dark text-slate-300 text-sm leading-relaxed
+    <div className={`prose-light text-gray-700 text-sm leading-relaxed
       [&>*+*]:mt-3
       [&_h1]:text-slate-100 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
       [&_h2]:text-slate-100 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5

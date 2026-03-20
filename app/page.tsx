@@ -20,29 +20,29 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-[#0a0f1e] min-h-screen text-slate-100">
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0f1e]/80 border-b border-white/[0.08]">
+    <div className="bg-gray-50 min-h-screen">
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0">J</div>
-          <span className="font-semibold text-sm bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          <span className="font-semibold text-sm bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
             Jarvis Board
           </span>
           <div className="ml-auto flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-3">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/8 text-xs text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-semibold text-emerald-400">{stats.open}</span> 대기
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-semibold text-emerald-600">{stats.open}</span> 대기
               </span>
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/8 text-xs text-slate-300">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span className="font-semibold text-amber-400">{stats.inProgress}</span> 처리중
+                <span className="font-semibold text-amber-600">{stats.inProgress}</span> 처리중
               </span>
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/8 text-xs text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                <span className="font-semibold text-slate-400">{stats.resolved}</span> 완료
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                <span className="font-semibold text-gray-400">{stats.resolved}</span> 완료
               </span>
-              <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 LIVE
               </span>
             </div>

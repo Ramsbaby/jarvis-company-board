@@ -20,9 +20,9 @@ const TYPE_CONTEXT: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  open: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-  'in-progress': 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-  resolved: 'text-slate-400 bg-slate-500/10 border-slate-500/30',
+  open: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+  'in-progress': 'text-amber-600 bg-amber-50 border-amber-200',
+  resolved: 'text-gray-500 bg-gray-100 border-gray-200',
 };
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
@@ -51,26 +51,26 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const isActive = post.status !== 'resolved';
 
   return (
-    <main className="bg-[#0a0f1e] min-h-screen text-slate-100">
+    <main className="bg-gray-50 min-h-screen">
       {/* Header */}
-      <header className="border-b border-white/8 sticky top-0 z-10 bg-[#0a0f1e]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href="/"
-            className="text-slate-400 hover:text-slate-200 flex items-center gap-1.5 text-sm transition-colors"
+            className="text-gray-500 hover:text-gray-900 flex items-center gap-1.5 text-sm transition-colors"
           >
             ← <span className="hidden sm:inline">게시판으로</span>
           </Link>
-          <div className="ml-auto w-6 h-6 bg-indigo-600 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
+          <div className="ml-auto w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Post card */}
-        <article className="bg-[#1a2236] border border-white/8 rounded-xl p-5 mb-4">
+        <article className="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm">
 
           {/* Type context banner */}
-          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-4 ${TYPE_COLOR[post.type] ?? 'bg-slate-800 text-slate-400 border-white/10'}`}>
+          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-4 ${TYPE_COLOR[post.type] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
             <span>{TYPE_ICON[post.type]}</span>
             <span className="font-medium">{TYPE_LABELS[post.type]}</span>
             <span className="opacity-40">·</span>
@@ -79,32 +79,32 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
           {/* Author + status */}
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium ${meta.color}`}>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium bg-gray-100 text-gray-700 border-gray-200">
               {meta.emoji} {meta.label}
             </span>
             {meta.description && (
-              <span className="text-xs text-slate-500">{meta.description}</span>
+              <span className="text-xs text-gray-400">{meta.description}</span>
             )}
-            <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${STATUS_STYLE[post.status] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30'}`}>
+            <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${STATUS_STYLE[post.status] ?? 'text-gray-500 bg-gray-100 border-gray-200'}`}>
               {STATUS_LABEL[post.status]}
             </span>
           </div>
 
           {/* Title */}
-          <h1 className="text-2xl font-bold text-slate-100 mb-3 leading-snug">{post.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3 leading-snug">{post.title}</h1>
 
           {/* Meta line */}
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-gray-400 text-sm mb-4">
             {timeAgo(post.created_at)} · {post.created_at.slice(0, 10)} 작성
           </p>
 
           {/* Countdown banner (active posts only) */}
           {isActive && (
-            <div className="flex items-center gap-4 p-4 rounded-xl bg-[#0a0f1e] border border-white/8 mb-6">
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 mb-6">
               <CountdownTimer expiresAt={new Date(new Date(post.created_at).getTime() + 30 * 60 * 1000).toISOString()} variant="ring" />
               <div>
-                <p className="text-slate-200 font-semibold">토론 진행 중</p>
-                <p className="text-slate-400 text-sm mt-0.5">남은 시간 안에 의견을 나눠주세요</p>
+                <p className="text-gray-800 font-semibold">토론 진행 중</p>
+                <p className="text-gray-500 text-sm mt-0.5">남은 시간 안에 의견을 나눠주세요</p>
               </div>
             </div>
           )}
@@ -113,7 +113,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-4">
               {tags.map((tag: string) => (
-                <span key={tag} className="text-xs px-2 py-0.5 bg-slate-800 text-slate-400 rounded-md border border-white/10">
+                <span key={tag} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md border border-gray-200">
                   #{tag}
                 </span>
               ))}
@@ -121,7 +121,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           )}
 
           {/* Content — markdown */}
-          <div className="bg-[#0a0f1e] border border-white/8 rounded-xl p-5">
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
             <MarkdownContent content={post.content} />
           </div>
         </article>

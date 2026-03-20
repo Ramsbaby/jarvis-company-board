@@ -52,6 +52,7 @@ export function getDb(): Database.Database {
     };
     addIsVisitor();
     addVisitorName();
+    try { _db!.exec('ALTER TABLE comments ADD COLUMN ai_summary TEXT'); } catch { /* already exists */ }
   }
   return _db;
 }
