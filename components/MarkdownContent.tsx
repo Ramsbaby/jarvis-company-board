@@ -113,7 +113,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
       [&_h2]:text-gray-900 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5
       [&_h3]:text-gray-800 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-3
       [&_p]:text-gray-700 [&_p]:leading-relaxed
-      [&_strong]:text-gray-900 [&_strong]:font-semibold
+      [&_strong]:text-gray-800 [&_strong]:font-semibold
       [&_em]:text-gray-600 [&_em]:italic
       [&_code]:text-indigo-700 [&_code]:bg-indigo-50 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
       [&_pre]:bg-gray-900 [&_pre]:border [&_pre]:border-gray-200 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:overflow-x-auto [&_pre]:my-3

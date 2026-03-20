@@ -43,22 +43,21 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
   if (variant === 'badge') {
     if (info.expired) {
       return (
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 ${className}`}>
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 border border-gray-200 ${className}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
           토론 종료
         </span>
       );
     }
-    const dotColor = isCritical ? 'bg-red-500' : info.color === 'green' ? 'bg-emerald-400' : info.color === 'amber' ? 'bg-amber-400' : 'bg-red-400';
-    const textColor = isCritical ? 'text-red-600' : info.color === 'green' ? 'text-emerald-300' : info.color === 'amber' ? 'text-amber-300' : 'text-red-300';
+    const dotColor = isCritical ? 'bg-red-500 animate-pulse' : info.color === 'green' ? 'bg-emerald-500' : info.color === 'amber' ? 'bg-amber-500' : 'bg-red-500';
+    const textColor = isCritical ? 'text-red-700' : info.color === 'green' ? 'text-emerald-700' : info.color === 'amber' ? 'text-amber-700' : 'text-red-700';
     const bgColor = isCritical
       ? 'bg-red-50 border-red-300'
-      : info.color === 'green' ? 'bg-emerald-900/30 border-emerald-700/40' : info.color === 'amber' ? 'bg-amber-900/30 border-amber-700/40' : 'bg-red-900/30 border-red-700/40';
-    const pulse = info.color === 'red' ? 'animate-countdown-pulse' : '';
+      : info.color === 'green' ? 'bg-emerald-50 border-emerald-200' : info.color === 'amber' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
     const critical = isCritical ? 'animate-countdown-critical' : '';
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${bgColor} ${textColor} ${pulse} ${critical} ${className}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${info.color === 'red' ? 'animate-pulse' : ''}`} />
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${bgColor} ${textColor} ${critical} ${className}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
         ⏱ {info.label} 남음
       </span>
     );
@@ -73,7 +72,7 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
       'countdown-bar countdown-bar-red';
     const criticalBarStyle = isCritical ? { background: '#ef4444' } : {};
     return (
-      <div className={`w-full bg-slate-800/50 rounded-b-xl overflow-hidden ${className}`} style={{ height: '3px' }}>
+      <div className={`w-full bg-gray-100 rounded-b-xl overflow-hidden ${className}`} style={{ height: '3px' }}>
         <div
           className={`${barClass} ${isCritical ? 'animate-countdown-critical' : ''}`}
           style={{ width: info.expired ? '100%' : `${info.pct}%`, height: '100%', transition: 'width 1s linear', ...criticalBarStyle }}
@@ -86,7 +85,7 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
   const radius = 36;
   const circ = 2 * Math.PI * radius;
   const strokeDash = info.expired ? circ : (info.pct / 100) * circ;
-  const strokeColor = info.expired ? '#374151' :
+  const strokeColor = info.expired ? '#d1d5db' :
     isCritical ? '#ef4444' :
     info.color === 'green' ? '#10b981' :
     info.color === 'amber' ? '#f59e0b' : '#ef4444';
@@ -98,7 +97,7 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
     <div className={`flex flex-col items-center gap-1 ${className}`}>
       <div className="relative w-24 h-24">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
-          <circle cx="44" cy="44" r={radius} fill="none" stroke="#1e293b" strokeWidth="6" />
+          <circle cx="44" cy="44" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="6" />
           <circle
             cx="44" cy="44" r={radius}
             fill="none"
@@ -111,17 +110,17 @@ export default function CountdownTimer({ expiresAt, variant = 'badge', className
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           {info.expired ? (
-            <span className="text-slate-400 text-xs font-medium">만료</span>
+            <span className="text-gray-400 text-xs font-medium">만료</span>
           ) : (
             <>
-              <span className="text-white font-bold text-lg leading-none">{info.min}</span>
-              <span className="text-slate-400 text-[10px]">분</span>
+              <span className="text-gray-900 font-bold text-lg leading-none">{info.min}</span>
+              <span className="text-gray-400 text-[10px]">분</span>
             </>
           )}
         </div>
       </div>
       {!info.expired && (
-        <span className="text-xs text-slate-400">{info.label}</span>
+        <span className="text-xs text-gray-500">{info.label}</span>
       )}
     </div>
   );
