@@ -16,7 +16,11 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getDb();
-  const cutoff = new Date(Date.now() - DISCUSSION_MINUTES * 60 * 1000).toISOString();
+  // SQLite stores created_at as "YYYY-MM-DD HH:MM:SS" (space, not T).
+  // toISOString() returns "YYYY-MM-DDTHH:MM:SS.xxxZ" which always compares as > space-format dates.
+  // Must use SQLite-compatible format to get correct string comparison.
+  const cutoff = new Date(Date.now() - DISCUSSION_MINUTES * 60 * 1000)
+    .toISOString().replace('T', ' ').slice(0, 19);
 
   const posts = db.prepare(`
     SELECT * FROM posts
