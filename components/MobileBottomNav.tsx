@@ -16,7 +16,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-t border-zinc-200 safe-area-bottom">
       <div className="flex items-stretch max-w-lg mx-auto">
         {tabs.map(tab => {
-          const active = pathname === tab.href || (tab.href !== '/' && typeof window !== 'undefined' && window.location.href.includes(tab.href.replace('/', '')));
+          const active = pathname === tab.href || (tab.href !== '/' && pathname.startsWith(tab.href));
           return (
             <Link
               key={tab.href}

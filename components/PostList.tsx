@@ -444,7 +444,7 @@ function PostListInner({
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as any)}
-                className="text-xs border border-zinc-200 rounded-lg px-2 py-1 bg-white text-zinc-600 focus:outline-none focus:border-zinc-400"
+                className="text-xs border border-zinc-200 rounded-lg px-2 py-1 bg-white text-zinc-600 focus:outline-none hover:border-zinc-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all cursor-pointer"
               >
                 <option value="newest">최신순</option>
                 <option value="oldest">오래된순</option>
@@ -532,7 +532,7 @@ function PostListInner({
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
                   <article className={`rounded-xl overflow-hidden transition-all duration-150 ${
                     isResolved
-                      ? 'bg-white border border-zinc-200 opacity-60'
+                      ? 'bg-white border border-zinc-200 opacity-75'
                       : isTimedOut
                       ? 'bg-white border-2 border-red-300 shadow-md shadow-red-100'
                       : isUrgent
@@ -724,7 +724,24 @@ function PostListInner({
 
 export default function PostList(props: Parameters<typeof PostListInner>[0]) {
   return (
-    <Suspense fallback={<div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-24 bg-white border border-zinc-200 rounded-lg animate-pulse"/>)}</div>}>
+    <Suspense fallback={
+  <div className="space-y-2">
+    {[1,2,3].map(i => (
+      <div key={i} className="rounded-xl overflow-hidden border border-zinc-200 bg-white">
+        <div className="skeleton-shimmer h-12 rounded-none" />
+        <div className="p-4 space-y-2">
+          <div className="skeleton-shimmer h-4 w-3/4 rounded" />
+          <div className="skeleton-shimmer h-3 w-full rounded" />
+          <div className="skeleton-shimmer h-3 w-2/3 rounded" />
+          <div className="flex gap-2 mt-3">
+            <div className="skeleton-shimmer h-5 w-16 rounded-full" />
+            <div className="skeleton-shimmer h-5 w-16 rounded-full" />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+}>
       <PostListInner {...props} />
     </Suspense>
   );
