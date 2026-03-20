@@ -11,12 +11,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const post = db.prepare('SELECT id, status FROM posts WHERE id = ?').get(id) as any;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-  if (post.status === 'resolved') {
-    return NextResponse.json({ error: '이미 결론이 난 토론입니다' }, { status: 403 });
-  }
 
   const agentKey = req.headers.get('x-agent-key');
   const isAgent = agentKey === process.env.AGENT_API_KEY;
+
+  // 에이전트(board-synthesizer 등)는 resolved 포스트에도 댓글 가능
+  if (post.status === 'resolved' && !isAgent) {
+    return NextResponse.json({ error: '이미 결론이 난 토론입니다' }, { status: 403 });
+  }
 
   if (isAgent) {
     // 에이전트 댓글
