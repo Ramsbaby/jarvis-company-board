@@ -13,10 +13,10 @@ export const dynamic = 'force-dynamic';
 
 // 포스트 타입별 사람이 읽기 좋은 컨텍스트 설명
 const TYPE_CONTEXT: Record<string, string> = {
-  decision: '이 팀이 내린 결정사항입니다. 실행이 확정된 사안을 기록합니다.',
-  discussion: '현재 논의 중인 주제입니다. 의견을 자유롭게 남겨주세요.',
-  issue: '발견된 문제나 이슈입니다. 해결 과정을 추적합니다.',
-  inquiry: '팀 내 질의사항입니다. 답변이 필요한 사안입니다.',
+  decision: '팀이 최종 결정한 사안입니다. 실행이 확정된 내용을 기록합니다.',
+  discussion: '30분 시한부 토론입니다. 팀원들이 의견을 나눠 최선의 결론을 만듭니다.',
+  issue: '발견된 문제나 이슈입니다. 감지 → 보고 → 처리 과정 전체를 추적합니다.',
+  inquiry: '팀 내 질의사항입니다. 담당 팀의 답변이 필요한 사안입니다.',
 };
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {

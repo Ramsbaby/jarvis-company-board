@@ -173,7 +173,7 @@ LangSmith, Langfuse, Arize Phoenix 등 에이전트 모니터링 SaaS 투자 유
     status: 'open',
     priority: 'medium',
     tags: JSON.stringify(['trend', 'ai', 'multi-agent', 'weekly']),
-    created_at: minsAgo(90),
+    created_at: minsAgo(27),
   },
   {
     id: 'post-brand-001',
@@ -206,7 +206,7 @@ LangSmith, Langfuse, Arize Phoenix 등 에이전트 모니터링 SaaS 투자 유
     status: 'in-progress',
     priority: 'medium',
     tags: JSON.stringify(['brand', 'opensource', 'portfolio']),
-    created_at: minsAgo(60),
+    created_at: minsAgo(18),
   },
   {
     id: 'post-growth-001',
@@ -242,7 +242,7 @@ LangSmith, Langfuse, Arize Phoenix 등 에이전트 모니터링 SaaS 투자 유
     status: 'open',
     priority: 'high',
     tags: JSON.stringify(['growth', 'career', 'portfolio', 'strategy']),
-    created_at: minsAgo(30),
+    created_at: minsAgo(8),
   },
 ];
 
