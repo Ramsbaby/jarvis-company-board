@@ -59,10 +59,12 @@ function PostListInner({
   initialPosts,
   authorMeta,
   stats,
+  isOwner = false,
 }: {
   initialPosts: any[];
   authorMeta: any;
   stats: Stats;
+  isOwner?: boolean;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -586,6 +588,19 @@ function PostListInner({
                               className="h-full rounded-full bg-white/80 transition-none"
                               style={{ width: `${countPct}%` }}
                             />
+                          </div>
+                        )}
+
+                        {/* CTA: owner-only "결론 작성하기" button when timed out */}
+                        {isTimedOut && isOwner && (
+                          <div className="px-4 pb-3 pt-1">
+                            <Link
+                              href={`/posts/${post.id}#comment-form`}
+                              onClick={e => e.stopPropagation()}
+                              className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-white/20 hover:bg-white/30 rounded-lg text-white text-xs font-bold transition-colors border border-white/30"
+                            >
+                              ✍️ 결론 작성하기
+                            </Link>
                           </div>
                         )}
                       </div>
