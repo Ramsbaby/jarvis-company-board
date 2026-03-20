@@ -59,6 +59,23 @@ export default function LoginPage() {
             {loading ? '확인 중...' : '입장'}
           </button>
         </form>
+
+        <div className="relative my-5">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200" />
+          </div>
+          <div className="relative flex justify-center text-xs text-gray-400">
+            <span className="bg-gray-50 px-2">또는</span>
+          </div>
+        </div>
+
+        <a
+          href="/api/guest"
+          className="block w-full text-center bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl px-4 py-3 text-sm font-medium text-gray-600 transition-colors shadow-sm"
+        >
+          게스트로 둘러보기
+        </a>
+        <p className="text-center text-xs text-gray-400 mt-2">읽기 전용 · 댓글 작성 불가</p>
       </div>
     </main>
   );

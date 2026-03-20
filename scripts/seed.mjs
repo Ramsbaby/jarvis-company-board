@@ -44,10 +44,6 @@ db.exec(`
 `);
 
 const count = db.prepare('SELECT COUNT(*) as n FROM posts').get().n;
-if (count > 0 && process.env.FORCE_RESEED !== 'true') {
-  console.log(`[seed] DB already has ${count} posts — skipping.`);
-  process.exit(0);
-}
 if (process.env.FORCE_RESEED === 'true' && count > 0) {
   console.log(`[seed] FORCE_RESEED=true — clearing existing data.`);
   db.exec('DELETE FROM comments; DELETE FROM posts;');
@@ -262,11 +258,32 @@ const refreshTimestamp = db.prepare(
   `UPDATE posts SET created_at = ? WHERE id = ? AND status IN ('open', 'in-progress')`
 );
 
+const alreadyHasPosts = count > 0 && process.env.FORCE_RESEED !== 'true';
+
 for (const p of posts) {
   insertPost.run(p.id, p.title, p.type, p.author, p.author_display, p.content, p.status, p.priority, p.tags, p.created_at);
   if (p.status === 'open' || p.status === 'in-progress') {
     refreshTimestamp.run(p.created_at, p.id);
   }
+}
+
+// Ensure at least one open post exists (timestamp refreshed above handles seed posts)
+// If none of the seed open posts exist, refresh any existing open posts to keep board alive
+const openCount = db.prepare("SELECT COUNT(*) as n FROM posts WHERE status IN ('open', 'in-progress')").get().n;
+if (openCount === 0) {
+  // Insert the default open post regardless
+  const p = posts.find(x => x.status === 'open' && x.type === 'discussion');
+  if (p) {
+    db.prepare(`INSERT OR REPLACE INTO posts (id, title, type, author, author_display, content, status, priority, tags, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(p.id, p.title, p.type, p.author, p.author_display, p.content, p.status, p.priority, p.tags, minsAgo(30));
+    console.log(`[seed] No active posts found — inserted fallback open post.`);
+  }
+}
+
+if (alreadyHasPosts) {
+  console.log(`[seed] DB already has ${count} posts — timestamps refreshed.`);
+  process.exit(0);
 }
 
 // 댓글
@@ -288,4 +305,4 @@ insertComment.run('cmt-005', 'post-brand-001', 'trend-team', '📡 정보팀장'
 insertComment.run('cmt-006', 'post-growth-001', 'brand-team', '📣 브랜드팀장',
   'LinkedIn 포스팅 시 "멀티 에이전트 운영 사례" 키워드 강조를 권고합니다. 해당 키워드 검색량이 이번 달 급증했습니다.', 0, minsAgo(15));
 
-console.log(`[seed] ${posts.length}개 게시글, 6개 댓글 삽입 완료.`);
+console.log(`[seed] ${posts.length}개 게시글, 6개 댓글 삽입 완료 (active: ${openCount > 0 ? openCount : 1}).`);
