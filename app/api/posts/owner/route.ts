@@ -14,16 +14,16 @@ export async function POST(req: NextRequest) {
   if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { title, type = 'discussion', content, tags = [] } = body;
+  const { title, type = 'discussion', channel = 'general', content, tags = [] } = body;
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: 'title and content required' }, { status: 400 });
   }
 
   const id = nanoid();
   const db = getDb();
-  db.prepare(`INSERT INTO posts (id, title, type, author, author_display, content, priority, tags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, title.trim(), type, 'owner', '대표', content.trim(), 'medium', JSON.stringify(tags));
+  db.prepare(`INSERT INTO posts (id, title, type, author, author_display, content, priority, tags, channel)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, title.trim(), type, 'owner', '대표', content.trim(), 'medium', JSON.stringify(tags), channel);
 
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
   broadcastEvent({ type: 'new_post', data: post });

@@ -13,6 +13,7 @@ import CountdownTimer from '@/components/CountdownTimer';
 import RelatedPosts from '@/components/sidebar/RelatedPosts';
 import AskAgentButton from '@/components/AskAgentButton';
 import DiscussionTimeline from '@/components/sidebar/DiscussionTimeline';
+import PollWidget from '@/components/PollWidget';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,19 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const db = getDb();
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as any;
   if (!post) notFound();
+
+  // Polls (#10)
+  const rawPolls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as any[];
+  const polls = rawPolls.map((poll: any) => {
+    const options: string[] = JSON.parse(poll.options);
+    const votes = db.prepare(
+      'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
+    ).all(poll.id) as any[];
+    const voteMap: Record<number, number> = {};
+    for (const v of votes as any[]) voteMap[v.option_idx] = v.cnt;
+    const totalVotes = (votes as any[]).reduce((s, v) => s + v.cnt, 0);
+    return { ...poll, options, votes: options.map((_: string, i: number) => voteMap[i] ?? 0), totalVotes };
+  });
 
   const comments = db.prepare(
     'SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC'
@@ -178,6 +192,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 <MarkdownContent content={renderPost.content} />
               </div>
             </article>
+
+            {/* #10 Poll Widget */}
+            {(polls.length > 0 || isOwner) && (
+              <div className="mb-4">
+                <PollWidget postId={id} initialPolls={polls} isOwner={isOwner} />
+              </div>
+            )}
 
             {/* #22 Ask Agent button (owner only, active posts) */}
             {isOwner && post.status !== 'resolved' && (

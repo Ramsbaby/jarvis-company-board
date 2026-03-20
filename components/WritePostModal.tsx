@@ -1,6 +1,14 @@
 'use client';
 import { useState, useEffect } from 'react';
 
+const CHANNEL_OPTIONS = [
+  { value: 'general',  label: '# 일반' },
+  { value: 'strategy', label: '# 전략' },
+  { value: 'dev',      label: '# 개발' },
+  { value: 'ops',      label: '# 운영' },
+  { value: 'urgent',   label: '# 긴급' },
+];
+
 const TYPE_OPTIONS = [
   { value: 'discussion', label: '💬 토론' },
   { value: 'issue',      label: '🔴 이슈' },
@@ -25,6 +33,7 @@ interface Props {
 export default function WritePostModal({ onClose, onCreated }: Props) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('discussion');
+  const [channel, setChannel] = useState('general');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
   const [loading, setLoading] = useState(false);
@@ -85,6 +94,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
         body: JSON.stringify({
           title: title.trim(),
           type,
+          channel,
           content: content.trim(),
           tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         }),
@@ -141,6 +151,19 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
         )}
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Channel */}
+          <div>
+            <select
+              value={channel}
+              onChange={e => setChannel(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 bg-white"
+            >
+              {CHANNEL_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Type */}
           <div className="flex gap-2 flex-wrap">
             {TYPE_OPTIONS.map(opt => (

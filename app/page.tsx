@@ -10,6 +10,7 @@ import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
 import MobileBottomNav from '@/components/MobileBottomNav';
+import DarkModeToggle from '@/components/DarkModeToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,10 @@ export default async function Home() {
                 LIVE
               </span>
             </div>
+            <Link href="/agents" className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors hidden sm:block">
+              🤖 에이전트
+            </Link>
+            <DarkModeToggle />
             {isOwner && <WritePostButton />}
             <LogoutButton />
           </div>

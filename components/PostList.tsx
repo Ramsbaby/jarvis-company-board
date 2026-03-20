@@ -64,6 +64,7 @@ function PostListInner({
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [authorFilter, setAuthorFilter] = useState(searchParams.get('author') || '');
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') || '');
+  const [channelFilter, setChannelFilter] = useState(searchParams.get('channel') || '');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'comments'>('newest');
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | null>(null);
 
@@ -130,12 +131,13 @@ function PostListInner({
     return () => clearTimeout(searchDebounce.current);
   }, [searchQuery]);
 
-  function pushFilter(t: string, s: string, a: string, tag: string) {
+  function pushFilter(t: string, s: string, a: string, tag: string, ch = channelFilter) {
     const p = new URLSearchParams();
     if (t) p.set('type', t);
     if (s) p.set('status', s);
     if (a) p.set('author', a);
     if (tag) p.set('tag', tag);
+    if (ch) p.set('channel', ch);
     const q = p.toString();
     router.replace(q ? `/?${q}` : '/', { scroll: false });
   }
@@ -145,6 +147,7 @@ function PostListInner({
     setStatusFilter(searchParams.get('status') || '');
     setAuthorFilter(searchParams.get('author') || '');
     setTagFilter(searchParams.get('tag') || '');
+    setChannelFilter(searchParams.get('channel') || '');
   }, [searchParams]);
 
   useEffect(() => {
@@ -207,6 +210,7 @@ function PostListInner({
     if (typeFilter && p.type !== typeFilter) return false;
     if (statusFilter && p.status !== statusFilter) return false;
     if (authorFilter && p.author !== authorFilter) return false;
+    if (channelFilter && (p.channel || 'general') !== channelFilter) return false;
     if (tagFilter) {
       const tags = parseTags(p.tags);
       if (!tags.includes(tagFilter)) return false;
@@ -367,6 +371,25 @@ function PostListInner({
             </button>
           )}
 
+          {/* #17 Channel filter */}
+          {['strategy', 'dev', 'ops', 'urgent'].map(ch => (
+            <button
+              key={ch}
+              onClick={() => {
+                const next = channelFilter === ch ? '' : ch;
+                setChannelFilter(next);
+                pushFilter(typeFilter, statusFilter, authorFilter, tagFilter, next);
+              }}
+              className={`text-xs px-2.5 py-1 rounded-md border transition-all ${
+                channelFilter === ch
+                  ? 'bg-zinc-900 text-white border-zinc-900'
+                  : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+              }`}
+            >
+              #{ch}
+            </button>
+          ))}
+
           {/* #11 Bookmark filter */}
           <button
             onClick={() => setShowBookmarksOnly(p => !p)}
@@ -520,6 +543,20 @@ function PostListInner({
 
                       {/* Footer */}
                       <div className="flex items-center gap-2 flex-wrap">
+                        {/* #17 Channel chip */}
+                        {post.channel && post.channel !== 'general' && (
+                          <span
+                            onClick={e => {
+                              e.preventDefault();
+                              const next = channelFilter === post.channel ? '' : post.channel;
+                              setChannelFilter(next);
+                              pushFilter(typeFilter, statusFilter, authorFilter, tagFilter, next);
+                            }}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-200 bg-zinc-50 text-zinc-500 cursor-pointer hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                          >
+                            #{post.channel}
+                          </span>
+                        )}
                         {/* #11 Bookmark button */}
                         <button
                           onClick={e => toggleBookmark(post.id, e)}

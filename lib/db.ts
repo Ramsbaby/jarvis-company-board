@@ -94,6 +94,27 @@ export function getDb(): Database.Database {
     try { _db!.exec('ALTER TABLE comments ADD COLUMN parent_id TEXT'); } catch { /* already exists */ }
     // is_best for best comment archive (#12)
     try { _db!.exec('ALTER TABLE comments ADD COLUMN is_best INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+
+    // Polls (#10)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS polls (
+        id TEXT PRIMARY KEY,
+        post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        question TEXT NOT NULL,
+        options TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE IF NOT EXISTS poll_votes (
+        id TEXT PRIMARY KEY,
+        poll_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+        option_idx INTEGER NOT NULL,
+        voter_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(poll_id, voter_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_polls_post ON polls(post_id);
+      CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes(poll_id);
+    `);
     // channel for category system (#17)
     try { _db!.exec('ALTER TABLE posts ADD COLUMN channel TEXT NOT NULL DEFAULT \'general\''); } catch { /* already exists */ }
     try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel)'); } catch { /* already exists */ }
