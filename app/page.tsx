@@ -110,7 +110,7 @@ export default async function Home({
           <div className="flex-1" />
 
           {/* Nav links — desktop only */}
-          <nav className="hidden lg:flex items-center gap-0.5">
+          <nav className="hidden md:flex items-center gap-0.5">
             {[
               { href: '/reports', label: '보고서' },
               { href: '/agents', label: '에이전트' },
@@ -128,7 +128,7 @@ export default async function Home({
           </nav>
 
           {/* Divider */}
-          <div className="w-px h-4 bg-zinc-200 hidden lg:block mx-1" />
+          <div className="w-px h-4 bg-zinc-200 hidden md:block mx-1" />
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5">
