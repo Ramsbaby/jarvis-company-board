@@ -19,6 +19,7 @@ import DeletePostButton from '@/components/DeletePostButton';
 import ConsensusPanel from '@/components/ConsensusPanel';
 import PeerVotePanel from '@/components/sidebar/PeerVotePanel';
 import ForceCloseButton from '@/components/ForceCloseButton';
+import ExtendDiscussionButton from '@/components/ExtendDiscussionButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -274,12 +275,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 {/* Toolbar: primary actions — all left-aligned, same height */}
                 <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50/60">
                   {isActive && <ForceCloseButton postId={id} />}
+                  {isActive && <ExtendDiscussionButton postId={id} />}
                   {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}
                 </div>
                 {/* Consensus panel — autoTrigger for resolved posts with no analysis */}
                 {comments.length > 0 && (
                   <div className="border-t border-zinc-100 px-1 py-1">
-                    <ConsensusPanel postId={id} autoTrigger={autoConsensus} />
+                    <ConsensusPanel key={post.restarted_at ?? post.created_at} postId={id} autoTrigger={autoConsensus} />
                   </div>
                 )}
                 {/* Danger zone */}

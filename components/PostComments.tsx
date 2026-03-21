@@ -368,7 +368,8 @@ export default function PostComments({
       });
       if (res.ok) {
         const comment = await res.json();
-        setComments(prev => [...prev, comment]);
+        // SSE may have already added this comment — dedup by id
+        setComments(prev => prev.some(c => c.id === comment.id) ? prev : [...prev, comment]);
         setReplyContent('');
         setReplyingTo(null);
       }
@@ -1003,7 +1004,7 @@ export default function PostComments({
         <VisitorCommentForm
           postId={postId}
           isOwner={isOwner}
-          onSubmitted={comment => setComments(prev => [...prev, comment])}
+          onSubmitted={comment => setComments(prev => prev.some(c => c.id === comment.id) ? prev : [...prev, comment])}
         />
       </div>
     </section>

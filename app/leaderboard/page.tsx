@@ -171,21 +171,25 @@ function formatDate(iso: string): string {
 const PODIUM_CONFIG: Record<number, {
   bg: string; border: string; text: string; subText: string;
   platformBg: string; platformH: string; ring: string;
+  cardW: number; emojiSize: string; nameSize: string; minH: number;
 }> = {
   1: {
     bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800',
     subText: 'text-amber-600', platformBg: 'bg-amber-400', platformH: 'h-10',
     ring: 'ring-2 ring-amber-400 ring-offset-1',
+    cardW: 148, emojiSize: 'text-4xl', nameSize: 'text-base', minH: 230,
   },
   2: {
     bg: 'bg-zinc-50', border: 'border-zinc-300', text: 'text-zinc-700',
     subText: 'text-zinc-500', platformBg: 'bg-zinc-400', platformH: 'h-6',
     ring: 'ring-2 ring-zinc-300 ring-offset-1',
+    cardW: 124, emojiSize: 'text-3xl', nameSize: 'text-sm', minH: 190,
   },
   3: {
     bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700',
     subText: 'text-orange-500', platformBg: 'bg-orange-300', platformH: 'h-4',
     ring: 'ring-1 ring-orange-300 ring-offset-1',
+    cardW: 116, emojiSize: 'text-3xl', nameSize: 'text-sm', minH: 170,
   },
 };
 
@@ -251,28 +255,35 @@ export default async function LeaderboardPage() {
                         key={agent.agent_id}
                         href={`/agents/${agent.agent_id}`}
                         className="flex flex-col items-center group"
-                        style={{ minWidth: 120, maxWidth: 150 }}
+                        style={{ width: cfg.cardW }}
                       >
-                        {/* Card — auto height, all content always visible */}
-                        <div className={`w-full flex flex-col items-center rounded-xl border px-4 py-4 ${cfg.bg} ${cfg.border} ${cfg.ring} transition-all group-hover:scale-105 group-hover:shadow-md`}>
-                          <div className="text-3xl mb-2">{agentEmoji(agent.agent_id)}</div>
-                          <div className={`text-sm font-bold ${cfg.text} text-center leading-tight`}>
-                            {agentName(agent.agent_id)}
-                          </div>
-                          {role && (
-                            <div className={`text-[10px] ${cfg.subText} text-center mt-0.5 leading-tight`}>
-                              {role}
+                        {/* Card — rank별 min-height 고정으로 금>은>동 높이 보장 */}
+                        <div
+                          className={`w-full flex flex-col items-center justify-between rounded-xl border px-3 py-4 ${cfg.bg} ${cfg.border} ${cfg.ring} transition-all group-hover:scale-105 group-hover:shadow-md`}
+                          style={{ minHeight: cfg.minH }}
+                        >
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className={`${cfg.emojiSize} mb-1`}>{agentEmoji(agent.agent_id)}</div>
+                            <div className={`${cfg.nameSize} font-bold ${cfg.text} text-center leading-tight`}>
+                              {agentName(agent.agent_id)}
                             </div>
-                          )}
-                          {team && (
-                            <div className={`text-[9px] ${cfg.subText} opacity-70 text-center mt-0.5`}>
-                              {team}
-                            </div>
-                          )}
-                          <div className={`mt-2.5 text-sm font-bold ${cfg.text}`}>
-                            {agent.display_30d}점
+                            {role && (
+                              <div className={`text-[10px] ${cfg.subText} text-center mt-0.5 leading-tight line-clamp-1 w-full`}>
+                                {role}
+                              </div>
+                            )}
+                            {team && (
+                              <div className={`text-[9px] ${cfg.subText} opacity-70 text-center mt-0.5 line-clamp-1 w-full`}>
+                                {team}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-xl mt-1">{rankMedal(agent.rank)}</div>
+                          <div className="flex flex-col items-center mt-2">
+                            <div className={`text-sm font-bold ${cfg.text}`}>
+                              {agent.display_30d}점
+                            </div>
+                            <div className="text-xl mt-1">{rankMedal(agent.rank)}</div>
+                          </div>
                         </div>
                         {/* Platform base — height varies by rank */}
                         <div className={`w-full ${cfg.platformBg} ${cfg.platformH} rounded-b-lg opacity-60`} />
