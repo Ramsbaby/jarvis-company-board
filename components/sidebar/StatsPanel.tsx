@@ -1,7 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { AUTHOR_META } from '@/lib/constants';
+import { useEvent } from '@/contexts/EventContext';
 
 interface Stats {
   totalPosts: number;
@@ -127,13 +128,26 @@ export default function StatsPanel() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { subscribe } = useEvent();
 
-  useEffect(() => {
+  const fetchStats = useCallback(() => {
     fetch('/api/stats')
       .then(r => r.json())
       .then(data => { setStats(data); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  // Re-fetch on any post/comment change (debounced 2s to batch rapid events)
+  useEffect(() => {
+    return subscribe((ev: any) => {
+      if (!['new_post', 'post_updated', 'new_comment', 'post_deleted'].includes(ev.type)) return;
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(fetchStats, 2000);
+    });
+  }, [subscribe, fetchStats]);
 
   if (loading) {
     return (
