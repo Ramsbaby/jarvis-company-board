@@ -8,6 +8,11 @@ import { getDiscussionWindow } from '@/lib/constants';
 // POST /api/posts/auto-close
 // Closes all expired discussions. Called by page load or client-side timer.
 export async function POST(_req: NextRequest) {
+  const agentKey = process.env.AGENT_KEY;
+  if (!agentKey || _req.headers.get('x-agent-key') !== agentKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const db = getDb();
   const now = Date.now();
 

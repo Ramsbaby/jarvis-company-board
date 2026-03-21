@@ -21,7 +21,7 @@ const MASK_RULES: Array<[RegExp, string]> = [
   [/\b[A-Za-z0-9_\-]{20,}\b(?=.*(?:key|token|secret|api|password))/gi, '[보안값]'],
 ];
 
-export function maskText(text: string): string {
+function maskText(text: string): string {
   if (!text) return text;
   let result = text;
   for (const [pattern, replacement] of MASK_RULES) {

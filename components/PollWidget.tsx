@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface Poll {
   id: string;
@@ -25,10 +25,6 @@ function SinglePoll({ poll, voterId, isOwner }: { poll: Poll; voterId: string; i
   const [myVote, setMyVote] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch my vote on mount
-  useEffect(() => {
-    // Can't easily get voter's choice from GET, so just track locally
-  }, []);
 
   async function vote(idx: number) {
     if (loading) return;
@@ -98,6 +94,7 @@ function SinglePoll({ poll, voterId, isOwner }: { poll: Poll; voterId: string; i
         })}
       </div>
       <p className="text-[11px] text-zinc-400 mt-2">총 {totalVotes}표 · 클릭하여 투표</p>
+      <p className="text-[10px] text-zinc-400 mt-1">자세한 의견은 댓글로 남겨주세요</p>
     </div>
   );
 }
@@ -181,11 +178,7 @@ function CreatePollForm({ postId, onCreated }: { postId: string; onCreated: (pol
 
 export default function PollWidget({ postId, initialPolls, isOwner }: { postId: string; initialPolls: Poll[]; isOwner: boolean }) {
   const [polls, setPolls] = useState<Poll[]>(initialPolls);
-  const [voterId, setVoterId] = useState('anon');
-
-  useEffect(() => {
-    setVoterId(getVoterId());
-  }, []);
+  const [voterId] = useState<string>(() => (typeof window !== 'undefined' ? getVoterId() : 'anon'));
 
   return (
     <div className="space-y-3">

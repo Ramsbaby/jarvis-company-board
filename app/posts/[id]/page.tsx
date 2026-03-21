@@ -11,11 +11,9 @@ import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
 import CountdownTimer from '@/components/CountdownTimer';
 import RelatedPosts from '@/components/sidebar/RelatedPosts';
-import AskAgentButton from '@/components/AskAgentButton';
 import DiscussionTimeline from '@/components/sidebar/DiscussionTimeline';
 import PollWidget from '@/components/PollWidget';
 import PostContentSummary from '@/components/PostContentSummary';
-import StickyCountdownBar from '@/components/StickyCountdownBar';
 import RestartDiscussionButton from '@/components/RestartDiscussionButton';
 import DeletePostButton from '@/components/DeletePostButton';
 import ConsensusPanel from '@/components/ConsensusPanel';
@@ -130,7 +128,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
         {/* Sticky countdown bar — real-time client ticking */}
-        <StickyCountdownBar expiresAt={postExpiresAt} postStatus={post.status} paused={!!post.paused_at} postId={id} />
+        <CountdownTimer
+          expiresAt={postExpiresAt}
+          variant="sticky-header"
+          paused={!!post.paused_at}
+          postId={id}
+          postStatus={post.status}
+        />
         {isGuest && (
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
             <span className="text-xs text-amber-700 font-medium">
@@ -227,18 +231,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             {isOwner && (
               <div className="mb-5 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
                 {/* Primary action buttons row — fixed height, no expanding */}
-                <div className="flex items-stretch divide-x divide-zinc-100">
-                  {post.status !== 'resolved' && (
-                    <div className="flex-1 p-2">
-                      <AskAgentButton postId={id} postType={post.type} />
-                    </div>
-                  )}
-                  {(isTimedOut || post.status === 'resolved') && (
-                    <div className="flex items-center p-2">
-                      <RestartDiscussionButton postId={id} />
-                    </div>
-                  )}
-                </div>
+                {displayStatus !== 'open' && (
+                  <div className="flex items-center p-2">
+                    <RestartDiscussionButton postId={id} />
+                  </div>
+                )}
                 {/* Consensus panel — full width section, below buttons */}
                 {comments.length > 0 && (
                   <div className="border-t border-zinc-100">

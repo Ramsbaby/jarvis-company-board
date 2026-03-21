@@ -5,11 +5,12 @@ import { useEvent } from '@/contexts/EventContext';
 
 interface CountdownTimerProps {
   expiresAt: string;
-  variant?: 'badge' | 'bar' | 'ring' | 'detail' | 'strip';
+  variant?: 'badge' | 'bar' | 'ring' | 'detail' | 'strip' | 'sticky-header';
   className?: string;
   expiredLabel?: string;  // default '토론 종료'
   paused?: boolean;       // shows paused state
   postId?: string;        // enables real-time SSE updates
+  postStatus?: string;    // sticky-header: hides when 'resolved'
 }
 
 function getTimeInfo(expiresAt: string) {
@@ -32,7 +33,7 @@ function getTimeInfo(expiresAt: string) {
   return { expired: false, label, pct, color, min, sec };
 }
 
-export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 'badge', className = '', expiredLabel, paused: initialPaused, postId }: CountdownTimerProps) {
+export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 'badge', className = '', expiredLabel, paused: initialPaused, postId, postStatus }: CountdownTimerProps) {
   const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
   const [paused, setPaused] = useState(initialPaused ?? false);
   const [info, setInfo] = useState(() => getTimeInfo(initialExpiresAt));
@@ -171,6 +172,56 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
         </svg>
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/15">
           <div className="h-full bg-white/50 transition-all duration-1000" style={{ width: `${info.pct}%` }} />
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Sticky-header variant (fixed sub-header bar under main nav) ── */
+  if (variant === 'sticky-header') {
+    if (postStatus === 'resolved') return null;
+
+    const expired = info.expired;
+    const pct     = expired ? 0 : info.pct;
+    const min     = (info as any).min ?? 0;
+    const sec     = (info as any).sec ?? 0;
+    const diffMs  = (min * 60 + sec) * 1000;
+    const urgent  = !expired && diffMs < 5 * 60 * 1000;
+    const warning = !expired && diffMs < 10 * 60 * 1000;
+
+    if (paused) {
+      return (
+        <div className={`z-30 border-t border-amber-200 bg-amber-50 ${className}`}>
+          <div className="max-w-5xl mx-auto px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 font-medium">
+            <span>⏸</span>
+            <span>토론 일시정지 — {expired ? '마감' : `${min}분 ${String(sec).padStart(2, '0')}초 남음`} (정지됨)</span>
+            <div className="ml-auto h-1 w-20 bg-amber-200 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const barColor = expired || urgent ? 'bg-red-500' : warning ? 'bg-amber-400' : 'bg-emerald-500';
+    const rowBg    = expired ? 'bg-red-50 border-red-200' : urgent ? 'bg-red-50/80 border-red-100' : warning ? 'bg-amber-50/80 border-amber-100' : 'bg-emerald-50/50 border-emerald-100';
+    const textCls  = expired || urgent ? 'text-red-700' : warning ? 'text-amber-700' : 'text-emerald-700';
+    const dotCls   = expired || urgent ? 'bg-red-500 animate-pulse' : warning ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500';
+
+    return (
+      <div className={`z-30 border-t ${rowBg} ${className}`}>
+        <div className={`max-w-5xl mx-auto px-4 py-1.5 flex items-center gap-3 text-xs font-semibold tabular-nums ${textCls}`}>
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
+          {expired
+            ? <span>토론 마감</span>
+            : <span>토론 마감까지 <strong className={`${urgent ? 'text-lg' : ''}`}>{min}분 {String(sec).padStart(2, '0')}초</strong> 남음</span>
+          }
+          <div className="ml-auto h-1.5 w-32 bg-white/70 rounded-full overflow-hidden border border-black/5 flex-shrink-0">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${barColor} ${urgent ? 'animate-pulse' : ''}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
         </div>
       </div>
     );

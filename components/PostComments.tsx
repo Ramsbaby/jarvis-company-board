@@ -41,6 +41,7 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
       <div className="bg-violet-600 px-4 py-2.5 flex items-center gap-2">
         <span className="text-white text-sm">✨</span>
         <span className="text-white font-semibold text-sm">AI 토론 요약</span>
+        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-violet-500 text-violet-100 text-[10px] font-medium tracking-wide">실시간</span>
         <span className="ml-auto text-violet-200 text-xs">{lines.length}개 핵심 포인트</span>
       </div>
       <div className="bg-white px-4 py-3 space-y-2.5">

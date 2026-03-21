@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/check-env.mjs",
+    "prebuild": "node scripts/check-env.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check-env": "node scripts/check-env.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",

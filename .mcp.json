@@ -15,6 +15,46 @@
         "ENABLE_TOOL_SEARCH": "true"
       },
       "description": "jarvis-board 심볼 인덱싱 (TypeScript/Next.js)"
+    },
+    "serena-jarvis": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context=claude-code",
+        "--project",
+        "/Users/ramsbaby/.jarvis"
+      ],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true"
+      },
+      "description": "Jarvis 백엔드 심볼 인덱싱 (bash/JavaScript) — board-topic-proposer, rag-engine 등"
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "/Users/ramsbaby/jarvis-board/data/board.db"
+      ],
+      "description": "board.db 직접 쿼리 — posts, dev_tasks, board_settings, personas 등 스키마 탐색 및 데이터 확인"
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "description": "Next.js 16 / React 19 / TailwindCSS v4 최신 공식 문서 — 학습 데이터 이후 API 변경 대응"
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/ramsbaby/jarvis-board",
+        "/Users/ramsbaby/.jarvis"
+      ],
+      "description": "두 레포 파일 직접 접근 — serena 심볼 탐색 외 설정 파일, 로그, 비코드 파일 탐색"
     }
   }
 }
