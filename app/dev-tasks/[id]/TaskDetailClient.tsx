@@ -311,6 +311,12 @@ export default function TaskDetailClient({
   });
   const [loadingImpact, setLoadingImpact] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+
+  // Inline editing state
+  const [editingMinutes, setEditingMinutes] = useState(false);
+  const [minutesDraft, setMinutesDraft] = useState('');
+  const [savedFlash, setSavedFlash] = useState<'minutes' | 'difficulty' | null>(null);
+
   const logEndRef = useRef<HTMLDivElement>(null);
   const { subscribe, connected } = useEvent();
 
@@ -513,6 +519,50 @@ export default function TaskDetailClient({
     }
   }
 
+  async function handleSaveMinutes() {
+    const val = parseInt(minutesDraft, 10);
+    if (isNaN(val) || val < 1 || val > 480) { setEditingMinutes(false); return; }
+    setEditingMinutes(false);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ estimated_minutes: val }),
+      });
+      if (res.ok) {
+        setTask(prev => ({ ...prev, estimated_minutes: val }));
+        setSavedFlash('minutes');
+        setTimeout(() => setSavedFlash(null), 1500);
+      }
+    } catch { /* silently ignore */ }
+  }
+
+  async function handleCycleDifficulty() {
+    const order = ['easy', 'medium', 'hard'] as const;
+    const current = task.difficulty as string | undefined;
+    const idx = order.indexOf(current as typeof order[number]);
+    const next = order[(idx + 1) % order.length];
+    setTask(prev => ({ ...prev, difficulty: next }));
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ difficulty: next }),
+      });
+      if (res.ok) {
+        setSavedFlash('difficulty');
+        setTimeout(() => setSavedFlash(null), 1500);
+      } else {
+        // revert on failure
+        setTask(prev => ({ ...prev, difficulty: current }));
+      }
+    } catch {
+      setTask(prev => ({ ...prev, difficulty: current }));
+    }
+  }
+
   // ── Derived values ─────────────────────────────────────────────────────────
 
   const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium;
@@ -644,8 +694,18 @@ export default function TaskDetailClient({
                   </span>
                   {/* Difficulty */}
                   {task.difficulty && (
-                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-violet-50 border border-violet-200 text-violet-700 font-medium">
+                    <span
+                      className={`group relative text-[11px] px-2 py-0.5 rounded-md bg-violet-50 border border-violet-200 text-violet-700 font-medium ${isOwner ? 'cursor-pointer hover:bg-violet-100' : ''}`}
+                      onClick={isOwner ? handleCycleDifficulty : undefined}
+                      title={isOwner ? '클릭하여 난이도 변경' : undefined}
+                    >
                       난이도: {DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty}
+                      {isOwner && <span className="ml-1 opacity-0 group-hover:opacity-60 text-[10px]">✏</span>}
+                      {savedFlash === 'difficulty' && (
+                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] text-emerald-600 font-semibold whitespace-nowrap bg-white border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
+                          저장됨
+                        </span>
+                      )}
                     </span>
                   )}
                   {/* Assignee */}
@@ -762,13 +822,51 @@ export default function TaskDetailClient({
                   {task.estimated_minutes !== undefined && (
                     <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
                       <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">예상 소요</p>
-                      <p className="text-sm font-bold text-zinc-800">약 {task.estimated_minutes}분</p>
+                      {editingMinutes ? (
+                        <input
+                          type="number"
+                          min={1}
+                          max={480}
+                          value={minutesDraft}
+                          onChange={e => setMinutesDraft(e.target.value)}
+                          onBlur={handleSaveMinutes}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSaveMinutes(); if (e.key === 'Escape') setEditingMinutes(false); }}
+                          className="text-xs w-full font-bold text-zinc-800 bg-white border border-indigo-300 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300"
+                          autoFocus
+                        />
+                      ) : (
+                        <div
+                          className={`group relative flex items-center gap-1 ${isOwner ? 'cursor-pointer hover:bg-zinc-100 rounded -mx-1 px-1' : ''}`}
+                          onClick={isOwner ? () => { setMinutesDraft(String(task.estimated_minutes ?? '')); setEditingMinutes(true); } : undefined}
+                          title={isOwner ? '클릭하여 수정' : undefined}
+                        >
+                          <p className="text-sm font-bold text-zinc-800">약 {task.estimated_minutes}분</p>
+                          {isOwner && <span className="opacity-0 group-hover:opacity-50 text-[11px] text-zinc-400">✏</span>}
+                          {savedFlash === 'minutes' && (
+                            <span className="absolute -top-5 left-0 text-[10px] text-emerald-600 font-semibold whitespace-nowrap bg-white border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
+                              저장됨
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   {task.difficulty && (
                     <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
                       <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">난이도</p>
-                      <p className="text-sm font-bold text-zinc-800">{DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty}</p>
+                      <div
+                        className={`group relative flex items-center gap-1 ${isOwner ? 'cursor-pointer hover:bg-zinc-100 rounded -mx-1 px-1' : ''}`}
+                        onClick={isOwner ? handleCycleDifficulty : undefined}
+                        title={isOwner ? '클릭하여 순환 변경' : undefined}
+                      >
+                        <p className="text-sm font-bold text-zinc-800">{DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty}</p>
+                        {isOwner && <span className="opacity-0 group-hover:opacity-50 text-[11px] text-zinc-400">✏</span>}
+                        {savedFlash === 'difficulty' && (
+                          <span className="absolute -top-5 left-0 text-[10px] text-emerald-600 font-semibold whitespace-nowrap bg-white border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
+                            저장됨
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
