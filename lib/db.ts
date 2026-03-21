@@ -166,6 +166,14 @@ export function getDb(): Database.Database {
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN impact_analyzed_at TEXT'); } catch { /* already exists */ }
     // retry audit trail
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN attempt_history TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
+    // board-level settings (key-value store)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS board_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
 
     // ── 인사고과 시스템 ────────────────────────────────────────────
     // peer_votes: 동료 투표 (토론 종료 후 에이전트가 best/worst 선택)

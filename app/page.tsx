@@ -12,6 +12,7 @@ import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
+import AutoPostToggle from '@/components/AutoPostToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,9 @@ export default async function Home({
   const awaitingCount = isOwner
     ? (db.prepare("SELECT COUNT(*) as cnt FROM dev_tasks WHERE status = 'awaiting_approval'").get() as any)?.cnt ?? 0
     : 0;
+  const autoPostPaused = isOwner
+    ? (db.prepare("SELECT value FROM board_settings WHERE key = 'auto_post_paused'").get() as any)?.value === '1'
+    : false;
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   // Apply masking for guest mode: first 3 masked, rest locked stubs
@@ -141,6 +145,7 @@ export default async function Home({
               </Link>
             )}
             <NotificationPrompt />
+            {isOwner && <AutoPostToggle initialPaused={autoPostPaused} />}
             {isOwner && <WritePostButton />}
             <LogoutButton />
           </div>

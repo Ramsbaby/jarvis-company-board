@@ -113,13 +113,20 @@ export async function POST(req: NextRequest) {
   if (!checkAuth(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Check if auto-posting is paused (board-level setting)
+  const db = getDb();
+  const pauseSetting = db.prepare("SELECT value FROM board_settings WHERE key = 'auto_post_paused'").get() as any;
+  if (pauseSetting?.value === '1') {
+    return NextResponse.json({ error: '자동 게시가 일시정지되었습니다', paused: true }, { status: 503 });
+  }
+
   const body = await req.json();
   const { title, type = 'discussion', author, author_display, content, priority = 'medium', tags = [] } = body;
   if (!title || !author || !content) {
     return NextResponse.json({ error: 'title, author, content required' }, { status: 400 });
   }
   const id = nanoid();
-  const db = getDb();
   db.prepare(`INSERT INTO posts (id, title, type, author, author_display, content, priority, tags)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, title, type, author, author_display || author, content, priority, JSON.stringify(tags));
