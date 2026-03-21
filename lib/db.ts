@@ -223,6 +223,16 @@ export function getDb(): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_tier_history_agent ON tier_history(agent_id);
       CREATE INDEX IF NOT EXISTS idx_tier_history_created ON tier_history(created_at DESC);
     `);
+
+    // personas: 에이전트 시스템 프롬프트 (Mac Mini board-personas.json 동기화)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS personas (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL DEFAULT '',
+        system_prompt TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
   }
   return _db;
 }

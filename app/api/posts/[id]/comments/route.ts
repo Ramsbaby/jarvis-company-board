@@ -16,8 +16,16 @@ async function triggerAutoReply(
   ownerContent: string,
   parentCommentId: string,
 ) {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!anthropicKey && !groqKey) return;
+
   try {
-    const postData = db.prepare('SELECT title, content FROM posts WHERE id = ?').get(postId) as any;
+    // 페르소나 시스템 프롬프트 조회 (personas 테이블 — Mac Mini에서 동기화)
+    const personaRow = db.prepare('SELECT system_prompt FROM personas WHERE id = ?').get(agentAuthor) as any;
+    const systemPrompt = personaRow?.system_prompt || null;
+
+    const postData = db.prepare('SELECT title FROM posts WHERE id = ?').get(postId) as any;
     const thread = db.prepare(
       'SELECT author, author_display, content FROM comments WHERE (id = ? OR parent_id = ?) AND id != ? ORDER BY created_at ASC LIMIT 10'
     ).all(parentCommentId, parentCommentId, ownerCommentId) as any[];
@@ -28,8 +36,7 @@ async function triggerAutoReply(
 
     broadcastEvent({ type: 'agent_typing', post_id: postId, data: { agent: agentAuthor, label: agentDisplay } });
 
-    const prompt = `당신은 자비스 컴퍼니의 ${agentDisplay}입니다.
-토론에서 당신이 댓글을 달았고, 대표님이 답변했습니다. 대표님의 의견에 직접 반응하세요.
+    const userPrompt = `토론에서 당신의 댓글에 대표님이 답변했습니다. 직접 반응하세요.
 
 ## 토론 주제
 ${postData?.title || ''}
@@ -37,18 +44,49 @@ ${postData?.title || ''}
 ## 이전 대화
 ${threadContext}
 
-## 대표님의 답변 (지금 이것에 반응)
+## 대표님의 답변 (이것에 반응)
 [대표]: ${ownerContent}
 
 [답변 규칙]
 - 당신의 전문 렌즈로 대표님 의견에 구체적으로 반응 (단순 동의·칭찬 금지)
-- 존댓말(합쇼체) 필수: "~합니다", "~입니다" 형식. 반말 절대 금지.
+- 존댓말(합쇼체) 필수. 반말 절대 금지.
 - 새 분석·근거·반론·제안 중 하나 이상 포함, 3~5문장
 - 서명(— 이름) 금지. 이미 완료된 논의면 [SKIP] 출력.
-
 한국어로만 답변.`;
 
-    const reply = await callLLM(prompt, { model: MODEL_QUALITY, maxTokens: 450, timeoutMs: 25000 });
+    let reply: string | null = null;
+
+    if (anthropicKey) {
+      // Anthropic API — 시스템 프롬프트 지원으로 페르소나 충실도 높음
+      const reqBody: Record<string, unknown> = {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: userPrompt }],
+      };
+      if (systemPrompt) reqBody.system = systemPrompt;
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(reqBody),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        reply = data?.content?.[0]?.text?.trim() ?? null;
+      }
+    } else if (groqKey) {
+      // Groq 폴백
+      const fullPrompt = systemPrompt
+        ? `[시스템: ${systemPrompt.slice(0, 500)}]\n\n${userPrompt}`
+        : `당신은 자비스 컴퍼니의 ${agentDisplay}입니다.\n\n${userPrompt}`;
+      reply = await callLLM(fullPrompt, { model: MODEL_QUALITY, maxTokens: 500, timeoutMs: 25000 }).catch(() => null);
+    }
+
     if (!reply || reply.trim() === '[SKIP]') return;
 
     const rid = nanoid();
@@ -98,8 +136,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const agentKey = req.headers.get('x-agent-key');
   const isAgent = agentKey === process.env.AGENT_API_KEY;
 
-  // 에이전트(board-synthesizer 등)는 resolved 포스트에도 댓글 가능
-  if (post.status === 'resolved' && !isAgent) {
+  // 대표 세션 조기 확인 — resolved 포스트 팔로업 허용 판단용
+  const earlySession = req.cookies.get(SESSION_COOKIE)?.value;
+  const earlyPassword = process.env.VIEWER_PASSWORD;
+  const isOwnerEarly = !!(earlyPassword && earlySession && earlySession === makeToken(earlyPassword));
+
+  // 에이전트·대표는 resolved 포스트에도 댓글 가능 (팔로업·이사회 결의 등)
+  if (post.status === 'resolved' && !isAgent && !isOwnerEarly) {
     return NextResponse.json({ error: '이미 결론이 난 토론입니다' }, { status: 403 });
   }
 
@@ -160,7 +203,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   broadcastEvent({ type: 'new_comment', post_id: id, data: comment });
 
   // Auto-reply: if owner replied to an agent's comment, trigger that agent to respond
-  if (parent_id && !post.paused_at && process.env.GROQ_API_KEY) {
+  if (parent_id && !post.paused_at && (process.env.ANTHROPIC_API_KEY || process.env.GROQ_API_KEY)) {
     const parentComment = db.prepare(
       'SELECT author, author_display FROM comments WHERE id = ?'
     ).get(parent_id) as any;
