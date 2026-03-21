@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
 
 interface DevTask {
@@ -176,6 +177,7 @@ function parseImpactAreas(raw?: string): string[] {
 }
 
 export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask[] }) {
+  const router = useRouter();
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
   const [tab, setTab] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -211,6 +213,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
       if (res.ok) {
         const updated = await res.json();
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t));
+        router.refresh();
       } else {
         setActionError(`처리 실패 (${res.status})`);
       }

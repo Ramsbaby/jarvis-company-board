@@ -451,6 +451,7 @@ export default function TaskDetailClient({
       });
       if (res.ok) {
         setTask(prev => ({ ...prev, status: 'approved', approved_at: new Date().toISOString() }));
+        router.refresh();
       } else if (res.status === 401) {
         setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
         setTimeout(() => router.push('/login'), 1500);
@@ -479,6 +480,7 @@ export default function TaskDetailClient({
           rejection_note: rejectNote || undefined,
         }));
         setShowRejectForm(false);
+        router.refresh();
       } else if (res.status === 401) {
         setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
         setTimeout(() => router.push('/login'), 1500);
@@ -508,6 +510,7 @@ export default function TaskDetailClient({
           completed_at: undefined, result_summary: undefined,
           changed_files: undefined, execution_log: undefined,
         }));
+        router.refresh();
       } else if (res.status === 401) {
         setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
         setTimeout(() => router.push('/login'), 1500);
