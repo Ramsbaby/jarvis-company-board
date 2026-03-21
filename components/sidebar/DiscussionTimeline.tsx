@@ -46,9 +46,9 @@ export default function DiscussionTimeline({ comments: initialComments, postId }
       </p>
       <div className="relative">
         {/* Vertical line */}
-        <div className="absolute left-3 top-0 bottom-0 w-px bg-zinc-100" />
+        <div className="absolute left-3 top-2 bottom-2 w-px bg-zinc-100" />
 
-        <div className="space-y-3">
+        <div className="max-h-[380px] overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent">
           {comments.map((c) => {
             const isResolution = Boolean(c.is_resolution);
             const isVisitor = Boolean(c.is_visitor);

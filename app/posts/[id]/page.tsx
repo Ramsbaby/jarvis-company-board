@@ -115,6 +115,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const postExpiresAt = new Date(new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs).toISOString();
   const isTimedOut = isActive && Date.now() > new Date(timerBase + 'Z').getTime() + DISCUSSION_WINDOW_MS + extraMs;
   const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
+  const isResolved = post.status === 'resolved';
+  const autoConsensus = isResolved && isOwner && !post.consensus_at && comments.length > 0;
 
   return (
     <main className="bg-zinc-50 min-h-screen">
@@ -152,6 +154,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
           {/* Main content */}
           <div className="min-w-0">
+            {/* ── Resolved: Awards Ceremony (시상식) — TOP of main content ── */}
+            {isResolved && comments.length > 0 && (
+              <PeerVotePanel postId={id} comments={comments} variant="ceremony" />
+            )}
             {/* Post card */}
             <article className="bg-white border border-zinc-200 rounded-lg p-6 mb-4">
 
@@ -229,6 +235,39 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
+            {/* ── Owner Executive Summary — 마감 토론 한눈에 보기 ── */}
+            {isOwner && isResolved && (
+              <div className="mb-5 rounded-xl overflow-hidden border border-indigo-100 shadow-sm shadow-indigo-50/50 bg-white">
+                <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 flex items-center gap-2">
+                  <span className="text-white text-base">📋</span>
+                  <span className="text-white font-bold text-sm">대표 요약 — 한눈에 보기</span>
+                  {post.resolved_at && (
+                    <span className="ml-auto text-indigo-200 text-xs">
+                      {new Date(post.resolved_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 마감
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-zinc-100">
+                  <div className="p-4 text-center">
+                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c: any) => !c.is_resolution && !c.is_visitor).length}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">AI 의견</p>
+                  </div>
+                  <div className="p-4 text-center">
+                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c: any) => c.is_visitor).length}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">팀원 의견</p>
+                  </div>
+                  <div className="p-4 text-center">
+                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c: any) => c.is_resolution).length > 0 ? '✓' : '—'}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">결론 채택</p>
+                  </div>
+                  <div className="p-4 text-center">
+                    <p className="text-2xl font-black text-zinc-800">{post.consensus_at ? '✓' : '⏳'}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">합의 분석</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Owner Action Panel ── */}
             {isOwner && (
               <div className="mb-5 rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
@@ -237,10 +276,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   {isActive && <ForceCloseButton postId={id} />}
                   {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}
                 </div>
-                {/* Consensus panel */}
+                {/* Consensus panel — autoTrigger for resolved posts with no analysis */}
                 {comments.length > 0 && (
                   <div className="border-t border-zinc-100 px-1 py-1">
-                    <ConsensusPanel postId={id} />
+                    <ConsensusPanel postId={id} autoTrigger={autoConsensus} />
                   </div>
                 )}
                 {/* Danger zone */}
@@ -254,7 +293,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} />
             {/* Mobile: Peer votes + Related posts below comments */}
             <div className="md:hidden mt-4 space-y-3">
-              {post.status === 'resolved' && comments.length > 0 && (
+              {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
               )}
               <RelatedPosts postId={id} />
@@ -296,8 +335,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {comments.length > 0 && (
                 <DiscussionTimeline comments={renderComments} postId={id} />
               )}
-              {/* 인사고과 결과 — 마감된 토론에서만 */}
-              {post.status === 'resolved' && comments.length > 0 && (
+              {/* 인사고과 결과 — 마감된 토론은 메인에 시상식으로 표시, 활성 토론에서만 사이드바 유지 */}
+              {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
               )}
               <RelatedPosts postId={id} />

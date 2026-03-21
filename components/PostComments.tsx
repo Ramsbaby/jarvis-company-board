@@ -377,6 +377,7 @@ export default function PostComments({
 
   // Scroll-to-comment from URL hash (e.g. #comment-abc123)
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [awardEffect, setAwardEffect] = useState<{ id: string; type: 'best' | 'worst' } | null>(null);
 
   function activateHashHighlight() {
     const hash = window.location.hash;
@@ -399,7 +400,16 @@ export default function PostComments({
   useEffect(() => {
     activateHashHighlight();
     window.addEventListener('hashchange', activateHashHighlight);
-    return () => window.removeEventListener('hashchange', activateHashHighlight);
+    function handleAwardEffect(e: Event) {
+      const { id, type } = (e as CustomEvent<{ id: string; type: 'best' | 'worst' }>).detail;
+      setAwardEffect({ id, type });
+      setTimeout(() => setAwardEffect(null), 2800);
+    }
+    window.addEventListener('comment-award-effect', handleAwardEffect);
+    return () => {
+      window.removeEventListener('hashchange', activateHashHighlight);
+      window.removeEventListener('comment-award-effect', handleAwardEffect);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // #8 Build reply map
@@ -526,11 +536,14 @@ export default function PostComments({
     const commentReactions = reactions[c.id] ?? {};
 
     const isHighlighted = highlightedId === c.id;
+    const awardType = awardEffect && awardEffect.id === c.id ? awardEffect.type : null;
     return (
       <div
         id={`comment-${c.id}`}
         key={c.id}
         className={`scroll-mt-20 flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-shadow ${isNew ? 'animate-slide-in' : ''} ${isCLevel ? 'shadow-sm' : ''} ${
+          awardType === 'best'  ? 'comment-award-best ring-2 ring-amber-400 ring-offset-2' :
+          awardType === 'worst' ? 'comment-award-worst ring-2 ring-red-400 ring-offset-2' :
           isHighlighted ? 'ring-2 ring-indigo-400 ring-offset-1 bg-indigo-50/40' :
           isReply
             ? 'mt-1 border border-l-2 border-l-indigo-200 border-gray-100'

@@ -2,14 +2,14 @@
 import { useState, useEffect } from 'react';
 import MarkdownContent from '@/components/MarkdownContent';
 
-export default function ConsensusPanel({ postId }: { postId: string }) {
+export default function ConsensusPanel({ postId, autoTrigger = false }: { postId: string; autoTrigger?: boolean }) {
   const [result, setResult] = useState<string | null>(null);
   const [consensusAt, setConsensusAt] = useState<string | null>(null);
   const [agentCount, setAgentCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load persisted consensus on mount
+  // Load persisted consensus on mount; auto-trigger if none found and autoTrigger=true
   useEffect(() => {
     fetch(`/api/posts/${postId}/consensus`)
       .then(r => r.ok ? r.json() : null)
@@ -17,10 +17,13 @@ export default function ConsensusPanel({ postId }: { postId: string }) {
         if (data?.consensus) {
           setResult(data.consensus);
           setConsensusAt(data.consensus_at ?? null);
+        } else if (autoTrigger) {
+          // No consensus yet — auto-generate for resolved posts
+          fetchConsensus();
         }
       })
       .catch(() => {});
-  }, [postId]);
+  }, [postId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchConsensus = async () => {
     setLoading(true);
