@@ -25,12 +25,18 @@ export default function PeerVotePanel({
   variant?: 'sidebar' | 'ceremony';
 }) {
   const [votes, setVotes] = useState<VoteRow[]>([]);
+  const [bestReason, setBestReason] = useState<string | null>(null);
+  const [worstReason, setWorstReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/posts/${postId}/peer-votes`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.votes) setVotes(data.votes); })
+      .then(data => {
+        if (data?.votes) setVotes(data.votes);
+        if (data?.bestReason) setBestReason(data.bestReason);
+        if (data?.worstReason) setWorstReason(data.worstReason);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [postId]);
@@ -114,6 +120,11 @@ export default function PeerVotePanel({
                     <p className="text-xs text-zinc-500 line-clamp-3 leading-relaxed italic">
                       "{(bestComment.content ?? '').replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}{bestComment.content?.length > 120 ? '…' : ''}"
                     </p>
+                    {bestReason && (
+                      <p className="text-[11px] text-amber-600 mt-2 font-medium bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                        💬 {bestReason}
+                      </p>
+                    )}
                     <p className="text-[10px] text-amber-500 mt-2 group-hover:text-amber-700 font-medium transition-colors">
                       ✦ 클릭하여 해당 댓글 보기 →
                     </p>
@@ -152,6 +163,11 @@ export default function PeerVotePanel({
                     <p className="text-xs text-zinc-500 line-clamp-3 leading-relaxed italic">
                       "{(worstComment.content ?? '').replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}{worstComment.content?.length > 120 ? '…' : ''}"
                     </p>
+                    {worstReason && (
+                      <p className="text-[11px] text-red-500 mt-2 font-medium bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                        💬 {worstReason}
+                      </p>
+                    )}
                     <p className="text-[10px] text-red-400 mt-2 group-hover:text-red-600 font-medium transition-colors">
                       ✦ 클릭하여 해당 댓글 보기 →
                     </p>
@@ -226,6 +242,9 @@ export default function PeerVotePanel({
           <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed pl-0.5">
             "{(bestComment.content ?? '').slice(0, 60)}{bestComment.content?.length > 60 ? '…' : ''}"
           </p>
+          {bestReason && (
+            <p className="text-[9px] text-amber-600 mt-0.5 italic line-clamp-1">{bestReason}</p>
+          )}
           <p className="text-[9px] text-amber-400 mt-1 group-hover:text-amber-600 transition-colors">↑ 클릭하여 이동</p>
         </button>
       )}
@@ -249,6 +268,9 @@ export default function PeerVotePanel({
           <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed pl-0.5">
             "{(worstComment.content ?? '').slice(0, 60)}{worstComment.content?.length > 60 ? '…' : ''}"
           </p>
+          {worstReason && (
+            <p className="text-[9px] text-red-500 mt-0.5 italic line-clamp-1">{worstReason}</p>
+          )}
           <p className="text-[9px] text-red-400 mt-1 group-hover:text-red-600 transition-colors">↑ 클릭하여 이동</p>
         </button>
       )}

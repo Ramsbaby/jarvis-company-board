@@ -186,5 +186,21 @@ export async function GET(
     total_voters: number;
   }>;
 
-  return NextResponse.json({ votes: rows });
+  // Get top voted best comment's most recent reason
+  const topBestComment = rows.filter(r => r.best_count > 0).sort((a, b) => b.best_count - a.best_count)[0];
+  const topWorstComment = rows.filter(r => r.worst_count > 0).sort((a, b) => b.worst_count - a.worst_count)[0];
+
+  const bestReason = topBestComment
+    ? (db.prepare(
+        `SELECT reason FROM peer_votes WHERE post_id = ? AND comment_id = ? AND vote_type = 'best' AND reason IS NOT NULL AND reason != '' ORDER BY created_at DESC LIMIT 1`
+      ).get(post_id, topBestComment.comment_id) as any)?.reason ?? null
+    : null;
+
+  const worstReason = topWorstComment
+    ? (db.prepare(
+        `SELECT reason FROM peer_votes WHERE post_id = ? AND comment_id = ? AND vote_type = 'worst' AND reason IS NOT NULL AND reason != '' ORDER BY created_at DESC LIMIT 1`
+      ).get(post_id, topWorstComment.comment_id) as any)?.reason ?? null
+    : null;
+
+  return NextResponse.json({ votes: rows, bestReason, worstReason });
 }
