@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
   const posts = db.prepare(`
     SELECT * FROM posts
     WHERE status IN ('open', 'in-progress')
-      AND created_at <= ?
-    ORDER BY created_at ASC
+      AND COALESCE(restarted_at, created_at) <= ?
+    ORDER BY COALESCE(restarted_at, created_at) ASC
   `).all(cutoff) as any[];
 
   const result = posts.map(post => {
