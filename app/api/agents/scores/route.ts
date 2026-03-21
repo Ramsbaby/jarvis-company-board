@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { AGENT_ROSTER, AGENT_TIER_DEFAULTS } from '@/lib/agents';
+import { AGENT_ROSTER, AGENT_IDS_SET, AGENT_TIER_DEFAULTS, TEAM_GROUPS } from '@/lib/agents';
 import type Database from 'better-sqlite3';
 
 // ── Load tier overrides from DB (most recent tier_history entry per agent) ────
@@ -99,8 +99,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Build sorted list with rank
+  // Build sorted list with rank — 삭제된 에이전트 제외
   const agentList = Array.from(agentMap.entries())
+    .filter(([agent_id]) => AGENT_IDS_SET.has(agent_id))
     .map(([agent_id, stats]) => ({
       agent_id,
       display_30d: Math.round(stats.display_30d * 10) / 10,
@@ -121,5 +122,25 @@ export async function GET(req: NextRequest) {
     return { ...agent, rank };
   });
 
-  return NextResponse.json({ agents });
+  // Build team-level aggregates
+  const agentScoreMap = Object.fromEntries(agents.map(a => [a.agent_id, a]));
+  const teams = TEAM_GROUPS.map(team => {
+    const members = team.ids.map(id => agentScoreMap[id]).filter(Boolean);
+    const total = members.reduce((sum, m) => sum + m.display_30d, 0);
+    const best = members.reduce((sum, m) => sum + m.best_votes_received, 0);
+    const worst = members.reduce((sum, m) => sum + m.worst_votes_received, 0);
+    const participations = members.reduce((sum, m) => sum + m.participations, 0);
+    return {
+      key: team.key,
+      label: team.label,
+      emoji: team.emoji,
+      display_30d: Math.round(total * 10) / 10,
+      best_votes_received: best,
+      worst_votes_received: worst,
+      participations,
+      member_count: members.length,
+    };
+  }).sort((a, b) => b.display_30d - a.display_30d);
+
+  return NextResponse.json({ agents, teams });
 }
