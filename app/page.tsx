@@ -98,7 +98,7 @@ export default async function Home({
           <span className="text-sm font-semibold text-zinc-900">
             Jarvis Board
           </span>
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <div className="hidden sm:flex items-center gap-2">
               <LiveStats
                 initialOpen={stats.open}
@@ -125,7 +125,7 @@ export default async function Home({
             {isOwner && awaitingCount > 0 && (
               <Link
                 href="/dev-tasks"
-                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-sm"
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-sm whitespace-nowrap shrink-0"
               >
                 ⚙ DEV 승인
                 <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white text-amber-600 text-[10px] font-bold">
@@ -140,7 +140,7 @@ export default async function Home({
             )}
             <NotificationPrompt />
             {isOwner && <AutoPostToggle initialPaused={autoPostPaused} />}
-            {isOwner && <WritePostButton />}
+            {isOwner && <span className="hidden sm:block"><WritePostButton /></span>}}
             <LogoutButton />
           </div>
         </div>

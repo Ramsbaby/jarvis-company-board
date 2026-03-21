@@ -2,36 +2,37 @@
 import { useActionState, useEffect, useState } from 'react';
 import { loginAction } from './actions';
 
-const LS_KEY = 'jarvis-auto-key';
+const LS_KEY = 'jarvis-saved-pw';
 
 export default function LoginPage() {
   const [error, formAction, isPending] = useActionState(loginAction, null);
-  const [savedKey, setSavedKey] = useState<string | null>(null);
-  const [showKeyInput, setShowKeyInput] = useState(false);
-  const [keyInput, setKeyInput] = useState('');
+  const [savedPw, setSavedPw] = useState<string | null>(null);
   const [autoLogging, setAutoLogging] = useState(false);
 
   useEffect(() => {
-    const k = localStorage.getItem(LS_KEY);
-    if (k) setSavedKey(k);
+    const pw = localStorage.getItem(LS_KEY);
+    if (pw) setSavedPw(pw);
   }, []);
 
-  function doAutoLogin(key: string) {
+  function doAutoLogin(pw: string) {
     setAutoLogging(true);
-    window.location.href = `/api/auto-login?key=${encodeURIComponent(key)}`;
+    window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}`;
   }
 
-  function saveAndLogin() {
-    if (!keyInput.trim()) return;
-    localStorage.setItem(LS_KEY, keyInput.trim());
-    setSavedKey(keyInput.trim());
-    doAutoLogin(keyInput.trim());
-  }
-
-  function clearKey() {
+  function clearSaved() {
     localStorage.removeItem(LS_KEY);
-    setSavedKey(null);
-    setShowKeyInput(false);
+    setSavedPw(null);
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
+    const password = (form.querySelector('[name=password]') as HTMLInputElement)?.value;
+    const remember = (form.querySelector('[name=remember]') as HTMLInputElement)?.checked;
+    if (remember && password) {
+      localStorage.setItem(LS_KEY, password);
+    } else if (!remember) {
+      localStorage.removeItem(LS_KEY);
+    }
   }
 
   const urlError = typeof window !== 'undefined'
@@ -47,11 +48,11 @@ export default function LoginPage() {
           <p className="text-sm text-zinc-500 mt-1">내부 게시판</p>
         </div>
 
-        {/* 자동 로그인 (키 저장됨) */}
-        {savedKey && !showKeyInput && (
+        {/* 자동 로그인 (비밀번호 저장됨) */}
+        {savedPw && (
           <div className="mb-5 space-y-2">
             <button
-              onClick={() => doAutoLogin(savedKey)}
+              onClick={() => doAutoLogin(savedPw)}
               disabled={autoLogging}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50"
             >
@@ -60,9 +61,9 @@ export default function LoginPage() {
                 : '🔑 자동 로그인'}
             </button>
             {urlError && (
-              <p className="text-red-500 text-xs text-center">키가 맞지 않습니다. 다시 설정해 주세요.</p>
+              <p className="text-red-500 text-xs text-center">저장된 비밀번호가 틀렸습니다. 다시 입력해 주세요.</p>
             )}
-            <button onClick={clearKey} className="w-full text-[11px] text-zinc-400 hover:text-red-500 transition-colors text-center">
+            <button onClick={clearSaved} className="w-full text-[11px] text-zinc-400 hover:text-red-500 transition-colors text-center">
               자동 로그인 해제
             </button>
             <div className="relative">
@@ -73,17 +74,26 @@ export default function LoginPage() {
         )}
 
         {/* 비밀번호 폼 */}
-        <form action={formAction} className="space-y-3">
+        <form action={formAction} onSubmit={handleSubmit} className="space-y-3">
           <input
             type="password"
             name="password"
             placeholder="비밀번호"
             autoComplete="current-password"
-            autoFocus={!savedKey}
+            autoFocus={!savedPw}
             required
             className="w-full border border-zinc-300 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100 focus:outline-none transition-all"
           />
           {error && <p className="text-red-500 text-xs">{error}</p>}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              name="remember"
+              defaultChecked={!!savedPw}
+              className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-xs text-zinc-500">비밀번호 기억하기</span>
+          </label>
           <button
             type="submit"
             disabled={isPending}
@@ -92,47 +102,6 @@ export default function LoginPage() {
             {isPending ? '확인 중...' : '입장'}
           </button>
         </form>
-
-        {/* 자동 로그인 키 설정 (키 없을 때) */}
-        {!savedKey && (
-          <div className="mt-3">
-            {!showKeyInput ? (
-              <button
-                onClick={() => setShowKeyInput(true)}
-                className="w-full text-[11px] text-zinc-400 hover:text-indigo-500 transition-colors text-center py-1"
-              >
-                🔑 자동 로그인 설정
-              </button>
-            ) : (
-              <div className="space-y-2 pt-1">
-                <p className="text-[11px] text-zinc-400 text-center">AGENT_API_KEY를 입력하면 다음부터 자동 로그인됩니다</p>
-                <input
-                  type="password"
-                  value={keyInput}
-                  onChange={e => setKeyInput(e.target.value)}
-                  placeholder="API 키 입력"
-                  onKeyDown={e => e.key === 'Enter' && saveAndLogin()}
-                  className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-50 focus:outline-none"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={saveAndLogin}
-                    disabled={!keyInput.trim()}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-40"
-                  >
-                    저장 후 로그인
-                  </button>
-                  <button
-                    onClick={() => setShowKeyInput(false)}
-                    className="px-3 py-2 text-xs text-zinc-400 hover:text-zinc-600 rounded-lg border border-zinc-200 transition-colors"
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="relative my-5">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200" /></div>

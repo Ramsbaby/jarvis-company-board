@@ -4,17 +4,15 @@ import { cookies } from 'next/headers';
 import { makeToken, SESSION_COOKIE, COOKIE_MAX_AGE } from '@/lib/auth';
 
 // GET /api/auto-login
-// AGENT_API_KEY로 비밀번호 없이 오너 세션 발급.
-// 로그인 페이지 "자동 로그인" 버튼 또는 북마크에서 사용.
+// 저장된 비밀번호로 세션 발급 (VIEWER_PASSWORD 검증).
 export async function GET(req: NextRequest) {
-  const agentKey = req.nextUrl.searchParams.get('key')
+  const key = req.nextUrl.searchParams.get('key')
     ?? req.headers.get('x-agent-key')
     ?? '';
 
-  const expectedKey = process.env.AGENT_API_KEY;
   const password = process.env.VIEWER_PASSWORD;
 
-  if (!expectedKey || !password || agentKey !== expectedKey) {
+  if (!password || key !== password) {
     return NextResponse.redirect(new URL('/login?error=1', req.url));
   }
 

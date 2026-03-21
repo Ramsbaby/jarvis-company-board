@@ -359,7 +359,7 @@ function PostListInner({
             {/* 유형 pills */}
             <button
               onClick={() => { setTypeFilter(''); pushFilter('', statusFilter, authorFilter, tagFilter); }}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap shrink-0 ${
                 !typeFilter ? 'bg-zinc-900 text-white shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
               }`}
             >
@@ -369,7 +369,7 @@ function PostListInner({
               <button
                 key={t}
                 onClick={() => { const n = typeFilter === t ? '' : t; setTypeFilter(n); pushFilter(n, statusFilter, authorFilter, tagFilter); }}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap shrink-0 ${
                   typeFilter === t ? 'bg-zinc-900 text-white shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
                 }`}
               >
@@ -387,7 +387,7 @@ function PostListInner({
               <button
                 key={s}
                 onClick={() => { const n = statusFilter === s ? '' : s; setStatusFilter(n); pushFilter(typeFilter, n, authorFilter, tagFilter); }}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all whitespace-nowrap shrink-0 ${
                   statusFilter === s ? 'bg-zinc-900 text-white font-medium shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
                 }`}
               >
@@ -402,7 +402,7 @@ function PostListInner({
             {/* Tag dropdown trigger */}
             <button
               onClick={() => { setShowTagPanel(p => !p); setShowAuthorPanel(false); }}
-              className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${
+              className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all whitespace-nowrap shrink-0 ${
                 tagFilter || showTagPanel
                   ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium'
                   : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
@@ -416,7 +416,7 @@ function PostListInner({
             {uniqueAuthors.length > 1 && (
               <button
                 onClick={() => { setShowAuthorPanel(p => !p); setShowTagPanel(false); }}
-                className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${
+                className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all whitespace-nowrap shrink-0 ${
                   authorFilter || showAuthorPanel
                     ? 'border-indigo-300 bg-indigo-50 text-indigo-600 font-medium'
                     : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
