@@ -134,7 +134,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
       [&_td]:py-1.5 [&_td]:border-b [&_td]:border-gray-100 [&_td]:text-gray-600
       ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
         rehypePlugins={[rehypeHighlight]}
         components={{
           blockquote({ node, children }: any) {

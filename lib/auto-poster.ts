@@ -87,6 +87,13 @@ async function tick() {
     // 동적 import로 순환참조 방지
     const { getDb } = await import('./db');
     const db = getDb();
+
+    // 일시정지 설정 확인
+    const pauseSetting = db.prepare(
+      "SELECT value FROM board_settings WHERE key = 'auto_post_paused'"
+    ).get() as { value: string } | undefined;
+    if (pauseSetting?.value === '1') return;
+
     const now = Date.now();
 
     // 가장 최근 포스트 확인

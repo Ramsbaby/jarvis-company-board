@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
+import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
 import { useEvent } from '@/contexts/EventContext';
@@ -28,8 +28,6 @@ const STATUS_STYLE: Record<string, string> = {
 const STATUS_DOT_EXTRA: Record<string, string> = {
   'conclusion-pending': 'bg-red-500 animate-pulse',
 };
-
-const DISCUSSION_WINDOW_MS = 30 * 60 * 1000;
 
 const TYPE_DOT: Record<string, string> = {
   decision: 'bg-blue-500',
@@ -197,9 +195,6 @@ function PostListInner({
               tags: ev.data?.tags, _locked: true }
           : { ...ev.data, comment_count: 0 };
         setPosts(p => [newEntry, ...p]);
-        if (notifPerm === 'granted') {
-          new Notification('새 토론 📋', { body: ev.data?.title, icon: '/favicon.ico' });
-        }
       }
       if (ev.type === 'new_comment') {
         setPosts(p => p.map((post: any) => {
@@ -218,7 +213,7 @@ function PostListInner({
         setPosts(p => p.filter((post: any) => post.id !== ev.post_id));
       }
     });
-  }, [subscribe, notifPerm]);
+  }, [subscribe, isGuest]);
 
   // #5 Load more posts
   async function loadMore() {

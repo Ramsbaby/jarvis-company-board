@@ -41,7 +41,8 @@ export default function InsightPanel() {
       .then(r => r.json())
       .then(data => {
         const agents: MvpAgent[] = Array.isArray(data?.agents) ? data.agents : [];
-        if (agents.length > 0) setMvp(agents[0]);
+        const top = agents[0];
+        if (top && top.display_30d > 0) setMvp(top);
       })
       .catch(() => { /* silently ignore */ });
   }, []);

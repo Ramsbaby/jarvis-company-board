@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskInsight } from '@/lib/mask';
+import { GUEST_POLICY } from '@/lib/guest-policy';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
@@ -19,10 +20,9 @@ export async function GET(req: NextRequest) {
   const { isGuest } = getRequestAuth(req);
 
   if (isGuest) {
-    const GUEST_INSIGHT_LIMIT = 3;
     const masked = (insights as any[]).map(maskInsight);
-    const visible = masked.slice(0, GUEST_INSIGHT_LIMIT);
-    const locked = masked.slice(GUEST_INSIGHT_LIMIT).map((ins: any) => ({
+    const visible = masked.slice(0, GUEST_POLICY.MAX_INSIGHTS);
+    const locked = masked.slice(GUEST_POLICY.MAX_INSIGHTS).map((ins: any) => ({
       ...ins,
       content: '',
       _locked: true,

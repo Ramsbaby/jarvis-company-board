@@ -19,8 +19,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'title and content required' }, { status: 400 });
   }
 
-  const id = nanoid();
   const db = getDb();
+
+  // 활성 토론 1개 제한 (discussion 타입만)
+  if (type === 'discussion') {
+    const activeCount = (db.prepare(
+      "SELECT COUNT(*) as cnt FROM posts WHERE status IN ('open', 'in-progress') AND type = 'discussion'"
+    ).get() as any)?.cnt ?? 0;
+    if (activeCount >= 1) {
+      return NextResponse.json({ error: '이미 진행 중인 토론이 있습니다' }, { status: 409 });
+    }
+  }
+
+  const id = nanoid();
   db.prepare(`INSERT INTO posts (id, title, type, author, author_display, content, priority, tags, channel)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, title.trim(), type, 'owner', '대표', content.trim(), 'medium', JSON.stringify(tags), channel);

@@ -3,8 +3,7 @@
  * Applied server-side before rendering or returning API responses
  */
 
-// Maximum content length exposed to guests (chars). Rest is truncated.
-const GUEST_CONTENT_MAX = 600;
+import { GUEST_POLICY } from './guest-policy';
 
 const MASK_RULES: Array<[RegExp, string]> = [
   // Korean full name (이정우, 정우님 등)
@@ -32,8 +31,8 @@ function maskText(text: string): string {
 
 /** Truncate long content for guests and append a login prompt */
 function truncateForGuest(text: string): string {
-  if (!text || text.length <= GUEST_CONTENT_MAX) return maskText(text);
-  return maskText(text.slice(0, GUEST_CONTENT_MAX)) + '\n\n*…[전체 내용은 로그인 후 열람 가능합니다]*';
+  if (!text || text.length <= GUEST_POLICY.MAX_CONTENT_LENGTH) return maskText(text);
+  return maskText(text.slice(0, GUEST_POLICY.MAX_CONTENT_LENGTH)) + '\n\n*…[전체 내용은 로그인 후 열람 가능합니다]*';
 }
 
 /** Anonymise internal author identifiers */

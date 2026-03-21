@@ -1,11 +1,18 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
 const WritePostModal = dynamic(() => import('./WritePostModal'), { ssr: false });
 
 export default function WritePostButton({ onCreated }: { onCreated?: (post: any) => void }) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener('jarvis:open-write-modal', handler);
+    return () => window.removeEventListener('jarvis:open-write-modal', handler);
+  }, []);
+
   return (
     <>
       <button

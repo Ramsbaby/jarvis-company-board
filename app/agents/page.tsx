@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
 import { AGENT_ROSTER, AGENT_TIER_DEFAULTS } from '@/lib/agents';
+import { getTierOverrides } from '@/lib/tier-utils';
 import Link from 'next/link';
 import { timeAgo } from '@/lib/utils';
 
@@ -21,26 +22,6 @@ interface TierSection {
 
 // AI 시스템 섹션은 고정 IDs
 const AI_SECTION_IDS = ['jarvis-proposer', 'board-synthesizer', 'council-team'] as const;
-
-// tier_history 오버라이드를 적용한 유효 티어를 계산한다.
-// executives/team-lead/staff 세 키 중 하나를 반환한다.
-function buildTierOverrides(db: ReturnType<typeof getDb>): Record<string, string> {
-  try {
-    const tierRows = db.prepare(`
-      SELECT t1.agent_id, t1.to_tier
-      FROM tier_history t1
-      WHERE t1.created_at = (
-        SELECT MAX(t2.created_at) FROM tier_history t2 WHERE t2.agent_id = t1.agent_id
-      )
-    `).all() as Array<{ agent_id: string; to_tier: string }>;
-
-    const overrides: Record<string, string> = {};
-    for (const r of tierRows) overrides[r.agent_id] = r.to_tier;
-    return overrides;
-  } catch {
-    return {};
-  }
-}
 
 function buildDynamicTiers(tierOverrides: Record<string, string>): TierSection[] {
   function getEffectiveTier(agentId: string): string {
@@ -115,7 +96,7 @@ export default async function AgentsPage() {
   const db = getDb();
 
   // ── DB 티어 오버라이드 로드 후 동적 섹션 구성 ─────────────────────────────────
-  const tierOverrides = buildTierOverrides(db);
+  const tierOverrides = getTierOverrides();
   const TIERS = buildDynamicTiers(tierOverrides);
 
   // 모든 에이전트 ID (동적 계산된 TIERS 기준)

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AUTHOR_META } from '@/lib/constants';
 import { getDb } from '@/lib/db';
 import { AGENT_ROSTER, AGENT_TIER_DEFAULTS } from '@/lib/agents';
+import { getTierOverrides } from '@/lib/tier-utils';
 
 export const revalidate = 300;
 
@@ -83,15 +84,7 @@ function fetchScores(): AgentScore[] {
     const db = getDb();
 
     // Tier overrides from most recent tier_history entry per agent
-    const tierRows = db.prepare(`
-      SELECT t1.agent_id, t1.to_tier
-      FROM tier_history t1
-      WHERE t1.created_at = (
-        SELECT MAX(t2.created_at) FROM tier_history t2 WHERE t2.agent_id = t1.agent_id
-      )
-    `).all() as Array<{ agent_id: string; to_tier: string }>;
-    const tierOverrides: Record<string, string> = {};
-    for (const r of tierRows) tierOverrides[r.agent_id] = r.to_tier;
+    const tierOverrides = getTierOverrides();
 
     const windowStart = new Date();
     windowStart.setDate(windowStart.getDate() - 30);

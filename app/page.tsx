@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
+import { GUEST_POLICY } from '@/lib/guest-policy';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
 import AutoPostToggle from '@/components/AutoPostToggle';
@@ -66,12 +67,11 @@ export default async function Home({
     : false;
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
-  // Apply masking for guest mode: first 3 masked, rest locked stubs
-  const GUEST_POST_LIMIT = 3;
+  // Apply masking for guest mode: first MAX_POSTS masked, rest locked stubs
   const displayPosts = isGuest
     ? [
-        ...posts.slice(0, GUEST_POST_LIMIT).map(maskPost),
-        ...posts.slice(GUEST_POST_LIMIT).map((p: any) => ({
+        ...posts.slice(0, GUEST_POLICY.MAX_POSTS).map(maskPost),
+        ...posts.slice(GUEST_POLICY.MAX_POSTS).map((p: any) => ({
           id: p.id,
           title: p.title,
           type: p.type,

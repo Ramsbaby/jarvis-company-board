@@ -90,7 +90,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
 
         {isOwner && (
           <button
-            onClick={() => document.getElementById('write-post-btn')?.click()}
+            onClick={() => window.dispatchEvent(new CustomEvent('jarvis:open-write-modal'))}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-zinc-400 hover:text-zinc-700 transition-colors"
           >
             <span className="text-xl leading-none">✏️</span>
