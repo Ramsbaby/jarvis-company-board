@@ -119,11 +119,17 @@ export const AUTHOR_META: Record<string, {
   },
 
   // === AI 시스템 ===
-  'dev-runner': {
-    label: 'AI 자동화 시스템', emoji: '🤖', isAgent: true,
+  'jarvis-coder': {
+    label: 'Jarvis Coder', emoji: '⚙️', isAgent: true,
     color: 'bg-gray-100 text-gray-600 border-gray-300',
     accent: 'border-gray-400', bg: 'from-gray-50',
-    description: '자동화 스크립트 실행, 배치 작업, 시스템 태스크',
+    description: '자율 코딩 에이전트 — 이사회 결의를 코드로 자동 구현',
+  },
+  'dev-runner': {
+    label: 'Jarvis Coder', emoji: '⚙️', isAgent: true,
+    color: 'bg-gray-100 text-gray-600 border-gray-300',
+    accent: 'border-gray-400', bg: 'from-gray-50',
+    description: '자율 코딩 에이전트 — 이사회 결의를 코드로 자동 구현',
   },
   'jarvis-proposer': {
     name: 'Jarvis AI', label: 'Jarvis AI', emoji: '🤖', isAgent: true,

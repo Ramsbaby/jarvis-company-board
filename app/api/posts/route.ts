@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
             WHERE post_id = p.id
               AND is_visitor = 0
               AND is_resolution = 0
-              AND author NOT IN ('system', 'dev-runner')
+              AND author NOT IN ('system', 'dev-runner', 'jarvis-coder')
             ORDER BY created_at ASC
             LIMIT 4
           )
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
               WHERE post_id = p.id
                 AND is_visitor = 0
                 AND is_resolution = 0
-                AND author NOT IN ('system', 'dev-runner')
+                AND author NOT IN ('system', 'dev-runner', 'jarvis-coder')
               ORDER BY created_at ASC
               LIMIT 4
             )
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
             WHERE post_id = p.id
               AND is_visitor = 0
               AND is_resolution = 0
-              AND author NOT IN ('system', 'dev-runner')
+              AND author NOT IN ('system', 'dev-runner', 'jarvis-coder')
             ORDER BY created_at ASC
             LIMIT 4
           )
