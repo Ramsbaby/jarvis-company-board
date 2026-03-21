@@ -102,7 +102,7 @@ const SOURCE_STATUS_LABEL: Record<string, string> = {
 const STATUS_PILL: Record<string, { label: string; className: string }> = {
   pending:            { label: '⏸ 대기중',      className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
   awaiting_approval:  { label: '🔍 검토 대기',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  approved:           { label: '✅ 승인됨',       className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  approved:           { label: '⏳ 실행 대기',     className: 'bg-teal-50 text-teal-700 border-teal-200' },
   'in-progress':      { label: '⚙️ 작업 중',     className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   done:               { label: '🎉 완료',          className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   rejected:           { label: '✕ 반려',           className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
@@ -149,21 +149,6 @@ function secsToNextCron(): number {
   return period - (totalSec % period);
 }
 
-// Time until next 22:55 KST (dev-runner.sh schedule)
-function secsToDevRunner(): number {
-  const now = new Date();
-  const target = new Date(now);
-  target.setHours(22, 55, 0, 0);
-  if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
-  return Math.floor((target.getTime() - now.getTime()) / 1000);
-}
-
-function formatDevRunnerEta(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}시간 ${m}분 후`;
-  return `${m}분 후`;
-}
 
 function detectPhase(logs: LogEntry[]): number {
   if (logs.length === 0) return 0;
@@ -293,7 +278,6 @@ export default function TaskDetailClient({
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [cronSecs, setCronSecs] = useState(secsToNextCron);
-  const [devRunnerSecs, setDevRunnerSecs] = useState(secsToDevRunner);
   const [logExpanded, setLogExpanded] = useState(false);
   const [showRetryForm, setShowRetryForm] = useState(false);
   const [retryNote, setRetryNote] = useState('');
@@ -352,15 +336,14 @@ export default function TaskDetailClient({
     return () => clearInterval(interval);
   }, [task.id, task.status, task.execution_log, isLive, isApproved]);
 
-  // Cron countdown (5-min boundary) + dev-runner countdown
+  // Cron countdown (5-min boundary)
   useEffect(() => {
-    if (!isApproved && !isLive) return;
+    if (!isApproved) return;
     const t = setInterval(() => {
       setCronSecs(secsToNextCron());
-      setDevRunnerSecs(secsToDevRunner());
     }, 1000);
     return () => clearInterval(t);
-  }, [isApproved, isLive]);
+  }, [isApproved]);
 
   // Live elapsed timer when running
   useEffect(() => {
@@ -645,8 +628,8 @@ export default function TaskDetailClient({
               </span>
             )}
             {isLive && logs.length === 0 && (
-              <span className="text-[11px] text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                22:55 실행 예정
+              <span className="text-[11px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                실행 대기 중
               </span>
             )}
 
@@ -966,7 +949,7 @@ export default function TaskDetailClient({
                 {[
                   { icon: '🔍', label: '검토 중', sub: '지금', active: true, done: false },
                   { icon: '📥', label: '큐 등록', sub: '승인 후 5분 내', active: false, done: false },
-                  { icon: '⚙️', label: '코드 실행', sub: `22:55 실행`, active: false, done: false },
+                  { icon: '⚙️', label: '코드 실행', sub: '승인 후 즉시', active: false, done: false },
                 ].map((step, i) => (
                   <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                     step.active ? 'bg-amber-50 border-amber-200' : 'bg-zinc-50 border-zinc-100'
@@ -988,8 +971,8 @@ export default function TaskDetailClient({
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center text-lg shrink-0">✅</div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-teal-800">승인 완료 — 큐 등록 대기 중</p>
-                  <p className="text-xs text-teal-600 mt-0.5">5분 내 큐에 등록되고, 오늘 22:55에 실행됩니다</p>
+                  <p className="text-sm font-bold text-teal-800">승인 완료 — 실행 대기 중</p>
+                  <p className="text-xs text-teal-600 mt-0.5">5분 내 큐에 등록되어 즉시 실행됩니다</p>
                 </div>
                 {/* Poller countdown */}
                 <div className="text-right shrink-0">
@@ -1013,7 +996,7 @@ export default function TaskDetailClient({
                 {[
                   { icon: '✅', label: '승인 완료', sub: '방금', done: true, active: false },
                   { icon: '📥', label: '큐 등록', sub: `약 ${cronMin}분 내`, done: false, active: true },
-                  { icon: '⚙️', label: '코드 실행', sub: `22:55 (${formatDevRunnerEta(devRunnerSecs)})`, done: false, active: false },
+                  { icon: '⚙️', label: '코드 실행', sub: '큐 등록 후 즉시', done: false, active: false },
                 ].map((step, i) => (
                   <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                     step.done   ? 'bg-teal-50 border-teal-200' :
@@ -1049,7 +1032,7 @@ export default function TaskDetailClient({
                   ) : (
                     <>
                       <p className="text-sm font-bold text-indigo-800">개발 큐 등록됨 — 실행 대기 중</p>
-                      <p className="text-xs text-indigo-600 mt-0.5">오늘 22:55에 Jarvis가 코드를 작업합니다</p>
+                      <p className="text-xs text-indigo-600 mt-0.5">Jarvis가 곧 코드 작업을 시작합니다</p>
                     </>
                   )}
                 </div>
@@ -1058,11 +1041,6 @@ export default function TaskDetailClient({
                     <>
                       <p className="text-[10px] text-zinc-400">예상 완료</p>
                       <p className="text-xs font-semibold text-indigo-700">약 {task.estimated_minutes}분 후</p>
-                    </>
-                  ) : logs.length === 0 ? (
-                    <>
-                      <p className="text-[10px] text-zinc-400 font-medium">실행까지</p>
-                      <p className="text-base font-black tabular-nums text-indigo-700 leading-none">{formatDevRunnerEta(devRunnerSecs)}</p>
                     </>
                   ) : null}
                 </div>
@@ -1076,7 +1054,7 @@ export default function TaskDetailClient({
                   {[
                     { icon: '✅', label: '승인', done: true, active: false },
                     { icon: '📥', label: '큐 등록', done: true, active: false },
-                    { icon: '⚙️', label: '22:55 실행', done: false, active: true },
+                    { icon: '⚙️', label: '즉시 실행', done: false, active: true },
                   ].map((step, i) => (
                     <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                       step.done   ? 'bg-teal-50 border-teal-200' :
@@ -1091,7 +1069,7 @@ export default function TaskDetailClient({
                 <div className="px-4 py-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
                   <p className="text-xs text-indigo-700">
                     <span className="font-semibold">로그가 보이지 않나요?</span>{' '}
-                    실행 로그는 22:55에 Jarvis가 실제 코드 작업을 시작할 때 채워집니다. 그 전까지는 큐에서 대기 중입니다.
+                    실행 로그는 Jarvis가 실제 코드 작업을 시작할 때 채워집니다. 잠시 후 자동으로 업데이트됩니다.
                   </p>
                 </div>
               </div>

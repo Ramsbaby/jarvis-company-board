@@ -69,7 +69,7 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
     stripe: 'bg-gradient-to-r from-teal-400 to-emerald-400',
     innerBg: 'bg-teal-50/40',
     badgeCls: 'bg-teal-50 border-teal-200 text-teal-700',
-    badgeLabel: '✅ 승인됨',
+    badgeLabel: '⏳ 실행 대기',
   },
   'in-progress': {
     outerBorder: 'border-indigo-200 shadow-sm',
@@ -113,7 +113,7 @@ const TAB_BADGE_CLS: Record<string, string> = {
 const STATUS_TABS = [
   { key: 'all',               label: '전체' },
   { key: 'awaiting_approval', label: '검토 대기' },
-  { key: 'approved',          label: '승인됨' },
+  { key: 'approved',          label: '실행 대기' },
   { key: 'in-progress',       label: '작업 중' },
   { key: 'pending',           label: '대기중' },
   { key: 'done',              label: '완료' },
@@ -235,7 +235,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
 
   const STATS = [
     { label: '검토 대기', key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
-    { label: '승인됨',    key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: false },
+    { label: '실행 대기',  key: 'approved',           color: 'bg-teal-50 border-teal-200 text-teal-700',     dot: 'bg-teal-400',    pulse: true  },
     { label: '작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: true },
     { label: '완료',      key: 'done',               color: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-400', pulse: false },
     { label: '반려',      key: 'rejected',           color: 'bg-zinc-50 border-zinc-200 text-zinc-500',    dot: 'bg-zinc-300',    pulse: false },
@@ -442,7 +442,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     >
                       {isLoading ? (
                         <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
-                      ) : '✓ 승인'}
+                      ) : '✓ 승인 & 즉시 실행'}
                     </button>
                   </div>
                 )}
