@@ -34,10 +34,9 @@ interface DevTask {
   changed_files?: string;
   execution_log?: string;
   rejection_note?: string;
-  // New fields
   expected_impact?: string;
   actual_impact?: string;
-  impact_areas?: string; // JSON array
+  impact_areas?: string;
   improvement_score?: number;
   user_visible?: string;
   risk_reduced?: string;
@@ -45,7 +44,8 @@ interface DevTask {
   estimated_minutes?: number;
   difficulty?: string;
   post_id?: string;
-  attempt_history?: string; // JSON array of AttemptEntry
+  post_title?: string;
+  attempt_history?: string;
 }
 
 interface AttemptEntry {
@@ -78,6 +78,13 @@ const PRIORITY_CONFIG: Record<string, { dot: string; badge: string; label: strin
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   easy: '쉬움', medium: '보통', hard: '어려움', expert: '전문가',
+};
+
+const DIFFICULTY_DESC: Record<string, string> = {
+  easy:   '단순 수정 — 파일 1-2개, 로직 변경 없음',
+  medium: '중간 수준 — 파일 2-5개, 부분 로직 수정',
+  hard:   '복잡한 작업 — 여러 모듈 수정, 구조 변경',
+  expert: '고난도 — 아키텍처 변경 또는 도메인 전문지식 필요',
 };
 
 const IMPACT_AREA_CHIPS: Record<string, string> = {
@@ -258,6 +265,75 @@ function StarRating({ score }: { score: number }) {
         <span key={i} className={i <= score ? 'text-amber-400' : 'text-zinc-200'}>★</span>
       ))}
     </span>
+  );
+}
+
+function FollowUpTaskForm({ taskId, taskTitle, sourceId, boardUrl }: {
+  taskId: string; taskTitle: string; sourceId: string | null; boardUrl: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  async function handleSubmit() {
+    if (!text.trim()) return;
+    setSubmitting(true);
+    try {
+      const newId = `followup-${taskId.slice(0, 8)}-${Date.now()}`;
+      await fetch('/api/dev-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          id: newId,
+          title: text.trim(),
+          detail: text.trim(),
+          source: boardUrl || `followup:${taskId}`,
+          status: 'awaiting_approval',
+          priority: 'medium',
+        }),
+      });
+      setSubmitted(true);
+      setText('');
+      setOpen(false);
+    } catch { /* ignore */ } finally { setSubmitting(false); }
+  }
+
+  if (submitted) return (
+    <p className="text-xs text-emerald-600 font-medium">✓ 후속 태스크가 검토 대기에 추가됐습니다</p>
+  );
+
+  if (!open) return (
+    <button
+      onClick={() => setOpen(true)}
+      className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1 transition-colors"
+    >
+      + 후속 태스크 요청
+    </button>
+  );
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder="추가로 해야 할 작업을 입력하세요..."
+        className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-xl p-3 resize-none outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
+        rows={3}
+        autoFocus
+      />
+      <div className="flex gap-2">
+        <button onClick={() => setOpen(false)} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700">취소</button>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !text.trim()}
+          className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+        >
+          {submitting ? '등록 중...' : '태스크 등록'}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -669,6 +745,13 @@ export default function TaskDetailClient({
             <div className="flex items-start gap-3 mb-4">
               <span className={`mt-2 w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
               <div className="flex-1 min-w-0">
+                {/* 출처 게시물 제목 */}
+                {task.post_title && (
+                  <p className="text-xs text-indigo-500 font-semibold mb-1.5 flex items-center gap-1">
+                    <span>🔗</span>
+                    <span>{task.post_title}</span>
+                  </p>
+                )}
                 <h1 className="text-xl font-bold text-zinc-900 leading-snug">{renderTitle(task.title)}</h1>
                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
                   {/* Priority */}
@@ -800,58 +883,67 @@ export default function TaskDetailClient({
               </div>
 
               <div className="p-5 space-y-4">
-                {/* Decision info grid */}
+                {/* Decision info grid — 항상 2칸 표시 */}
                 <div className="grid grid-cols-2 gap-3">
-                  {task.estimated_minutes !== undefined && (
-                    <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
-                      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">예상 소요</p>
-                      {editingMinutes ? (
-                        <input
-                          type="number"
-                          min={1}
-                          max={480}
-                          value={minutesDraft}
-                          onChange={e => setMinutesDraft(e.target.value)}
-                          onBlur={handleSaveMinutes}
-                          onKeyDown={e => { if (e.key === 'Enter') handleSaveMinutes(); if (e.key === 'Escape') setEditingMinutes(false); }}
-                          className="text-xs w-full font-bold text-zinc-800 bg-white border border-indigo-300 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300"
-                          autoFocus
-                        />
-                      ) : (
-                        <div
-                          className={`group relative flex items-center gap-1 ${isOwner ? 'cursor-pointer hover:bg-zinc-100 rounded -mx-1 px-1' : ''}`}
-                          onClick={isOwner ? () => { setMinutesDraft(String(task.estimated_minutes ?? '')); setEditingMinutes(true); } : undefined}
-                          title={isOwner ? '클릭하여 수정' : undefined}
-                        >
-                          <p className="text-sm font-bold text-zinc-800">약 {task.estimated_minutes}분</p>
-                          {isOwner && <span className="opacity-0 group-hover:opacity-50 text-[11px] text-zinc-400">✏</span>}
-                          {savedFlash === 'minutes' && (
-                            <span className="absolute -top-5 left-0 text-[10px] text-emerald-600 font-semibold whitespace-nowrap bg-white border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
-                              저장됨
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {task.difficulty && (
-                    <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
-                      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">난이도</p>
+                  {/* 예상 소요 — 없으면 "미정" */}
+                  <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">예상 소요</p>
+                    {editingMinutes ? (
+                      <input
+                        type="number"
+                        min={1}
+                        max={480}
+                        value={minutesDraft}
+                        onChange={e => setMinutesDraft(e.target.value)}
+                        onBlur={handleSaveMinutes}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveMinutes(); if (e.key === 'Escape') setEditingMinutes(false); }}
+                        className="text-xs w-full font-bold text-zinc-800 bg-white border border-indigo-300 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300"
+                        autoFocus
+                      />
+                    ) : (
                       <div
                         className={`group relative flex items-center gap-1 ${isOwner ? 'cursor-pointer hover:bg-zinc-100 rounded -mx-1 px-1' : ''}`}
-                        onClick={isOwner ? handleCycleDifficulty : undefined}
-                        title={isOwner ? '클릭하여 순환 변경' : undefined}
+                        onClick={isOwner ? () => { setMinutesDraft(String(task.estimated_minutes ?? '')); setEditingMinutes(true); } : undefined}
+                        title={isOwner ? '클릭하여 수정' : undefined}
                       >
-                        <p className="text-sm font-bold text-zinc-800">{DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty}</p>
-                        {isOwner && <span className="opacity-0 group-hover:opacity-50 text-[11px] text-zinc-400">✏</span>}
-                        {savedFlash === 'difficulty' && (
+                        {task.estimated_minutes && task.estimated_minutes > 0 ? (
+                          <p className="text-sm font-bold text-zinc-800">약 {task.estimated_minutes}분</p>
+                        ) : (
+                          <p className="text-sm font-bold text-zinc-400">{isOwner ? '미정 ✏' : '미정'}</p>
+                        )}
+                        {savedFlash === 'minutes' && (
                           <span className="absolute -top-5 left-0 text-[10px] text-emerald-600 font-semibold whitespace-nowrap bg-white border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
                             저장됨
                           </span>
                         )}
                       </div>
+                    )}
+                  </div>
+                  {/* 난이도 — 없으면 "분석 전" */}
+                  <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">난이도</p>
+                      <span className="text-[9px] px-1 py-px rounded bg-zinc-100 text-zinc-400 border border-zinc-200">AI 추정</span>
                     </div>
-                  )}
+                    <div
+                      className={`group relative ${isOwner ? 'cursor-pointer hover:bg-zinc-100 rounded -mx-1 px-1' : ''}`}
+                      onClick={isOwner ? handleCycleDifficulty : undefined}
+                      title={isOwner ? '클릭하여 순환 변경 (쉬움→보통→어려움→전문가)' : undefined}
+                    >
+                      <p className="text-sm font-bold text-zinc-800">
+                        {task.difficulty ? DIFFICULTY_LABEL[task.difficulty] ?? task.difficulty : '분석 전'}
+                        {isOwner && <span className="ml-1 opacity-0 group-hover:opacity-50 text-[11px] text-zinc-400">✏</span>}
+                      </p>
+                      {task.difficulty && DIFFICULTY_DESC[task.difficulty] && (
+                        <p className="text-[10px] text-zinc-400 mt-0.5 leading-snug">{DIFFICULTY_DESC[task.difficulty]}</p>
+                      )}
+                      {savedFlash === 'difficulty' && (
+                        <span className="absolute -top-5 left-0 text-[10px] text-emerald-600 font-semibold whitespace-nowrap bg-white border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
+                          저장됨
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Impact areas */}
@@ -877,20 +969,20 @@ export default function TaskDetailClient({
                   </div>
                 )}
 
-                {/* Action buttons */}
+                {/* Action buttons — 우측 정렬, 컴팩트 */}
                 {!showRejectForm ? (
-                  <div className="flex gap-3 pt-1">
+                  <div className="flex justify-end gap-2 pt-1">
                     <button
                       onClick={() => setShowRejectForm(true)}
                       disabled={!!actionLoading}
-                      className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-zinc-50 text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-40 transition-all"
+                      className="px-4 py-2 text-sm font-medium rounded-xl bg-zinc-50 text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-40 transition-all whitespace-nowrap"
                     >
                       ✕ 반려
                     </button>
                     <button
                       onClick={handleApprove}
                       disabled={!!actionLoading}
-                      className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-all shadow-sm hover:shadow-md"
+                      className="flex items-center gap-2 px-5 py-2 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-all shadow-sm hover:shadow-md whitespace-nowrap"
                     >
                       {actionLoading === 'approved' ? (
                         <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
@@ -1151,35 +1243,57 @@ export default function TaskDetailClient({
             <div className="absolute left-[32px] top-5 bottom-5 w-0.5 bg-zinc-100" />
 
             <TimelineStep
-              icon="📋" label="작업 요청됨" sublabel="Jarvis 시스템에 등록"
+              icon="📋"
+              label="작업 접수"
+              sublabel={task.source?.startsWith('board:')
+                ? '이사회 토론에서 도출된 개발 요청이 큐에 등록됨'
+                : task.source?.startsWith('manual:') ? '수동으로 등록된 개발 요청'
+                : 'Jarvis 시스템에 개발 요청 등록됨'}
               time={task.created_at} done={true} active={false}
             />
             <TimelineStep
-              icon="⏳" label="대표 검토 중" sublabel="승인 여부 확인 필요"
+              icon="⏳"
+              label={isAwaiting ? '대표 검토 중 (현재 단계)' : '대표 검토'}
+              sublabel={isRejected
+                ? '검토 결과: 반려 (재검토 가능)'
+                : isAwaiting
+                ? '승인하면 Jarvis가 즉시 코드 작업을 시작합니다'
+                : '검토 완료'}
               time={isAwaiting ? task.created_at : undefined}
               done={!isAwaiting && !isRejected && task.status !== 'pending'}
               active={isAwaiting} pulse={isAwaiting} rejected={isRejected}
             />
             <TimelineStep
               icon="✓"
-              label={isRejected ? '반려됨' : '작업 승인됨'}
-              sublabel={isRejected ? '작업 취소됨' : '코드 작업 실행 승인'}
+              label={isRejected ? '반려 — 작업 중단' : '승인 완료'}
+              sublabel={isRejected
+                ? (task.rejection_note ? `사유: ${task.rejection_note.slice(0, 60)}` : '반려 사유 없음')
+                : isApproved ? '5분 내 자동으로 개발 큐에 등록됩니다'
+                : '코드 작업 실행이 예약됨'}
               time={task.approved_at ?? task.rejected_at}
-              elapsedLabel={waitTime ? `대기 ${waitTime}` : null}
+              elapsedLabel={waitTime ? `검토 소요 ${waitTime}` : null}
               done={!isRejected && !!task.approved_at}
               active={isApproved} rejected={isRejected}
             />
             <TimelineStep
-              icon="⚙" label="Jarvis 코드 작업 시작" sublabel="자동화 코드 작업 실행 중"
+              icon="⚙"
+              label={isLive ? 'Jarvis 작업 중 (현재 단계)' : 'Jarvis 코드 작업'}
+              sublabel={isLive
+                ? `코드 분석 → 수정 → 검증 진행 중${runningElapsed > 0 ? ` (${formatElapsed(runningElapsed)} 경과)` : ''}`
+                : isDone ? `${task.assignee ?? ''}팀 코드 자동 수정 완료`
+                : '승인 후 Jarvis가 자동으로 코드를 수정합니다'}
               time={task.started_at}
               done={isDone} active={isLive} pulse={isLive} rejected={isRejected}
             />
             <TimelineStep
               icon="🎉"
-              label={isDone ? '모든 작업 완료' : isRejected ? '–' : '완료 대기 중'}
-              sublabel={isDone ? '결과물 저장됨' : isRejected ? '' : '실행 완료 후 자동 기록'}
+              label={isDone ? '작업 완료' : isRejected ? '완료되지 않음' : '완료 대기'}
+              sublabel={isDone
+                ? `수정된 파일 ${changedFiles.length > 0 ? `${changedFiles.length}개` : '확인 필요'} — 결과 기록 저장됨`
+                : isRejected ? '반려로 인해 작업이 진행되지 않았습니다'
+                : '코드 작업 완료 시 자동으로 기록됩니다'}
               time={task.completed_at}
-              elapsedLabel={workTime ? `작업 ${workTime}` : null}
+              elapsedLabel={workTime ? `작업 소요 ${workTime}` : null}
               done={isDone} active={false} rejected={isRejected}
             />
           </div>
@@ -1286,61 +1400,34 @@ export default function TaskDetailClient({
           </div>
         )}
 
-        {/* ── Completion card ── */}
+        {/* ── Done — Result card ── */}
         {isDone && (
           <div className="bg-white border border-emerald-200 rounded-2xl overflow-hidden shadow-sm">
-            {/* Header */}
+            {/* Green completion banner */}
             <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 border-b border-emerald-100">
               <div className="flex items-center gap-3">
-                <span className="text-2xl">🎉</span>
+                <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-xl shrink-0">🎉</div>
                 <div className="flex-1">
-                  <h2 className="text-base font-bold text-emerald-800">작업 완료!</h2>
-                  {task.completed_at && (
-                    <p className="text-[11px] text-emerald-600 mt-0.5 tabular-nums">
-                      완료 시각: {fmt(task.completed_at)}
-                      {completionDuration !== null ? ` · 총 ${completionDuration}분 소요` : workTime ? ` · ${workTime} 소요` : ''}
-                    </p>
-                  )}
+                  <p className="text-sm font-bold text-emerald-800">Jarvis 작업 완료</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    {task.started_at && task.completed_at ? `${elapsed(task.started_at, task.completed_at)} 소요` : fmt(task.completed_at)}
+                  </p>
                 </div>
+                {/* Link back to source post */}
+                {sourcePostId && (
+                  <Link href={`/posts/${sourcePostId}`} className="text-xs text-emerald-600 hover:text-emerald-800 underline shrink-0">
+                    출처 토론 보기 →
+                  </Link>
+                )}
               </div>
             </div>
 
-            <div className="p-5 space-y-5">
-              {/* One-line summary box */}
-              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">이 작업으로 무엇이 바뀌었나요?</p>
-                <p className="text-sm text-emerald-800 leading-relaxed">
-                  {task.actual_impact
-                    ? task.actual_impact
-                    : task.result_summary
-                      ? task.result_summary.slice(0, 80) + (task.result_summary.length > 80 ? '…' : '')
-                      : '결과 요약이 없습니다.'}
-                </p>
-              </div>
-
-              {/* Impact area chips */}
-              {impactAreas.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">영향 범위</p>
-                  <ImpactChips areas={impactAreas} />
-                </div>
-              )}
-
-              {/* Expected impact */}
-              {task.expected_impact && (
-                <div>
-                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">기대 효과</h3>
-                  <div className="bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
-                    <p className="text-sm text-violet-800 leading-relaxed">{task.expected_impact}</p>
-                  </div>
-                </div>
-              )}
-
+            <div className="p-5 space-y-4">
               {/* Result summary */}
               {task.result_summary && (
                 <div>
-                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">실제 변화</h3>
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4">
+                  <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">실행 결과</p>
+                  <div className="text-sm text-zinc-700 leading-relaxed bg-zinc-50 rounded-xl p-4 border border-zinc-100">
                     <MarkdownContent content={task.result_summary} />
                   </div>
                 </div>
@@ -1349,25 +1436,30 @@ export default function TaskDetailClient({
               {/* Changed files */}
               {changedFiles.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-                    변경된 파일 {changedFiles.length}개
-                  </h3>
-                  <ul className="space-y-1.5">
-                    {changedFiles.map((f, i) => {
-                      const isNew = /new|create/i.test(f);
-                      return (
-                        <li key={i} className="flex items-center gap-2.5 text-xs">
-                          <span className="shrink-0 text-sm">{isNew ? '🆕' : '📝'}</span>
-                          <code className="font-mono text-zinc-700 bg-zinc-50 px-2 py-0.5 rounded-lg border border-zinc-100 truncate">
-                            {f}
-                          </code>
-                          <span className={`text-[10px] shrink-0 font-medium ${isNew ? 'text-emerald-600' : 'text-zinc-400'}`}>
-                            {isNew ? '새 파일' : '수정됨'}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">수정된 파일 ({changedFiles.length})</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {changedFiles.map((f, i) => (
+                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-600 font-mono">
+                        {f.split('/').pop() || f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actual impact */}
+              {task.actual_impact && (
+                <div className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wider mb-1">실제 효과</p>
+                  <p className="text-sm text-emerald-800">{task.actual_impact}</p>
+                </div>
+              )}
+
+              {/* Impact area chips */}
+              {impactAreas.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">영향 범위</p>
+                  <ImpactChips areas={impactAreas} />
                 </div>
               )}
 
@@ -1428,6 +1520,14 @@ export default function TaskDetailClient({
                   </div>
                 )}
               </div>
+
+              {/* Owner: create follow-up task */}
+              {isOwner && (
+                <div className="pt-2 border-t border-zinc-100">
+                  <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">후속 작업</p>
+                  <FollowUpTaskForm taskId={task.id} taskTitle={task.title} sourceId={sourcePostId} boardUrl={task.source} />
+                </div>
+              )}
             </div>
           </div>
         )}

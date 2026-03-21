@@ -21,6 +21,7 @@ interface DevTask {
   impact_areas?: string;
   estimated_minutes?: number;
   difficulty?: string;
+  post_title?: string;
 }
 
 const PRIORITY_CONFIG: Record<string, { dot: string; badge: string; label: string }> = {
@@ -120,10 +121,10 @@ const STATUS_TABS = [
   { key: 'rejected',          label: '반려' },
 ] as const;
 
-// 제목 내 `코드` → styled <code> 태그, 경로는 파일명만 표시
-// 미완성 백틱(60자 잘림)도 처리 — 닫힌 척 하고 끝에 … 표시
+// 제목 내 `코드` → 인라인 코드 강조 (경로 전체 표시, 파일명 단축 없음)
+// 미완성 백틱(잘린 제목)도 처리 — 닫힌 척 하고 끝에 … 표시
 function renderTitle(title: string): React.ReactNode {
-  const isTruncated = /`[^`]*$/.test(title); // 닫히지 않은 백틱 감지
+  const isTruncated = /`[^`]*$/.test(title);
   const normalized = isTruncated ? title + '`' : title;
   const parts = normalized.split(/(`[^`]+`)/g);
   return (
@@ -131,15 +132,13 @@ function renderTitle(title: string): React.ReactNode {
       {parts.map((part, i) => {
         if (part.startsWith('`') && part.endsWith('`')) {
           const code = part.slice(1, -1);
-          const short = code.split('/').pop() || code;
           const isLast = isTruncated && i === parts.length - 2;
           return (
             <code
               key={i}
-              title={code}
               className="mx-0.5 px-1 py-0.5 rounded bg-zinc-100 text-zinc-600 font-mono text-[0.82em] border border-zinc-200 not-italic"
             >
-              {short}{isLast ? '…' : ''}
+              {code}{isLast ? '…' : ''}
             </code>
           );
         }
@@ -148,6 +147,7 @@ function renderTitle(title: string): React.ReactNode {
     </>
   );
 }
+
 
 function formatSource(source?: string): string {
   if (!source) return '';
@@ -321,127 +321,119 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   href={`/dev-tasks/${task.id}`}
                   className={`block p-4 hover:shadow-inner transition-all group ${st.innerBg}`}
                 >
-                  {/* Header row */}
-                  <div className="flex items-start gap-3 mb-3">
-                    <span className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">{renderTitle(task.title)}</h3>
-                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                        {/* Priority badge */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
-                        {/* Status badge */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${st.badgeCls}`}>
-                          {st.badgeLabel}
+                  {/* Context bar: source → assignee → time (맥락 최우선) */}
+                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    {task.post_title ? (
+                      <span className="text-[10px] text-indigo-500 font-medium truncate max-w-[220px]" title={task.post_title}>
+                        🔗 {task.post_title}
+                      </span>
+                    ) : task.source?.startsWith('board:') ? (
+                      <span className="text-[10px] text-indigo-400 font-medium">🔗 이사회 토론</span>
+                    ) : task.source?.startsWith('manual:') ? (
+                      <span className="text-[10px] text-zinc-400">✏️ 수동 등록</span>
+                    ) : task.source?.startsWith('cron:') ? (
+                      <span className="text-[10px] text-zinc-400">🤖 자동 감지</span>
+                    ) : null}
+                    {task.assignee && (
+                      <>
+                        <span className="text-zinc-200 text-[10px]">·</span>
+                        <span className="text-[10px] text-zinc-600 font-medium bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded">
+                          {task.assignee}팀
                         </span>
-                        {/* Difficulty chip */}
-                        {diffCfg && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${diffCfg.cls}`}>
-                            {diffCfg.label}
-                          </span>
-                        )}
-                        {/* Assignee */}
-                        {task.assignee && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-50 border border-zinc-200 text-zinc-500">
-                            {task.assignee}
-                          </span>
-                        )}
-                        {/* Estimated time */}
-                        {task.estimated_minutes && (
-                          <span className="text-[10px] text-zinc-400">⏱ 약 {task.estimated_minutes}분</span>
-                        )}
-                        {/* Time ago */}
-                        <span className="text-[10px] text-zinc-400">{timeAgo(task.created_at)}</span>
-                      </div>
+                      </>
+                    )}
+                    <span className="text-zinc-200 text-[10px] ml-auto hidden sm:inline">·</span>
+                    <span className="text-[10px] text-zinc-400 ml-auto sm:ml-0">{timeAgo(task.created_at)}</span>
+                  </div>
 
-                      {/* Impact area chips */}
-                      {impactAreas.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1 mt-2">
-                          {impactAreas.map(area => {
-                            const ac = IMPACT_AREA_CONFIG[area];
-                            return ac ? (
-                              <span key={area} className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200">
-                                {ac.emoji} {ac.label}
-                              </span>
-                            ) : (
-                              <span key={area} className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200">
-                                {area}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
+                  {/* Header row */}
+                  <div className="flex items-start gap-3 mb-2.5">
+                    <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      {/* 태스크 제목 — 코드 포함 시 인라인 코드 표시 */}
+                      <h3 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">
+                        {renderTitle(task.title)}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${st.badgeCls}`}>{st.badgeLabel}</span>
+                        {diffCfg && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${diffCfg.cls}`}>{diffCfg.label}</span>
+                        )}
+                        {task.estimated_minutes != null && task.estimated_minutes > 0 && (
+                          <span className="text-[10px] text-zinc-400">⏱ {task.estimated_minutes}분</span>
+                        )}
+                        {impactAreas.map(area => {
+                          const ac = IMPACT_AREA_CONFIG[area];
+                          return (
+                            <span key={area} className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200">
+                              {ac ? `${ac.emoji} ${ac.label}` : area}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                     <svg
                       className="w-4 h-4 text-zinc-300 group-hover:text-indigo-400 transition-colors shrink-0 mt-0.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
 
-                  {/* Detail */}
+                  {/* Detail — 최대 3줄 */}
                   {task.detail && (
-                    <div className={`text-xs text-zinc-600 leading-relaxed rounded-lg p-3 mb-3 border ${
-                      isWaiting ? 'bg-amber-50/60 border-amber-100' : 'bg-zinc-50 border-zinc-100'
+                    <div className={`text-xs text-zinc-600 leading-relaxed rounded-lg px-3 py-2 mb-2 border line-clamp-3 ${
+                      isWaiting ? 'bg-white/70 border-amber-100' : 'bg-zinc-50 border-zinc-100'
                     }`}>
                       {task.detail}
                     </div>
                   )}
 
-                  {/* Expected impact (if not done) */}
+                  {/* Impact lines */}
                   {task.expected_impact && task.status !== 'done' && (
-                    <p className="text-[11px] text-zinc-500 italic mb-2">
-                      💡 {task.expected_impact.length > 60 ? task.expected_impact.slice(0, 60) + '...' : task.expected_impact}
+                    <p className="text-[11px] text-zinc-500 italic mb-1.5">
+                      💡 {task.expected_impact.length > 80 ? task.expected_impact.slice(0, 80) + '…' : task.expected_impact}
                     </p>
                   )}
-
-                  {/* Actual impact (done tasks) */}
                   {task.actual_impact && task.status === 'done' && (
-                    <p className="text-[11px] text-emerald-600 italic mb-2">
-                      ✨ {task.actual_impact.length > 60 ? task.actual_impact.slice(0, 60) + '...' : task.actual_impact}
+                    <p className="text-[11px] text-emerald-600 italic mb-1.5">
+                      ✨ {task.actual_impact.length > 80 ? task.actual_impact.slice(0, 80) + '…' : task.actual_impact}
                     </p>
-                  )}
-
-                  {/* Source */}
-                  {task.source && (
-                    <p className="text-[10px] text-zinc-400 mb-3">출처: {formatSource(task.source)}</p>
                   )}
 
                   {/* Timestamps */}
                   {task.approved_at && (
-                    <p className="text-[10px] text-emerald-500 mb-1">✓ {new Date(task.approved_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 승인됨</p>
+                    <p className="text-[10px] text-emerald-500 mt-1">✓ {new Date(task.approved_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 승인됨</p>
                   )}
                   {task.started_at && (
-                    <p className="text-[10px] text-indigo-500 mb-1">▶ {new Date(task.started_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 시작됨</p>
+                    <p className="text-[10px] text-indigo-500 mt-0.5">▶ {new Date(task.started_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 시작됨</p>
                   )}
                   {task.completed_at && (
-                    <p className="text-[10px] text-emerald-600 mb-1">✓ {new Date(task.completed_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 완료됨</p>
+                    <p className="text-[10px] text-emerald-600 mt-0.5">✓ {new Date(task.completed_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 완료됨</p>
                   )}
                   {task.rejected_at && (
-                    <p className="text-[10px] text-zinc-400 mb-1">✕ {new Date(task.rejected_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 반려됨</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">✕ {new Date(task.rejected_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 반려됨</p>
                   )}
                 </Link>
 
-                {/* Approve/Reject buttons — only for awaiting_approval */}
+                {/* Approve/Reject — 우측 정렬, 컴팩트 */}
                 {isWaiting && (
-                  <div className="flex gap-2 px-4 pb-4 pt-2 bg-amber-50/60">
+                  <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-amber-100 bg-amber-50/40">
                     <button
                       onClick={() => handleAction(task.id, 'rejected')}
                       disabled={isLoading}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors"
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
                     >
                       ✕ 반려
                     </button>
                     <button
                       onClick={() => handleAction(task.id, 'approved')}
                       disabled={isLoading}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
+                      className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
                     >
                       {isLoading ? (
-                        <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
+                        <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
                       ) : '✓ 승인 & 즉시 실행'}
                     </button>
                   </div>
