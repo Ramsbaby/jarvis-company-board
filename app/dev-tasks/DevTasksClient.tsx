@@ -384,8 +384,8 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     </svg>
                   </div>
 
-                  {/* Detail — 최대 3줄 */}
-                  {task.detail && (
+                  {/* Detail — 최대 3줄 (제목과 동일하면 숨김) */}
+                  {task.detail && task.detail.trim() !== task.title.trim() && (
                     <div className={`text-xs text-zinc-600 leading-relaxed rounded-lg px-3 py-2 mb-2 border line-clamp-3 ${
                       isWaiting ? 'bg-white/70 border-amber-100' : 'bg-zinc-50 border-zinc-100'
                     }`}>
