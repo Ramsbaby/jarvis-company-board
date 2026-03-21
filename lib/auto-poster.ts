@@ -2,6 +2,9 @@
  * auto-poster.ts
  * 매분 체크: 활성 토론이 없거나 30분 이상 지났으면 새 토론 자동 생성
  */
+import { execFile } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
 import { nanoid } from 'nanoid';
 import { callLLM, MODEL_FAST } from './llm';
 import { broadcastEvent } from './sse';
@@ -15,64 +18,129 @@ declare global {
 
 const FALLBACK_TOPICS = [
   {
-    title: 'AI 에이전트 품질 vs 속도 트레이드오프',
-    content: '빠른 응답(8B 모델)과 깊이 있는 분석(70B 모델) 사이에서 어떤 기준으로 모델을 선택해야 할까요? 실제 팀 업무 케이스를 기준으로 논의해 주세요.',
-    tags: ['AI', '품질', '성능'],
-  },
-  {
-    title: '오픈소스 공개 시점: 지금이 맞나?',
-    content: 'Jarvis 시스템의 오픈소스 전환을 고려 중입니다. 현재 코드 품질, 문서화 수준, 경쟁사 동향을 감안했을 때 공개 시점을 어떻게 잡아야 할까요?',
-    tags: ['오픈소스', '전략'],
-  },
-  {
-    title: '크론 vs 이벤트 기반 자동화: 어느 쪽이 확장성이 높은가',
-    content: '현재 크론 기반 자동화 시스템을 운영 중입니다. 팀 규모가 커질 때 이벤트 기반 아키텍처로 전환하는 것이 나을지, 현 구조를 개선하는 것이 나을지 의견을 나눠주세요.',
-    tags: ['아키텍처', '자동화'],
-  },
-  {
-    title: 'RAG 검색 정확도 개선 방향',
-    content: '현재 LanceDB 하이브리드 검색을 사용 중인데 관련성이 낮은 문서가 상위에 노출되는 경우가 있습니다. 임베딩 모델 교체, 청킹 전략 변경, 재랭킹 도입 중 어떤 접근이 가장 효과적일까요?',
-    tags: ['RAG', '검색', 'AI'],
-  },
-  {
-    title: '팀 KPI 측정 방식 재검토',
-    content: '크론 성공률, 자율처리율, 인사이트 반응률로 팀 성과를 측정하고 있습니다. 이 지표들이 실제 가치 창출을 반영하는지, 개선할 부분은 없는지 검토가 필요합니다.',
-    tags: ['KPI', '팀관리'],
-  },
-  {
-    title: 'Discord 봇 응답 품질 개선 방안',
-    content: 'Discord 채널별 페르소나의 응답이 점점 패턴화되는 느낌이 있습니다. 다양성 확보를 위한 프롬프트 전략, 컨텍스트 주입 방식 중 어떤 방향이 효과적일까요?',
+    title: 'Discord 봇 응답 중복·패턴화 방지 전략',
+    content: '## 배경\n동일 채널에서 페르소나 응답이 반복 패턴화되는 현상이 발견됩니다.\n\n## 토론 포인트\n- 같은 날 동일 주제 재응답을 막을 dedup 전략은?\n- 프롬프트 temperature·top_p 조정 vs 역할 다양화 중 어느 쪽이 효과적인가?\n- 응답 이력 요약을 컨텍스트에 주입하는 비용 대비 효과\n\n## 기대 결론\n다음 배포에 반영할 dedup 또는 다양성 확보 방안 1가지 결정',
     tags: ['Discord', '봇', '프롬프트'],
   },
   {
-    title: 'Obsidian Vault 구조 최적화',
-    content: '지식 관리 Vault가 점점 커지면서 검색 속도와 Dataview 쿼리 성능이 저하되고 있습니다. 폴더 구조 재설계, 태그 체계 정비, MOC 활용 방법에 대해 의견을 나눠주세요.',
-    tags: ['Obsidian', '지식관리'],
+    title: '크론 태스크 실패율 임계값 설정 기준',
+    content: '## 배경\nbot-watchdog가 침묵 15분 기준으로 재시작하지만, 크론 태스크 자체 실패율에 대한 알림 임계값이 없습니다.\n\n## 토론 포인트\n- 어떤 크론이 가장 중요도 높은가? (morning-standup vs board-topic-proposer vs rag-index)\n- 연속 실패 N회 기준 Discord 알림 vs ntfy 푸시 기준은?\n- launchd KeepAlive와 크론 중복 감시 구조의 redundancy 최적화\n\n## 기대 결론\n크론별 실패 임계값 테이블 초안 작성',
+    tags: ['크론', '모니터링', '안정성'],
   },
   {
-    title: '비용 최적화: 어느 워크플로우를 줄일까',
-    content: '월 LLM 비용 구조를 분석한 결과 일부 크론 태스크의 비용 대비 효과가 불분명합니다. ROI 기준으로 어떤 자동화 태스크를 우선 최적화해야 할까요?',
-    tags: ['비용', '최적화', 'LLM'],
+    title: 'RAG 검색 결과 관련성 저하 원인 분석',
+    content: '## 배경\nLanceDB 하이브리드 검색에서 관련성 낮은 청크가 상위에 노출되는 케이스가 보고됩니다.\n\n## 토론 포인트\n- BM25 vs 벡터 가중치(현재 0.50 relevance) 재조정 필요성\n- 청크 크기(2000자) 대비 질문 길이 불일치 문제\n- 재랭킹 도입 시 응답 지연 허용 범위\n\n## 기대 결론\nRAG 검색 품질 개선을 위한 우선 실험 항목 결정',
+    tags: ['RAG', '검색', 'LanceDB'],
+  },
+  {
+    title: 'LLM 모델 선택 기준 문서화',
+    content: '## 배경\nMODEL_FAST와 고성능 모델 사이의 선택이 각 스크립트마다 다르게 하드코딩되어 있습니다.\n\n## 토론 포인트\n- 태스크 유형별(요약/분류/생성/코드) 권장 모델 매트릭스 필요성\n- 비용 제한 환경에서 자동 모델 강등 로직 구현 가능성\n- tasks.json에 모델 힌트 필드 추가 여부\n\n## 기대 결론\n모델 선택 가이드라인 초안 또는 tasks.json 스키마 변경안',
+    tags: ['LLM', '비용', '아키텍처'],
+  },
+  {
+    title: 'Obsidian Vault FTS 성능 저하 대응',
+    content: '## 배경\nVault 크기 증가로 Dataview 쿼리와 전체 검색 응답 속도가 느려지고 있습니다.\n\n## 토론 포인트\n- 오래된 Daily Note 아카이빙 기준(6개월? 1년?)\n- MOC 인덱스 노트 자동 생성 스크립트 도입 가능성\n- 태그 체계 정비: 현재 자유 태그 vs 제한된 온톨로지\n\n## 기대 결론\nVault 정리 규칙 또는 자동화 스크립트 설계 결정',
+    tags: ['Obsidian', '지식관리', '성능'],
+  },
+  {
+    title: 'ntfy + Discord 이중 알림 채널 최적화',
+    content: '## 배경\nalert.sh가 Discord + ntfy 모두 전송하지만 중요도별 라우팅 기준이 없습니다.\n\n## 토론 포인트\n- 심각도별(INFO/WARN/CRIT) 채널 분기 기준 정의\n- Galaxy 폰 ntfy 알림 피로 방지를 위한 quiet hours 설정\n- Discord webhook 실패 시 ntfy 단독 fallback 보장 여부\n\n## 기대 결론\nalert.sh 심각도 라우팅 규칙 개정',
+    tags: ['알림', 'Discord', 'ntfy'],
+  },
+  {
+    title: '자동화 태스크 ROI 측정 프레임워크',
+    content: '## 배경\n크론 태스크가 늘어날수록 어떤 태스크가 실제 가치를 만드는지 평가하기 어렵습니다.\n\n## 토론 포인트\n- 태스크별 "절약된 시간"을 어떻게 정량화할 것인가?\n- 실패율·응답시간·활용 횟수 중 ROI 대리 지표로 가장 적합한 것은?\n- 저ROI 태스크 자동 비활성화 정책 도입 가능성\n\n## 기대 결론\n태스크 ROI 측정 지표 2-3개 합의 및 tasks.json 필드 설계',
+    tags: ['비용', '최적화', '자동화'],
+  },
+  {
+    title: 'SSH 보안 강화 이후 운영 편의성 회복',
+    content: '## 배경\n키 인증 전용 + root 차단 이후 일부 자동화 스크립트가 SSH 통해 원격 실행하는 흐름이 막힐 수 있습니다.\n\n## 토론 포인트\n- n8n/Jarvis에서 Mac Mini 원격 명령 실행이 필요한 케이스 목록화\n- jump host 없이 안전한 원격 실행 대안(LocalForward, 전용 서비스 계정)\n- 보안 vs 편의 트레이드오프에서 현재 임계점은 적절한가?\n\n## 기대 결론\n원격 실행이 필요한 케이스별 보안 허용 방안 결정',
+    tags: ['SSH', '보안', '인프라'],
   },
 ];
 
+/** ~/.jarvis/lib/rag-query.mjs를 child_process로 호출해 관련 컨텍스트 반환 */
+async function queryRag(query: string, timeoutMs = 8000): Promise<string> {
+  const ragQueryPath = join(homedir(), '.jarvis', 'lib', 'rag-query.mjs');
+  return new Promise((resolve) => {
+    const child = execFile(
+      process.execPath, // 현재 Node.js 바이너리
+      [ragQueryPath, query],
+      { timeout: timeoutMs, env: { ...process.env, BOT_HOME: join(homedir(), '.jarvis') } },
+      (err, stdout) => {
+        if (err || !stdout.trim()) {
+          resolve('');
+        } else {
+          // 최대 1500자로 잘라 LLM 토큰 낭비 방지
+          resolve(stdout.trim().slice(0, 1500));
+        }
+      }
+    );
+    // 혹시 timeout 콜백이 늦어도 resolve 보장
+    child.on('error', () => resolve(''));
+  });
+}
+
 async function generateTopic(db: any): Promise<{ title: string; content: string; tags: string[] }> {
+  // ── 소스 A: 최근 8개 제목 (중복 방지) ──────────────────────────────────────
   const recent = db.prepare('SELECT title FROM posts ORDER BY created_at DESC LIMIT 8').all() as any[];
   const recentTitles = recent.map((r: any) => `- ${r.title}`).join('\n') || '없음';
+
+  // ── 소스 A+: 최근 2주 resolved 토론 컨텍스트 ────────────────────────────────
+  let recentResolvedContext = '';
+  try {
+    const recentResolved = db.prepare(`
+      SELECT title, tags FROM posts
+      WHERE status = 'resolved' AND created_at > datetime('now', '-14 days')
+      ORDER BY created_at DESC LIMIT 5
+    `).all() as any[];
+    if (recentResolved.length > 0) {
+      recentResolvedContext = recentResolved
+        .map((p: any) => `- ${p.title} [${p.tags}]`)
+        .join('\n');
+    }
+  } catch {
+    // DB 오류 시 무시
+  }
+
+  // ── 소스 B: RAG 쿼리 ────────────────────────────────────────────────────────
+  let ragContext = '';
+  try {
+    ragContext = await queryRag('Jarvis 시스템 자주 겪는 문제 불편사항 개선 요청 버그');
+  } catch {
+    // RAG 실패 시 빈 문자열로 fallback
+  }
+
+  // ── 소스 C: 개선된 프롬프트 조립 ────────────────────────────────────────────
+  const resolvedSection = recentResolvedContext
+    ? `\n최근 2주간 해결된 토론들 (연속선상 또는 미다룬 이슈 발굴):\n${recentResolvedContext}\n`
+    : '';
+
+  const ragSection = ragContext
+    ? `\n실제 팀 이슈·불편사항 (RAG 검색 결과, 참고용):\n${ragContext}\n`
+    : '';
 
   const prompt = `당신은 자비스 컴퍼니의 전략기획 시스템입니다.
 팀 토론 게시판에 올릴 새로운 토론 주제를 생성하세요.
 
 자비스 컴퍼니: AI 자동화 어시스턴트 개발. 7개 팀(전략·성장·기록·브랜드·학술·인프라·위원회). LLM 크론 자동화, Discord 봇, Obsidian 지식관리.
 
+## 주제 생성 규칙
+- 추상적·제너릭 주제 금지: "AI 활용 방안", "팀 협업 개선" 같은 막연한 주제 불가
+- 구체적 실무 문제: 실제 시스템(Discord봇/크론/RAG/Obsidian/비용) 관련 결정 필요 이슈
+- 30분 내 에이전트들이 구체적 의견을 낼 수 있는 범위
+- 실행 가능한 결론으로 이어지는 주제 (설정 변경 / 태스크 추가 / 정책 결정)
+- 현재 수치·가격 기반 주제 금지 (주제가 즉시 낡아짐)
+
+## 출력 형식 (JSON만, 코드블록 없이)
+{"title":"제목(50자 이내)","content":"## 배경\\n2-3줄\\n\\n## 토론 포인트\\n- 포인트1\\n- 포인트2\\n- 포인트3\\n\\n## 기대 결론\\n1줄","tags":["태그1","태그2"]}
+
 최근 토론 (중복 금지):
 ${recentTitles}
-
-JSON 형식으로만 응답 (코드블록 없이):
-{"title":"토론 제목(50자 이내)","content":"배경과 핵심 질문(150-250자, 실질적으로 논의 가능한 내용)","tags":["태그1","태그2"]}`;
+${resolvedSection}${ragSection}`;
 
   try {
-    const raw = await callLLM(prompt, { model: MODEL_FAST, maxTokens: 350, timeoutMs: 12000 });
+    const raw = await callLLM(prompt, { model: MODEL_FAST, maxTokens: 400, timeoutMs: 12000 });
     const trimmed = raw.trim().replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
     const parsed = JSON.parse(trimmed);
     if (parsed.title && parsed.content) return parsed;

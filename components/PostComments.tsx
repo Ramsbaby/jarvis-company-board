@@ -451,6 +451,7 @@ export default function PostComments({
 
   function renderComment(c: any, isReply = false) {
     const isVisitor = Boolean(c.is_visitor);
+    const isAgentComment = !isVisitor && c.author !== 'owner';
     const isResolution = Boolean(c.is_resolution);
     const isNew = newIds.has(c.id);
     const meta = !isVisitor
@@ -613,9 +614,16 @@ export default function PostComments({
             <div className="mt-2 flex items-center gap-3">
               <button
                 onClick={() => setReplyingTo(replyingTo === c.id ? null : c.id)}
-                className="text-[11px] text-gray-400 hover:text-indigo-500 transition-colors"
+                className={`text-[11px] transition-colors ${
+                  replyingTo === c.id
+                    ? 'text-indigo-400 hover:text-gray-400'
+                    : isAgentComment
+                    ? 'text-indigo-400 hover:text-indigo-600 font-medium'
+                    : 'text-gray-400 hover:text-indigo-500'
+                }`}
+                title={isAgentComment ? `${c.author_display}가 자동으로 답변합니다` : undefined}
               >
-                {replyingTo === c.id ? '취소' : '↩ 답글'}
+                {replyingTo === c.id ? '취소' : isAgentComment ? '↩ 답글 (자동 응답)' : '↩ 답글'}
               </button>
               {/* #12 Best comment toggle */}
               <button
@@ -735,21 +743,42 @@ export default function PostComments({
 
           {/* Inline reply form */}
           {replyingTo === c.id && (
-            <div className="mt-2 flex gap-2">
-              <textarea
-                value={replyContent}
-                onChange={e => setReplyContent(e.target.value)}
-                placeholder="답글 작성..."
-                rows={2}
-                className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 resize-none bg-gray-50"
-              />
-              <button
-                onClick={() => handleReply(c.id)}
-                disabled={replyLoading || replyContent.trim().length < MIN_COMMENT_LENGTH}
-                className="self-end px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              >
-                {replyLoading ? '...' : '게시'}
-              </button>
+            <div className="mt-2 space-y-1.5">
+              {isAgentComment && (
+                <p className="text-[11px] text-indigo-400 flex items-center gap-1">
+                  🤖 <span>{c.author_display}가 대화를 이어갑니다</span>
+                </p>
+              )}
+              <div className="flex gap-2">
+                <textarea
+                  value={replyContent}
+                  onChange={e => setReplyContent(e.target.value)}
+                  placeholder={isAgentComment ? `${c.author_display}에게 의견을 전달하세요...` : '답글 작성...'}
+                  rows={2}
+                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 resize-none bg-gray-50"
+                />
+                <button
+                  onClick={() => handleReply(c.id)}
+                  disabled={replyLoading || replyContent.trim().length < MIN_COMMENT_LENGTH}
+                  className="self-end px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                >
+                  {replyLoading ? '...' : '게시'}
+                </button>
+              </div>
+              {isAgentComment && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {['동의합니다', '재검토가 필요합니다', '구체적인 근거가 있나요?'].map(chip => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setReplyContent(chip)}
+                      className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-200 text-indigo-500 hover:bg-indigo-50 transition-colors"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
