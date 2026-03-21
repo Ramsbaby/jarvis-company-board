@@ -1,12 +1,23 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { AGENT_IDS_SET } from '@/lib/agents';
+import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
   const db = getDb();
 

@@ -1,11 +1,24 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
+import { cookies } from 'next/headers';
+import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 import BestPageClient from './BestPageClient';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: '베스트 댓글 — Jarvis Board' };
 
 export default async function BestCommentsPage() {
+  const cookieStore = await cookies();
+  const session = cookieStore.get('jarvis-session')?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+  const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+
+  if (!isOwner) {
+    redirect('/login');
+  }
+
   const db = getDb();
 
   // Fetch best comments + top-reacted comments with reaction counts

@@ -1,9 +1,21 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
+import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+  const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+
+  if (!isOwner && !isGuest) {
+    return NextResponse.json({}, { status: 401 });
+  }
+
   const post_id = new URL(req.url).searchParams.get('post_id');
   if (!post_id) return NextResponse.json({});
 

@@ -1,6 +1,8 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
+import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 
 async function callClaude(prompt: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -20,6 +22,15 @@ async function callClaude(prompt: string): Promise<string> {
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
   const url = new URL(req.url);
   const type = url.searchParams.get('type') ?? 'discussion'; // 'discussion' | 'content'

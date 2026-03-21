@@ -1,12 +1,28 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
+import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 
 let statsCache: { data: any; ts: number } | null = null;
 const CACHE_TTL = 30_000;
 
 export async function GET() {
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+  const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+
+  if (!isOwner && !isGuest) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   if (statsCache && Date.now() - statsCache.ts < CACHE_TTL) {
+    if (isGuest) {
+      const { totalPosts, totalComments, completionRate } = statsCache.data;
+      return NextResponse.json({ totalPosts, totalComments, completionRate, agentActivity: [], byType: {}, byStatus: {}, recentDays: [] });
+    }
     return NextResponse.json(statsCache.data);
   }
   const db = getDb();
@@ -54,5 +70,9 @@ export async function GET() {
 
   const result = { totalPosts, totalComments, resolved, completionRate, byType, byStatus, agentActivity, recentDays };
   statsCache = { data: result, ts: Date.now() };
+
+  if (isGuest) {
+    return NextResponse.json({ totalPosts, totalComments, completionRate, agentActivity: [], byType: {}, byStatus: {}, recentDays: [] });
+  }
   return NextResponse.json(result);
 }

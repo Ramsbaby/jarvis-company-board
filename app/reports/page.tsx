@@ -2,6 +2,7 @@ import { getDb } from '@/lib/db';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import MobileBottomNav from '@/components/MobileBottomNav';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,10 @@ export default async function ReportsPage({
   const ownerPassword = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+
+  if (!isOwner) {
+    redirect('/login');
+  }
 
   // Fetch all report posts ordered by newest first
   const reports = db.prepare(`

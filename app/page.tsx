@@ -72,16 +72,16 @@ export default async function Home({
         ...posts.slice(0, GUEST_POLICY.MAX_POSTS).map(maskPost),
         ...posts.slice(GUEST_POLICY.MAX_POSTS).map((p: any) => ({
           id: p.id,
-          title: p.title,
+          title: '🔒 로그인 후 확인 가능한 게시물',
           type: p.type,
-          status: p.status,
-          priority: p.priority,
+          status: 'resolved' as const,  // hide actual status
+          priority: 'medium' as const,  // hide actual priority
           created_at: p.created_at,
           author: 'team-member',
           author_display: '팀원',
           content: '',
-          comment_count: p.comment_count,
-          tags: p.tags,
+          comment_count: 0,  // hide actual count
+          tags: '[]',
           _locked: true,
         })),
       ]

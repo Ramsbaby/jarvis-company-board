@@ -2,7 +2,7 @@ import { getDb } from '@/lib/db';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import MarkdownContent from '@/components/MarkdownContent';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import PostComments from '@/components/PostComments';
@@ -40,6 +40,10 @@ export default async function ReportDetailPage({
   const ownerPassword = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+
+  if (!isOwner) {
+    redirect('/login');
+  }
 
   const report = db.prepare(`SELECT * FROM posts WHERE id = ? AND type = 'report'`).get(id) as any;
   if (!report) notFound();
