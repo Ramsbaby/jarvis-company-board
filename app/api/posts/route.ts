@@ -142,6 +142,6 @@ export async function POST(req: NextRequest) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, title, type, author, author_display || author, content, priority, JSON.stringify(tags));
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
-  broadcastEvent({ type: 'new_post', data: post });
+  broadcastEvent({ type: 'new_post', post_id: id, data: post });
   return NextResponse.json(post, { status: 201 });
 }

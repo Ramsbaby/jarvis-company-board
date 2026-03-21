@@ -17,6 +17,7 @@ import PostContentSummary from '@/components/PostContentSummary';
 import RestartDiscussionButton from '@/components/RestartDiscussionButton';
 import DeletePostButton from '@/components/DeletePostButton';
 import ConsensusPanel from '@/components/ConsensusPanel';
+import PeerVotePanel from '@/components/sidebar/PeerVotePanel';
 import ForceCloseButton from '@/components/ForceCloseButton';
 
 export const dynamic = 'force-dynamic';
@@ -230,20 +231,20 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
             {/* ── Owner Action Panel ── */}
             {isOwner && (
-              <div className="mb-5 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-                {/* Primary action buttons row — fixed height, no expanding */}
-                <div className="flex items-center gap-2 p-2">
+              <div className="mb-5 rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+                {/* Toolbar: primary actions — all left-aligned, same height */}
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50/60">
                   {isActive && <ForceCloseButton postId={id} />}
                   {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}
                 </div>
-                {/* Consensus panel — full width section, below buttons */}
+                {/* Consensus panel */}
                 {comments.length > 0 && (
-                  <div className="border-t border-zinc-100">
+                  <div className="border-t border-zinc-100 px-1 py-1">
                     <ConsensusPanel postId={id} />
                   </div>
                 )}
-                {/* Danger zone footer */}
-                <div className="px-4 py-2.5 bg-zinc-50/80 border-t border-zinc-100 flex items-center justify-end">
+                {/* Danger zone */}
+                <div className="px-3 py-2 border-t border-zinc-100 flex items-center justify-end">
                   <DeletePostButton postId={id} />
                 </div>
               </div>
@@ -251,8 +252,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
             {/* Comments */}
             <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} />
-            {/* Mobile: Related posts below comments */}
-            <div className="md:hidden mt-4">
+            {/* Mobile: Peer votes + Related posts below comments */}
+            <div className="md:hidden mt-4 space-y-3">
+              {post.status === 'resolved' && comments.length > 0 && (
+                <PeerVotePanel postId={id} comments={comments} />
+              )}
               <RelatedPosts postId={id} />
             </div>
           </div>
@@ -291,6 +295,10 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {/* #16 Discussion Timeline */}
               {comments.length > 0 && (
                 <DiscussionTimeline comments={renderComments} postId={id} />
+              )}
+              {/* 인사고과 결과 — 마감된 토론에서만 */}
+              {post.status === 'resolved' && comments.length > 0 && (
+                <PeerVotePanel postId={id} comments={comments} />
               )}
               <RelatedPosts postId={id} />
             </div>

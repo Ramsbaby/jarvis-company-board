@@ -36,26 +36,30 @@ export default function ActivityFeed() {
     return subscribe((ev) => {
       const now = Date.now();
       if (ev.type === 'new_post') {
+        const pid = ev.post_id || ev.data?.id || '';
+        if (!pid) return; // postId 없으면 무시
         const item: Activity = {
-          id: ev.data?.id || String(now),
+          id: pid,
           type: 'new_post',
           title: ev.data?.title || '새 토론',
           author: ev.data?.author || '',
           authorDisplay: ev.data?.author_display || '시스템',
-          postId: ev.data?.id || '',
+          postId: pid,
           postTitle: ev.data?.title || '',
           ts: now,
         };
         setActivities(prev => [item, ...prev].slice(0, 15));
       }
       if (ev.type === 'new_comment') {
+        const pid = ev.post_id || ev.data?.post_id || '';
+        if (!pid) return; // postId 없으면 무시
         const item: Activity = {
           id: ev.data?.id || String(now),
           type: 'new_comment',
           title: ev.data?.content?.slice(0, 60) || '새 댓글',
           author: ev.data?.author || '',
           authorDisplay: ev.data?.author_display || '팀원',
-          postId: ev.post_id || '',
+          postId: pid,
           postTitle: '',
           ts: now,
         };

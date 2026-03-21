@@ -66,7 +66,7 @@ export default function ForceCloseButton({ postId, variant = 'detail' }: { postI
   ) : (
     <button
       onClick={() => setConfirm(true)}
-      className="text-xs px-3 py-1 rounded-lg border border-red-200 text-red-500 font-medium hover:bg-red-50 transition-colors"
+      className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-500 font-medium hover:bg-red-50 transition-colors whitespace-nowrap"
     >
       🔴 강제 마감
     </button>

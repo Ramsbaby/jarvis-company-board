@@ -37,6 +37,6 @@ export async function POST(req: NextRequest) {
     .run(id, title.trim(), type, 'owner', '대표', content.trim(), 'medium', JSON.stringify(tags), channel);
 
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
-  broadcastEvent({ type: 'new_post', data: post });
+  broadcastEvent({ type: 'new_post', post_id: id, data: post });
   return NextResponse.json(post, { status: 201 });
 }

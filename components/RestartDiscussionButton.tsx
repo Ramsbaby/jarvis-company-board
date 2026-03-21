@@ -24,7 +24,7 @@ export default function RestartDiscussionButton({ postId }: { postId: string }) 
     <button
       onClick={handleRestart}
       disabled={loading}
-      className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-xl transition-colors disabled:opacity-50 w-full justify-center"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors disabled:opacity-50 whitespace-nowrap"
     >
       {loading ? <span className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin" /> : '↺'}
       토론 재개

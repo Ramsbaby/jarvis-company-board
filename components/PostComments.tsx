@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { AUTHOR_META, DISCUSSION_WINDOW_MS, MIN_COMMENT_LENGTH } from '@/lib/constants';
 import { timeAgo, fmtDateShort } from '@/lib/utils';
@@ -412,16 +412,23 @@ export default function PostComments({
   }
 
   // Reaction rankings — top 3 non-resolution root comments by total reaction count
-  const reactionTotals: Record<string, number> = {};
-  for (const [cid, emojiMap] of Object.entries(reactions)) {
-    reactionTotals[cid] = Object.values(emojiMap).reduce((s, { count }) => s + count, 0);
-  }
-  const rankMap: Record<string, 1 | 2 | 3> = {};
-  comments
-    .filter(c => !c.parent_id && !c.is_resolution && (reactionTotals[c.id] ?? 0) > 0)
-    .sort((a, b) => (reactionTotals[b.id] ?? 0) - (reactionTotals[a.id] ?? 0))
-    .slice(0, 3)
-    .forEach((c, i) => { rankMap[c.id] = (i + 1) as 1 | 2 | 3; });
+  const reactionTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const [cid, emojiMap] of Object.entries(reactions)) {
+      totals[cid] = Object.values(emojiMap).reduce((s, { count }) => s + count, 0);
+    }
+    return totals;
+  }, [reactions]);
+
+  const rankMap = useMemo(() => {
+    const map: Record<string, 1 | 2 | 3> = {};
+    comments
+      .filter(c => !c.parent_id && !c.is_resolution && (reactionTotals[c.id] ?? 0) > 0)
+      .sort((a, b) => (reactionTotals[b.id] ?? 0) - (reactionTotals[a.id] ?? 0))
+      .slice(0, 3)
+      .forEach((c, i) => { map[c.id] = (i + 1) as 1 | 2 | 3; });
+    return map;
+  }, [comments, reactionTotals]);
 
   const RANK_MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
   const RANK_STYLE: Record<number, string> = {
@@ -433,18 +440,20 @@ export default function PostComments({
   // #18 AI vs 인간 탭
   const [viewTab, setViewTab] = useState<'all' | 'ai' | 'human'>('all');
 
-  const baseRootComments = comments.filter(c => {
-    if (c.parent_id) return false;
-    if (viewTab === 'ai') return !c.is_visitor;
-    if (viewTab === 'human') return !!c.is_visitor;
-    return true;
-  });
-  // Ranked comments float to top
-  const rootComments = [...baseRootComments].sort((a, b) => {
-    const ra = rankMap[a.id] ?? 99;
-    const rb = rankMap[b.id] ?? 99;
-    return ra - rb;
-  });
+  // Ranked comments float to top — memoized to prevent re-sort on unrelated state changes
+  const rootComments = useMemo(() => {
+    const base = comments.filter(c => {
+      if (c.parent_id) return false;
+      if (viewTab === 'ai') return !c.is_visitor;
+      if (viewTab === 'human') return !!c.is_visitor;
+      return true;
+    });
+    return [...base].sort((a, b) => {
+      const ra = rankMap[a.id] ?? 99;
+      const rb = rankMap[b.id] ?? 99;
+      return ra - rb;
+    });
+  }, [comments, viewTab, rankMap]);
 
   const agentComments = comments.filter(c => !c.is_visitor);
   const humanComments = comments.filter(c => c.is_visitor);
@@ -521,7 +530,7 @@ export default function PostComments({
       <div
         id={`comment-${c.id}`}
         key={c.id}
-        className={`scroll-mt-20 flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-all ${isNew ? 'animate-slide-in' : ''} ${isCLevel ? 'shadow-sm' : ''} ${
+        className={`scroll-mt-20 flex gap-3 p-4 rounded-xl bg-white hover:shadow-sm transition-shadow ${isNew ? 'animate-slide-in' : ''} ${isCLevel ? 'shadow-sm' : ''} ${
           isHighlighted ? 'ring-2 ring-indigo-400 ring-offset-1 bg-indigo-50/40' :
           isReply
             ? 'mt-1 border border-l-2 border-l-indigo-200 border-gray-100'
