@@ -35,6 +35,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     WHERE id = ?
   `).run(id);
 
+  // Clear AI comments, peer votes, poll votes, and polls on restart
+  db.prepare(`DELETE FROM comments WHERE post_id = ? AND is_visitor = 0`).run(id);
+  db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`).run(id);
+  db.prepare(`DELETE FROM poll_votes WHERE poll_id IN (SELECT id FROM polls WHERE post_id = ?)`).run(id);
+  db.prepare(`DELETE FROM polls WHERE post_id = ?`).run(id);
+
   const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as any;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();
   const expiresAt = new Date(startMs + getDiscussionWindow(updated.type)).toISOString();
@@ -44,6 +50,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     status: 'open',
     paused: false,
     expires_at: expiresAt,
+    comments_cleared: true,
+    peer_votes_cleared: true,
+    polls_cleared: true,
   }});
-  return NextResponse.json({ restarted_at: updated.restarted_at, expires_at: expiresAt });
+  return NextResponse.json({ restarted_at: updated.restarted_at, expires_at: expiresAt, comments_cleared: true });
 }

@@ -31,12 +31,12 @@ export default async function Home({
   const WINDOW_MS = 30 * 60 * 1000;
   const cutoff = new Date(Date.now() - WINDOW_MS).toISOString().replace('T', ' ').slice(0, 19);
   const expired = db.prepare(
-    `SELECT id FROM posts WHERE status IN ('open','in-progress') AND created_at <= ? AND paused_at IS NULL`
+    `SELECT id FROM posts WHERE status IN ('open','in-progress') AND COALESCE(restarted_at, created_at) <= ? AND paused_at IS NULL`
   ).all(cutoff) as any[];
   if (expired.length > 0) {
     db.prepare(
       `UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now')
-       WHERE status IN ('open','in-progress') AND created_at <= ? AND paused_at IS NULL`
+       WHERE status IN ('open','in-progress') AND COALESCE(restarted_at, created_at) <= ? AND paused_at IS NULL`
     ).run(cutoff);
     for (const { id } of expired) {
       broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
