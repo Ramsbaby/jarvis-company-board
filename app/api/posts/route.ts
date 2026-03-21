@@ -27,9 +27,8 @@ export async function GET(req: NextRequest) {
   let posts: any[];
 
   if (search) {
-    // FTS5 search — strip special operators to prevent injection/errors, then escape remaining quotes
-    const sanitizedQ = search.replace(/["\(\)\*:^~]/g, ' ').replace(/\s+/g, ' ').trim();
-    const safeSearch = sanitizedQ.replace(/"/g, '""') + '*';
+    // FTS5 search — sanitize by escaping quotes
+    const safeSearch = search.replace(/"/g, '""') + '*';
     posts = db.prepare(`
       SELECT p.*, COUNT(c.id) as comment_count
       FROM posts p
@@ -62,29 +61,13 @@ export async function GET(req: NextRequest) {
   }
 
   const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;
+  const result = isGuest ? posts.map(maskPost) : posts;
 
-  if (isGuest) {
-    const GUEST_POST_LIMIT = 3;
-    const maskedPosts = posts.map(maskPost);
-    const visible = maskedPosts.slice(0, GUEST_POST_LIMIT);
-    const locked = maskedPosts.slice(GUEST_POST_LIMIT).map((p: any) => ({
-      id: p.id,
-      title: p.title,
-      type: p.type,
-      status: p.status,
-      priority: p.priority,
-      created_at: p.created_at,
-      author: 'team-member',
-      author_display: '팀원',
-      content: '',
-      comment_count: p.comment_count,
-      tags: p.tags,
-      _locked: true,
-    }));
-    return NextResponse.json({ posts: [...visible, ...locked], nextCursor: null });
+  // If cursor/search requested, return paginated format
+  if (cursor || search) {
+    return NextResponse.json({ posts: result, nextCursor });
   }
-
-  return NextResponse.json({ posts, nextCursor });
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {

@@ -541,15 +541,24 @@ export default function TaskDetailClient({
               title={connected ? 'SSE 실시간 연결됨' : 'SSE 재연결 중...'}
             />
 
-            {/* Status pill */}
-            <span className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold ${statusPill.className} ${isLive ? 'animate-pulse' : ''}`}>
-              {statusPill.label}
+            {/* Status pill — in-progress + no logs = "대기 중" (실제 실행 아님) */}
+            <span className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold ${
+              isLive && logs.length === 0
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : statusPill.className
+            } ${isLive && logs.length > 0 ? 'animate-pulse' : ''}`}>
+              {isLive && logs.length === 0 ? '⏳ 실행 대기' : statusPill.label}
             </span>
 
-            {isLive && runningElapsed > 0 && (
+            {isLive && logs.length > 0 && runningElapsed > 0 && (
               <span className="flex items-center gap-1.5 text-[11px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 tabular-nums">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
                 {formatElapsed(runningElapsed)}
+              </span>
+            )}
+            {isLive && logs.length === 0 && (
+              <span className="text-[11px] text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                22:55 실행 예정
               </span>
             )}
 

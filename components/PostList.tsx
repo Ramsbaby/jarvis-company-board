@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT } from '@/lib/constants';
-import { timeAgo, fmtDateShort, truncate } from '@/lib/utils';
+import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
 import { useEvent } from '@/contexts/EventContext';
 
@@ -55,21 +55,6 @@ function parseTags(raw: any): string[] {
   try { return JSON.parse(raw); } catch { return []; }
 }
 
-function Highlight({ text, keyword }: { text: string; keyword?: string }) {
-  if (!keyword || !keyword.trim()) return <>{text}</>;
-  const escaped = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.toLowerCase() === keyword.trim().toLowerCase()
-          ? <mark key={i} className="bg-yellow-100 text-yellow-900 rounded-sm px-0.5 not-italic">{part}</mark>
-          : part
-      )}
-    </>
-  );
-}
-
 function PostListInner({
   initialPosts,
   authorMeta,
@@ -100,21 +85,6 @@ function PostListInner({
     const t = setInterval(() => setClockNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-
-  // Auto-close: trigger server when any post is detected as timed-out on client
-  const autoCloseRef = useRef(false);
-  useEffect(() => {
-    const hasExpired = posts.some(p =>
-      p.status !== 'resolved' && !p.paused_at &&
-      new Date(p.created_at + 'Z').getTime() + DISCUSSION_WINDOW_MS < clockNow
-    );
-    if (hasExpired && !autoCloseRef.current) {
-      autoCloseRef.current = true;
-      fetch('/api/posts/auto-close', { method: 'POST' }).catch(() => {});
-      // Reset flag after 5 minutes so it can re-trigger if new posts expire
-      setTimeout(() => { autoCloseRef.current = false; }, 5 * 60 * 1000);
-    }
-  }, [clockNow, posts]);
 
   // #11 Bookmarks (localStorage)
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
@@ -172,7 +142,7 @@ function PostListInner({
       try {
         const res = await fetch(`/api/posts?search=${encodeURIComponent(searchQuery.trim())}`);
         const data = await res.json();
-        setSearchResults(data.posts ?? []);
+        setSearchResults(data.posts ?? data);
       } finally {
         setSearching(false);
       }
@@ -582,36 +552,6 @@ function PostListInner({
         ) : (
           <div className="space-y-2">
             {visible.map((post: any) => {
-              // Locked post card for guests
-              if ((post as any)._locked) {
-                return (
-                  <a key={post.id} href="/login" className="block group">
-                    <article className="rounded-xl overflow-hidden bg-zinc-50 border border-zinc-200 opacity-80">
-                      <div className="p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border font-medium bg-zinc-100 text-zinc-400 border-zinc-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
-                            {TYPE_LABELS[post.type] ?? post.type}
-                          </span>
-                        </div>
-                        <h2 className="text-sm font-medium text-zinc-400 leading-snug mb-2 blur-[2px] select-none">
-                          {post.title || '제목 잠김'}
-                        </h2>
-                        <div className="flex items-center gap-2 mt-3">
-                          <span className="text-base">🔒</span>
-                          <span className="text-xs text-zinc-400">
-                            로그인하면 전체 논의를 볼 수 있습니다
-                          </span>
-                          <span className="ml-auto text-xs text-indigo-500 font-medium group-hover:underline">
-                            로그인하기 →
-                          </span>
-                        </div>
-                      </div>
-                    </article>
-                  </a>
-                );
-              }
-
               const meta = authorMeta[post.author] ?? {
                 label: post.author_display || post.author,
                 color: 'bg-zinc-100 text-zinc-600 border-zinc-200',
@@ -653,49 +593,65 @@ function PostListInner({
                   }`}>
                     {/* ── Countdown header — only for non-resolved posts ── */}
                     {!isResolved && (
-                      isTimedOut ? (
-                        /* Compact timed-out banner */
-                        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-red-600">
-                          <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
-                          <span className="text-xs font-bold text-white flex-1">마감됨 — 결론 작성 필요</span>
-                          {isOwner && (
+                      <div className={`select-none overflow-hidden ${
+                        isTimedOut ? 'bg-gradient-to-r from-red-600 to-red-800' :
+                        isUrgent   ? 'bg-gradient-to-r from-red-500 to-rose-700' :
+                        isWarning  ? 'bg-gradient-to-r from-amber-400 to-orange-500' :
+                        isPaused   ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
+                                     'bg-gradient-to-r from-indigo-500 to-indigo-700'
+                      } ${isUrgent ? 'animate-pulse' : ''}`}>
+                        {/* Main timer row */}
+                        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+                          {/* Pulsing live dot */}
+                          {isActiveNow && !isPaused && (
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isUrgent ? 'bg-white animate-ping' : 'bg-white/60 animate-pulse'}`} />
+                          )}
+
+                          {/* Big timer number */}
+                          <span className={`font-black tabular-nums tracking-tight leading-none text-white ${
+                            isTimedOut ? 'text-xl' : 'text-4xl'
+                          }`}>
+                            {isTimedOut
+                              ? '🔴 마감됨'
+                              : isPaused
+                              ? '⏸ 일시정지'
+                              : `${countMin}분 ${String(countSec).padStart(2, '0')}초`
+                            }
+                          </span>
+
+                          {isActiveNow && !isPaused && (
+                            <span className="text-white/80 text-sm font-semibold">남음</span>
+                          )}
+
+                          {/* Right label */}
+                          <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white whitespace-nowrap">
+                            {isTimedOut ? '결론 작성 필요' : isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '🟢 진행중'}
+                          </span>
+                        </div>
+
+                        {/* Progress bar strip */}
+                        {isActiveNow && !isPaused && (
+                          <div className="h-1.5 bg-white/20 mx-4 mb-3 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-white/80 transition-none"
+                              style={{ width: `${countPct}%` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* CTA: owner-only "결론 작성하기" button when timed out */}
+                        {isTimedOut && isOwner && (
+                          <div className="px-4 pb-3 pt-1">
                             <Link
                               href={`/posts/${post.id}#comment-form`}
                               onClick={e => e.stopPropagation()}
-                              className="text-[11px] font-bold text-red-600 bg-white hover:bg-red-50 px-2.5 py-1 rounded-md transition-colors shrink-0"
+                              className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-white/20 hover:bg-white/30 rounded-lg text-white text-xs font-bold transition-colors border border-white/30"
                             >
-                              ✍️ 결론
+                              ✍️ 결론 작성하기
                             </Link>
-                          )}
-                        </div>
-                      ) : (
-                        <div className={`select-none overflow-hidden ${
-                          isUrgent   ? 'bg-gradient-to-r from-red-500 to-rose-700' :
-                          isWarning  ? 'bg-gradient-to-r from-amber-400 to-orange-500' :
-                          isPaused   ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
-                                       'bg-gradient-to-r from-indigo-500 to-indigo-700'
-                        } ${isUrgent ? 'animate-pulse' : ''}`}>
-                          <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-                            {!isPaused && (
-                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isUrgent ? 'bg-white animate-ping' : 'bg-white/60 animate-pulse'}`} />
-                            )}
-                            <span className="text-4xl font-black tabular-nums tracking-tight leading-none text-white">
-                              {isPaused ? '⏸ 일시정지' : `${countMin}분 ${String(countSec).padStart(2, '0')}초`}
-                            </span>
-                            {!isPaused && (
-                              <span className="text-white/80 text-sm font-semibold">남음</span>
-                            )}
-                            <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white whitespace-nowrap">
-                              {isUrgent ? '⚡ 마감 임박' : isWarning ? '⚠ 곧 마감' : isPaused ? '일시정지' : '🟢 진행중'}
-                            </span>
                           </div>
-                          {!isPaused && (
-                            <div className="h-1.5 bg-white/20 mx-4 mb-3 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full bg-white/80 transition-none" style={{ width: `${countPct}%` }} />
-                            </div>
-                          )}
-                        </div>
-                      )
+                        )}
+                      </div>
                     )}
 
                     <div className="p-4">
@@ -714,21 +670,17 @@ function PostListInner({
                             🔥 HOT
                           </span>
                         )}
-                        <span className="ml-auto text-zinc-400 text-xs shrink-0" title={fmtDateShort(post.created_at)}>
-                          {fmtDateShort(post.created_at)} · {timeAgo(post.created_at)}
-                        </span>
+                        <span className="ml-auto text-zinc-400 text-xs shrink-0">{timeAgo(post.created_at)}</span>
                       </div>
 
                       {/* Title */}
                       <h2 className="text-sm font-medium text-zinc-900 leading-snug mb-1.5">
-                        <Highlight text={post.title} keyword={isSearching ? searchQuery : undefined} />
+                        {post.title}
                       </h2>
 
                       {/* Preview */}
                       {preview && (
-                        <p className="text-xs text-zinc-500 leading-relaxed mb-3 line-clamp-2">
-                          <Highlight text={preview} keyword={isSearching ? searchQuery : undefined} />
-                        </p>
+                        <p className="text-xs text-zinc-500 leading-relaxed mb-3 line-clamp-2">{preview}</p>
                       )}
 
 
