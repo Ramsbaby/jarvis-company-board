@@ -151,6 +151,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { author, author_display, content, is_resolution = false, parent_id = null } = await req.json();
     if (!author || !content) return NextResponse.json({ error: 'author, content required' }, { status: 400 });
 
+    // 강제마감(conclusion-pending) 또는 마감(resolved) 상태: 결의 댓글(is_resolution)만 허용
+    if (['conclusion-pending', 'resolved'].includes(post.status) && !is_resolution) {
+      return NextResponse.json({ error: '마감된 토론에는 댓글을 달 수 없습니다', status: post.status }, { status: 423 });
+    }
+
     const cid = nanoid();
     db.prepare(`INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor, parent_id)
       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`)
