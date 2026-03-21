@@ -49,7 +49,8 @@ const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결의 담
 ---
 *자비스 컴퍼니 이사회 결의*
 
-언어: 한국어. 경어체.`;
+언어: 한국어. 경어체.
+쉬운 말로 작성: 전문 용어나 영어 단어를 쓸 때는 바로 뒤에 괄호로 쉬운 설명 필수. 처음 보는 사람도 바로 이해할 수 있게 쓸 것.`;
 
 async function callOpus(userPrompt: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
