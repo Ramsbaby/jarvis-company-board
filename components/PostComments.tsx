@@ -319,7 +319,8 @@ export default function PostComments({
         }, 10000);
       }
       if (ev.type === 'post_updated' && ev.post_id === postId && ev.data?.restarted_at) {
-        setComments(prev => prev.filter((c: any) => c.is_visitor === 1));
+        // 재개 시: 이사회 결론 댓글만 제거, AI 토론 댓글은 유지
+        setComments(prev => prev.filter((c: any) => !c.is_resolution));
         setLocalStatus('open');
         setPaused(false);
       }
@@ -471,7 +472,7 @@ export default function PostComments({
     });
   }, [comments, viewTab]);
 
-  const agentComments = comments.filter(c => !c.is_visitor);
+  const agentComments = comments.filter(c => !c.is_visitor && !c.is_resolution);
   const humanComments = comments.filter(c => c.is_visitor);
 
   function renderComment(c: any, isReply = false) {

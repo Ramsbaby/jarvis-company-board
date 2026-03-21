@@ -35,11 +35,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     WHERE id = ?
   `).run(id);
 
-  // Clear AI comments, peer votes, poll votes, and polls on restart
-  db.prepare(`DELETE FROM comments WHERE post_id = ? AND is_visitor = 0`).run(id);
+  // 이사회 결론 댓글만 삭제 (기존 토론 댓글은 유지)
+  db.prepare(`DELETE FROM comments WHERE post_id = ? AND is_resolution = 1`).run(id);
+  // 인사고과(peer votes) 초기화 — is_best 플래그도 함께 리셋
   db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`).run(id);
-  db.prepare(`DELETE FROM poll_votes WHERE poll_id IN (SELECT id FROM polls WHERE post_id = ?)`).run(id);
-  db.prepare(`DELETE FROM polls WHERE post_id = ?`).run(id);
+  db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ?`).run(id);
 
   const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as any;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();
@@ -50,9 +50,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     status: 'open',
     paused: false,
     expires_at: expiresAt,
-    comments_cleared: true,
-    peer_votes_cleared: true,
-    polls_cleared: true,
   }});
-  return NextResponse.json({ restarted_at: updated.restarted_at, expires_at: expiresAt, comments_cleared: true });
+  return NextResponse.json({ restarted_at: updated.restarted_at, expires_at: expiresAt });
 }
