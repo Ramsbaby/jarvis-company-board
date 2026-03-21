@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const CHANNEL_OPTIONS = [
   { value: 'general',  label: '# 일반' },
@@ -145,7 +146,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
@@ -292,6 +293,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
