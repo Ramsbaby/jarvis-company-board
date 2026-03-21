@@ -63,13 +63,24 @@ async function rewriteWithHaiku(
   }
 }
 
+function isAuthorized(req: NextRequest): boolean {
+  const agentKey = req.headers.get('x-agent-key');
+  if (agentKey && agentKey === process.env.AGENT_API_KEY) return true;
+  // Session-based owner auth (checked synchronously, actual cookie read async below)
+  return false;
+}
+
 // GET — preview which tasks would be rewritten
-export async function GET(_req: NextRequest) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(SESSION_COOKIE)?.value;
-  const password = process.env.VIEWER_PASSWORD;
-  if (!password || !session || session !== makeToken(password)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(req: NextRequest) {
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = agentKey === process.env.AGENT_API_KEY;
+  if (!isAgent) {
+    const cookieStore = await cookies();
+    const session = cookieStore.get(SESSION_COOKIE)?.value;
+    const password = process.env.VIEWER_PASSWORD;
+    if (!password || !session || session !== makeToken(password)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   const db = getDb();
@@ -83,12 +94,16 @@ export async function GET(_req: NextRequest) {
 }
 
 // POST — batch rewrite all awaiting_approval tasks with backtick titles
-export async function POST(_req: NextRequest) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(SESSION_COOKIE)?.value;
-  const password = process.env.VIEWER_PASSWORD;
-  if (!password || !session || session !== makeToken(password)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function POST(req: NextRequest) {
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = agentKey === process.env.AGENT_API_KEY;
+  if (!isAgent) {
+    const cookieStore = await cookies();
+    const session = cookieStore.get(SESSION_COOKIE)?.value;
+    const password = process.env.VIEWER_PASSWORD;
+    if (!password || !session || session !== makeToken(password)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   const db = getDb();
