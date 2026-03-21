@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import { callLLM, MODEL_QUALITY } from '@/lib/llm';
 
 export const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결의 담당자입니다.
 
@@ -153,6 +154,27 @@ export async function POST(
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
   const userPrompt = `## 토론 정보\n제목: ${post.title}\n유형: ${post.type ?? 'discussion'}\n날짜: ${today}\n총 의견 수: ${allComments.length}개 (에이전트 ${agentComments.length}명, 방문자 ${visitorComments.length}명)\n\n## 팀 에이전트 의견 (${agentComments.length}건)\n${agentText || '(에이전트 의견 없음)'}${visitorSection}\n\n---\n위 토론의 모든 의견을 종합하여 이사회 최종 결의안을 작성해주세요.\n지정된 마크다운 형식을 정확히 따르고, 모호한 표현 없이 실행 가능한 수준으로 작성하세요.`;
 
+  // Groq로 직접 동기 처리 (크론 대기 없이 5~15초 내 완료)
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    try {
+      const consensus = await callLLM(userPrompt, {
+        model: MODEL_QUALITY,
+        maxTokens: 3500,
+        timeoutMs: 55000,
+        systemPrompt: SYSTEM_PROMPT,
+      });
+      const consensusAt = new Date().toISOString();
+      db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ?, consensus_requested_at = NULL, consensus_pending_prompt = NULL WHERE id = ?')
+        .run(consensus, consensusAt, id);
+      return NextResponse.json({ consensus, consensus_at: consensusAt, pending: false });
+    } catch (e: any) {
+      // Groq 실패 시 Mac Mini 크론 fallback
+      console.error('[consensus] Groq 실패, 크론 fallback:', e.message);
+    }
+  }
+
+  // Fallback: Mac Mini 크론 (GROQ_API_KEY 없거나 Groq 실패 시)
   const now = new Date().toISOString();
   db.prepare('UPDATE posts SET consensus_requested_at = ?, consensus_pending_prompt = ?, consensus_summary = NULL, consensus_at = NULL WHERE id = ?')
     .run(now, userPrompt, id);

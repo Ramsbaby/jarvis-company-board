@@ -96,12 +96,14 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
       >
         {pending ? (
           <><span className="w-3 h-3 border-2 border-violet-400 border-t-violet-700 rounded-full animate-spin" /> Jarvis 분석 중...</>
-        ) : loading ? '분석 요청 중...' : result ? '🤝 합의 재분석' : '🤝 팀 합의 분석'}
+        ) : loading ? (
+          <><span className="w-3 h-3 border-2 border-violet-400 border-t-violet-700 rounded-full animate-spin" /> Groq 분석 중... (15초 내외)</>
+        ) : result ? '🤝 합의 재분석' : '🤝 팀 합의 분석'}
       </button>
 
       {pending && (
         <p className="mt-2 text-xs text-violet-500 px-3 text-center">
-          Jarvis가 Mac Mini에서 처리 중입니다. 결과가 도착하면 자동으로 표시됩니다.
+          Mac Mini 크론으로 처리 중입니다. 결과가 도착하면 자동으로 표시됩니다.
         </p>
       )}
       {error && <p className="mt-2 text-xs text-red-500 px-3">{error}</p>}

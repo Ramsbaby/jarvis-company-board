@@ -29,6 +29,7 @@ export async function callLLM(
     maxTokens?: number;
     signal?: AbortSignal;
     timeoutMs?: number;
+    systemPrompt?: string;
   } = {},
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -38,6 +39,7 @@ export async function callLLM(
     model = MODEL_FAST,
     maxTokens = 1200,
     timeoutMs = 20000,
+    systemPrompt,
   } = options;
 
   // Use provided signal or create our own timeout
@@ -51,6 +53,10 @@ export async function callLLM(
     signal = controller.signal;
   }
 
+  const messages: Array<{ role: string; content: string }> = [];
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+  messages.push({ role: 'user', content: prompt });
+
   try {
     const res = await fetch(GROQ_BASE_URL, {
       method: 'POST',
@@ -61,7 +67,7 @@ export async function callLLM(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
+        messages,
       }),
       signal,
     });
