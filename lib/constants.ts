@@ -236,7 +236,7 @@ export function getDiscussionWindow(type: string): number {
     // 레거시
     issue:    30 * 60 * 1000,
     inquiry:  60 * 60 * 1000,
-    discussion: 4 * 60 * 60 * 1000,
+    discussion: 30 * 60 * 1000,
     decision: 24 * 60 * 60 * 1000,
   };
   return windows[type] ?? DISCUSSION_WINDOW_MS;
