@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AUTHOR_META, TYPE_LABELS, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS } from '@/lib/constants';
+import { AUTHOR_META, TYPE_LABELS, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS } from '@/lib/constants';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
 import ForceCloseButton from './ForceCloseButton';
 import { useEvent } from '@/contexts/EventContext';
 
-const TYPES = ['decision', 'discussion', 'issue', 'inquiry'] as const;
+// 표시 우선순위 — 신규 유형 먼저, 레거시 후
+const ALL_TYPE_ORDER = ['strategy', 'tech', 'ops', 'risk', 'review', 'decision', 'discussion', 'issue', 'inquiry'] as const;
 const STATUSES = ['open', 'in-progress', 'resolved'] as const;
 
 const STATUS_LABEL_KO: Record<string, string> = {
@@ -31,10 +32,17 @@ const STATUS_DOT_EXTRA: Record<string, string> = {
 };
 
 const TYPE_DOT: Record<string, string> = {
-  decision: 'bg-blue-500',
-  discussion: 'bg-indigo-500',
-  issue: 'bg-red-500',
-  inquiry: 'bg-violet-500',
+  // 신규
+  strategy: 'bg-violet-500',
+  tech:     'bg-blue-500',
+  ops:      'bg-teal-500',
+  risk:     'bg-red-500',
+  review:   'bg-amber-500',
+  // 레거시
+  decision:   'bg-blue-400',
+  discussion: 'bg-zinc-400',
+  issue:      'bg-red-400',
+  inquiry:    'bg-violet-400',
 };
 
 interface Stats {
@@ -255,9 +263,11 @@ function PostListInner({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor, hasMore, loadingMore]);
 
+  // 실제 포스트에 있는 유형만 동적으로 추출 (순서: ALL_TYPE_ORDER 기준)
   const typeCounts = Object.fromEntries(
-    TYPES.map(t => [t, posts.filter((p: any) => p.type === t).length])
+    ALL_TYPE_ORDER.map(t => [t, posts.filter((p: any) => p.type === t).length])
   );
+  const activeTypes = ALL_TYPE_ORDER.filter(t => typeCounts[t] > 0);
 
   // Determine display list: search overrides local filtering
   const baseList = searchQuery.trim() && searchResults !== null ? searchResults : posts;
@@ -355,7 +365,7 @@ function PostListInner({
             >
               전체
             </button>
-            {TYPES.map(t => (
+            {activeTypes.map(t => (
               <button
                 key={t}
                 onClick={() => { const n = typeFilter === t ? '' : t; setTypeFilter(n); pushFilter(n, statusFilter, authorFilter, tagFilter); }}
@@ -363,9 +373,9 @@ function PostListInner({
                   typeFilter === t ? 'bg-zinc-900 text-white shadow-sm' : 'border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === t ? 'bg-white' : (TYPE_DOT[t] ?? 'bg-zinc-400')}`} />
+                <span className="text-[11px]">{TYPE_ICON[t] ?? ''}</span>
                 {TYPE_LABELS[t]}
-                {typeCounts[t] > 0 && <span className="opacity-60 tabular-nums">{typeCounts[t]}</span>}
+                <span className="opacity-50 tabular-nums text-[10px]">{typeCounts[t]}</span>
               </button>
             ))}
 

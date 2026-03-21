@@ -176,14 +176,24 @@ export const AUTHOR_META: Record<string, {
 };
 
 export const TYPE_LABELS: Record<string, string> = {
+  // 신규 유형 (도메인 기반)
+  strategy: '전략', tech: '기술', ops: '운영', risk: '리스크', review: '성과',
+  // 레거시 (기존 데이터 호환)
   decision: '결정', discussion: '논의', issue: '이슈', inquiry: '문의',
 };
 
 export const TYPE_COLOR: Record<string, string> = {
-  decision: 'bg-blue-50 text-blue-700 border-blue-200',
-  discussion: 'bg-gray-100 text-gray-600 border-gray-200',
-  issue: 'bg-red-50 text-red-700 border-red-200',
-  inquiry: 'bg-purple-50 text-purple-700 border-purple-200',
+  // 신규 유형
+  strategy: 'bg-violet-50 text-violet-700 border-violet-200',
+  tech:     'bg-blue-50 text-blue-700 border-blue-200',
+  ops:      'bg-teal-50 text-teal-700 border-teal-200',
+  risk:     'bg-red-50 text-red-700 border-red-200',
+  review:   'bg-amber-50 text-amber-700 border-amber-200',
+  // 레거시
+  decision:   'bg-blue-50 text-blue-600 border-blue-200',
+  discussion: 'bg-zinc-100 text-zinc-500 border-zinc-200',
+  issue:      'bg-red-50 text-red-600 border-red-200',
+  inquiry:    'bg-purple-50 text-purple-600 border-purple-200',
 };
 
 export const PRIORITY_BADGE: Record<string, string> = {
@@ -216,10 +226,17 @@ export const DISCUSSION_WINDOW_MS = 30 * 60 * 1000;
 
 export function getDiscussionWindow(type: string): number {
   const windows: Record<string, number> = {
-    issue:      30 * 60 * 1000,        // 30분
-    inquiry:    60 * 60 * 1000,        // 1시간
-    discussion: 4 * 60 * 60 * 1000,   // 4시간
-    decision:   24 * 60 * 60 * 1000,  // 24시간
+    // 신규 유형
+    strategy: 24 * 60 * 60 * 1000,   // 24시간 — 전략 결정은 충분한 숙의 필요
+    tech:      4 * 60 * 60 * 1000,   // 4시간
+    ops:       4 * 60 * 60 * 1000,   // 4시간
+    risk:     30 * 60 * 1000,        // 30분 — 리스크는 신속 대응
+    review:    8 * 60 * 60 * 1000,   // 8시간
+    // 레거시
+    issue:    30 * 60 * 1000,
+    inquiry:  60 * 60 * 1000,
+    discussion: 4 * 60 * 60 * 1000,
+    decision: 24 * 60 * 60 * 1000,
   };
   return windows[type] ?? DISCUSSION_WINDOW_MS;
 }
@@ -227,8 +244,15 @@ export function getDiscussionWindow(type: string): number {
 export const MIN_COMMENT_LENGTH = 5;
 
 export const TYPE_ICON: Record<string, string> = {
-  decision: '✅',
+  // 신규 유형
+  strategy: '🎯',
+  tech:     '⚙️',
+  ops:      '🔄',
+  risk:     '⚠️',
+  review:   '📊',
+  // 레거시
+  decision:   '✅',
   discussion: '💬',
-  issue: '🔴',
-  inquiry: '❓',
+  issue:      '🔴',
+  inquiry:    '❓',
 };

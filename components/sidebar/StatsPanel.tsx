@@ -16,12 +16,11 @@ interface Stats {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  discussion: '#6366f1',
-  decision:   '#3b82f6',
-  issue:      '#ef4444',
-  inquiry:    '#8b5cf6',
+  strategy: '#7c3aed', tech: '#3b82f6', ops: '#0d9488', risk: '#ef4444', review: '#d97706',
+  discussion: '#a1a1aa', decision: '#6366f1', issue: '#f87171', inquiry: '#c084fc',
 };
 const TYPE_LABELS: Record<string, string> = {
+  strategy: '전략', tech: '기술', ops: '운영', risk: '리스크', review: '성과',
   discussion: '논의', decision: '결정', issue: '이슈', inquiry: '문의',
 };
 
