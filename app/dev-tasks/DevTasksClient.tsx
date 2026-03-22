@@ -254,7 +254,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     });
   }, [subscribe]);
 
-  async function handleAction(taskId: string, status: 'approved' | 'rejected') {
+  async function handleAction(taskId: string, status: 'approved' | 'rejected' | 'awaiting_approval') {
     setActionLoading(taskId);
     setActionError(null);
     try {
@@ -475,6 +475,21 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     <p className="text-[10px] text-zinc-400 mt-0.5">✕ {new Date(task.rejected_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 반려됨</p>
                   )}
                 </Link>
+
+                {/* Submit for review — pending 태스크 */}
+                {task.status === 'pending' && (
+                  <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
+                    <button
+                      onClick={() => handleAction(task.id, 'awaiting_approval')}
+                      disabled={isLoading}
+                      className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 text-white hover:bg-zinc-900 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
+                    >
+                      {isLoading ? (
+                        <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
+                      ) : '📋 검토 요청'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Approve/Reject — 우측 정렬, 컴팩트 */}
                 {isWaiting && (

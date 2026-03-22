@@ -385,6 +385,7 @@ export default function TaskDetailClient({
   const isRejected = task.status === 'rejected';
   const isAwaiting = task.status === 'awaiting_approval';
   const isApproved = task.status === 'approved';
+  const isPending  = task.status === 'pending';
 
   // SSE real-time updates
   useEffect(() => {
@@ -546,6 +547,29 @@ export default function TaskDetailClient({
       } else if (res.status === 401) {
         setActionError('세션이 만료되었습니다.');
         setTimeout(() => router.push('/login'), 1500);
+      }
+    } catch {
+      setActionError('네트워크 오류.');
+    } finally { setActionLoading(null); }
+  }
+
+  async function handleRequestReview() {
+    setActionLoading('request_review');
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'awaiting_approval' }),
+      });
+      if (res.ok) {
+        setTask(prev => ({ ...prev, status: 'awaiting_approval' }));
+        router.refresh();
+      } else if (res.status === 401) {
+        setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
+      } else {
+        setActionError(`검토 요청 실패 (${res.status})`);
       }
     } catch {
       setActionError('네트워크 오류.');
@@ -868,6 +892,52 @@ export default function TaskDetailClient({
             </div>
           </div>
         </div>
+
+        {/* ── Pending card (미제출) ── */}
+        {isPending && isOwner && (
+          <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-zinc-50 px-5 py-4 border-b border-zinc-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg shrink-0">📋</div>
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold text-zinc-700">검토 요청 전</h2>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">검토를 요청하면 대표 승인 후 Jarvis가 코드 작업을 시작합니다</p>
+                </div>
+                <span className="text-[11px] text-zinc-400 font-medium shrink-0">{timeAgo(task.created_at)} 등록됨</span>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 text-sm shrink-0 mt-0.5">💭</span>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  이 태스크는 아직 검토 큐에 올라가지 않았습니다. 준비가 됐다면 검토 요청을 눌러주세요.
+                </p>
+              </div>
+              {actionError && (
+                <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                  ⚠️ {actionError}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => router.back()}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                >
+                  ← 뒤로 가기
+                </button>
+                <button
+                  onClick={handleRequestReview}
+                  disabled={!!actionLoading}
+                  className="inline-flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-xl bg-zinc-800 text-white hover:bg-zinc-900 disabled:opacity-40 transition-colors font-semibold"
+                >
+                  {actionLoading === 'request_review' ? (
+                    <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
+                  ) : '📋 검토 요청'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Approval card (awaiting_approval) ── */}
         {isAwaiting && (
@@ -1256,11 +1326,13 @@ export default function TaskDetailClient({
             />
             <TimelineStep
               icon="⏳"
-              label={isAwaiting ? '대표 검토 중 (현재 단계)' : '대표 검토'}
+              label={isAwaiting ? '대표 검토 중 (현재 단계)' : isPending ? '대표 검토 대기 중' : '대표 검토'}
               sublabel={isRejected
                 ? '검토 결과: 반려 (재검토 가능)'
                 : isAwaiting
                 ? '승인하면 Jarvis가 즉시 코드 작업을 시작합니다'
+                : isPending
+                ? '검토 요청 후 대표 승인이 필요합니다'
                 : '검토 완료'}
               time={isAwaiting ? task.created_at : undefined}
               done={!isAwaiting && !isRejected && task.status !== 'pending'}

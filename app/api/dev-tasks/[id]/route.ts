@@ -89,7 +89,7 @@ export async function PATCH(
     'in-progress':     ['done', 'pending', 'failed'],
     done:              ['pending'],
     rejected:          ['pending'],
-    failed:            ['pending'],
+    failed:            ['pending', 'done'],  // agent가 실제 완료 결과 보고 가능 (stale-watcher 오탐 복구)
   };
 
   // State machine: enforce valid transitions — wrapped in transaction to prevent races
