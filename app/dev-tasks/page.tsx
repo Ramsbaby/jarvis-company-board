@@ -37,7 +37,7 @@ export default async function DevTasksPage() {
           <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 flex items-center gap-1 transition-colors">
             ← 홈
           </Link>
-          <h1 className="text-sm font-semibold text-zinc-900">Jarvis 코딩 작업</h1>
+          <h1 className="text-sm font-semibold text-zinc-900">개발 태스크 관리</h1>
           <div className="ml-auto w-6 h-6 bg-zinc-900 rounded-md flex items-center justify-center font-bold text-xs text-white">J</div>
         </div>
       </header>

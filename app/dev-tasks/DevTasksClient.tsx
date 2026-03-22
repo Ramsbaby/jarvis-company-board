@@ -148,7 +148,14 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
     stripe: null,
     innerBg: 'bg-white',
     badgeCls: 'bg-zinc-50 border-zinc-200 text-zinc-500',
-    badgeLabel: '대기중',
+    badgeLabel: '미제출',
+  },
+  failed: {
+    outerBorder: 'border-red-200',
+    stripe: 'bg-red-400',
+    innerBg: 'bg-red-50/30',
+    badgeCls: 'bg-red-50 border-red-200 text-red-600',
+    badgeLabel: '⚠ 실패',
   },
 };
 
@@ -159,6 +166,7 @@ const TAB_BADGE_CLS: Record<string, string> = {
   done:              'bg-emerald-500 text-white',
   rejected:          'bg-zinc-400 text-white',
   pending:           'bg-zinc-200 text-zinc-600',
+  failed:            'bg-red-400 text-white',
 };
 
 const STATUS_TABS = [
@@ -166,9 +174,10 @@ const STATUS_TABS = [
   { key: 'awaiting_approval', label: '검토 대기' },
   { key: 'approved',          label: '실행 대기' },
   { key: 'in-progress',       label: '작업 중' },
-  { key: 'pending',           label: '대기중' },
+  { key: 'pending',           label: '미제출' },
   { key: 'done',              label: '완료' },
   { key: 'rejected',          label: '반려' },
+  { key: 'failed',            label: '실패' },
 ] as const;
 
 // 제목 내 `코드` → 인라인 코드 강조 (경로 전체 표시, 파일명 단축 없음)
@@ -281,6 +290,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     pending:           tasks.filter(t => t.status === 'pending'),
     done:              tasks.filter(t => t.status === 'done'),
     rejected:          tasks.filter(t => t.status === 'rejected'),
+    failed:            tasks.filter(t => t.status === 'failed'),
   } as Record<string, DevTask[]>;
 
   const filtered = grouped[tab] ?? tasks;
@@ -291,7 +301,8 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     { label: '작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: true },
     { label: '완료',      key: 'done',               color: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-400', pulse: false },
     { label: '반려',      key: 'rejected',           color: 'bg-zinc-50 border-zinc-200 text-zinc-500',    dot: 'bg-zinc-300',    pulse: false },
-    { label: '대기중',    key: 'pending',            color: 'bg-zinc-50 border-zinc-200 text-zinc-400',    dot: 'bg-zinc-200',    pulse: false },
+    { label: '미제출',    key: 'pending',            color: 'bg-zinc-50 border-zinc-200 text-zinc-400',    dot: 'bg-zinc-200',    pulse: false },
+    { label: '실패',      key: 'failed',             color: 'bg-red-50 border-red-200 text-red-600',       dot: 'bg-red-400',     pulse: false },
   ];
 
   return (
@@ -306,7 +317,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
       )}
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
         {STATS.map(s => (
           <button
             key={s.key}
