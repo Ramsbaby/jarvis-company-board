@@ -254,6 +254,28 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     });
   }, [subscribe]);
 
+  async function handleDelete(taskId: string) {
+    if (!confirm('이 태스크를 삭제할까요?')) return;
+    setActionLoading(taskId);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/dev-tasks/${taskId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error ?? `삭제 실패 (${res.status})`);
+      }
+    } catch {
+      setActionError('네트워크 오류가 발생했습니다.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleAction(taskId: string, status: 'approved' | 'rejected' | 'awaiting_approval') {
     setActionLoading(taskId);
     setActionError(null);
@@ -476,9 +498,16 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   )}
                 </Link>
 
-                {/* Submit for review — pending 태스크 */}
+                {/* Submit for review / Delete — pending 태스크 */}
                 {task.status === 'pending' && (
                   <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      disabled={isLoading}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                    >
+                      🗑 삭제
+                    </button>
                     <button
                       onClick={() => handleAction(task.id, 'awaiting_approval')}
                       disabled={isLoading}

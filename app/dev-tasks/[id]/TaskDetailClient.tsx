@@ -553,6 +553,26 @@ export default function TaskDetailClient({
     } finally { setActionLoading(null); }
   }
 
+  async function handleDelete() {
+    if (!confirm('이 태스크를 삭제할까요?')) return;
+    setActionLoading('delete');
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/dev-tasks/${task.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        router.push('/dev-tasks');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error ?? `삭제 실패 (${res.status})`);
+      }
+    } catch {
+      setActionError('네트워크 오류.');
+    } finally { setActionLoading(null); }
+  }
+
   async function handleRequestReview() {
     setActionLoading('request_review');
     setActionError(null);
@@ -920,11 +940,15 @@ export default function TaskDetailClient({
               )}
               <div className="flex gap-2">
                 <button
-                  onClick={() => router.back()}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                  onClick={handleDelete}
+                  disabled={!!actionLoading}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-40 transition-colors"
                 >
-                  ← 뒤로 가기
+                  {actionLoading === 'delete' ? (
+                    <><span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> 삭제 중...</>
+                  ) : '🗑 삭제'}
                 </button>
+                <div className="flex-1" />
                 <button
                   onClick={handleRequestReview}
                   disabled={!!actionLoading}

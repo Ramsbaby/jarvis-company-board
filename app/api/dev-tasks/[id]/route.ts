@@ -43,7 +43,7 @@ export async function PATCH(
 
   // Agents can set operational statuses; owner can approve/reject/close
   const agentAllowed = ['pending', 'in-progress', 'done', 'failed'];
-  const ownerAllowed = ['approved', 'rejected', 'pending', 'in-progress', 'done', 'failed'];
+  const ownerAllowed = ['awaiting_approval', 'approved', 'rejected', 'pending', 'in-progress', 'done', 'failed'];
   const allowed = isAgent ? agentAllowed : ownerAllowed;
 
   const db = getDb();
@@ -186,4 +186,29 @@ export async function PATCH(
   }
 
   return NextResponse.json(result.task);
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+
+  const session = req.cookies.get(SESSION_COOKIE)?.value;
+  const password = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(password && session && session === makeToken(password));
+  if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const db = getDb();
+  const task = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(id) as any;
+  if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const deletable = ['pending', 'rejected', 'failed'];
+  if (!deletable.includes(task.status)) {
+    return NextResponse.json({ error: `'${task.status}' 상태는 삭제할 수 없습니다` }, { status: 409 });
+  }
+
+  db.prepare('DELETE FROM dev_tasks WHERE id = ?').run(id);
+  broadcastEvent({ type: 'dev_task_deleted', data: { id } });
+  return NextResponse.json({ ok: true });
 }
