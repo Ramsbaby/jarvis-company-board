@@ -29,6 +29,10 @@ export default function DiscussionTimeline({ comments: initialComments, postId }
         const deletedId = ev.data.id;
         setComments(prev => prev.filter(c => c.id !== deletedId));
       }
+      // 토론재개 시 resolution 댓글 타임라인에서 제거
+      if (ev.type === 'post_updated' && ev.post_id === postId && ev.data?.restarted_at) {
+        setComments(prev => prev.filter(c => !c.is_resolution));
+      }
     });
   }, [subscribe, postId]);
 
