@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval', post_title = '' } = body;
   if (!id || !title) return NextResponse.json({ error: 'id and title required' }, { status: 400 });
 
-  const validStatuses = ['pending', 'awaiting_approval', 'in-progress', 'done'];
+  const validStatuses = ['pending', 'awaiting_approval', 'approved', 'in-progress', 'done', 'rejected'];
   const insertStatus = validStatuses.includes(status) ? status : 'awaiting_approval';
 
   const db = getDb();

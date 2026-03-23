@@ -39,6 +39,19 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Auth: owner, guest, or agent
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
+  const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
+  const agentKey = req.headers.get('x-agent-key');
+  const isAgent = !!(agentKey && agentKey === process.env.AGENT_API_KEY);
+
+  if (!isOwner && !isGuest && !isAgent) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { target_id, target_type = 'comment', author, emoji } = await req.json();
   if (!target_id || !author || !emoji) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });

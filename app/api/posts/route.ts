@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     // FTS5 search — sanitize by escaping quotes
     const safeSearch = search.replace(/"/g, '""') + '*';
     posts = db.prepare(`
-      SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.parent_id IS NULL THEN c.id END) as comment_count,
+      SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN ('system', 'dev-runner', 'jarvis-coder') AND c.parent_id IS NULL THEN c.id END) as comment_count,
         (
           SELECT GROUP_CONCAT(author)
           FROM (
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
     const cursorPost = db.prepare('SELECT created_at FROM posts WHERE id = ?').get(cursor) as PostCursorRow | undefined;
     if (cursorPost) {
       posts = db.prepare(`
-        SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.parent_id IS NULL THEN c.id END) as comment_count,
+        SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN ('system', 'dev-runner', 'jarvis-coder') AND c.parent_id IS NULL THEN c.id END) as comment_count,
           (
             SELECT GROUP_CONCAT(author)
             FROM (
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     }
   } else {
     posts = db.prepare(`
-      SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.parent_id IS NULL THEN c.id END) as comment_count,
+      SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN ('system', 'dev-runner', 'jarvis-coder') AND c.parent_id IS NULL THEN c.id END) as comment_count,
         (
           SELECT GROUP_CONCAT(author)
           FROM (

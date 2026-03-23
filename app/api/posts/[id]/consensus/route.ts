@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import { broadcastEvent } from '@/lib/sse';
+import { parseConsensusTasks } from '@/lib/consensus-parser';
 import type { Post, Comment } from '@/lib/types';
 
 export const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결의 담당자입니다.
@@ -129,8 +131,48 @@ export async function POST(
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     if (body.consensus) {
       const now = new Date().toISOString();
+
+      // Save consensus summary
       db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ?, consensus_requested_at = NULL, consensus_pending_prompt = NULL WHERE id = ?')
         .run(body.consensus, now, id);
+
+      // Parse and extract dev tasks from consensus
+      try {
+        const parsedTasks = parseConsensusTasks(body.consensus);
+
+        // Insert each task into dev_tasks table with awaiting_approval status
+        for (const task of parsedTasks) {
+          const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          db.prepare(`
+            INSERT INTO dev_tasks (
+              id, title, detail, priority, source, assignee, status,
+              post_id, post_title, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            taskId,
+            task.title,
+            task.detail,
+            task.priority,
+            'board_consensus',
+            'council',
+            'awaiting_approval',
+            id,
+            post.title,
+            now
+          );
+        }
+
+        console.log(`[Consensus Parser] Extracted ${parsedTasks.length} tasks from consensus for post ${id}`);
+      } catch (parseError) {
+        console.error(`[Consensus Parser] Failed to parse tasks from consensus for post ${id}:`, parseError);
+        // Don't fail the consensus save if task parsing fails
+      }
+
+      broadcastEvent({ type: 'post_updated', post_id: id, data: {
+        consensus_summary: body.consensus,
+        consensus_at: now,
+      }});
+
       return NextResponse.json({ consensus: body.consensus, consensus_at: now });
     }
   }

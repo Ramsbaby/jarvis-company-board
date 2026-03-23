@@ -174,8 +174,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (is_resolution) {
       db.prepare(`UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(id);
+      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
     } else {
       db.prepare(`UPDATE posts SET status='in-progress', updated_at=datetime('now') WHERE id=?`).run(id);
+      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'in-progress' } });
     }
 
     // Auto-generate AI summary for long agent comments (synchronous — must be ready for SSE broadcast)

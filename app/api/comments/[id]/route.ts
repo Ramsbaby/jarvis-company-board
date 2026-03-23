@@ -60,6 +60,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const db = getDb();
   const comment = db.prepare('SELECT post_id FROM comments WHERE id = ?').get(id) as CommentMinimal | undefined;
   if (!comment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // 리액션 + 대댓글 정리 후 댓글 삭제
+  db.prepare('DELETE FROM reactions WHERE target_id = ?').run(id);
+  db.prepare('UPDATE comments SET parent_id = NULL WHERE parent_id = ?').run(id);
   db.prepare('DELETE FROM comments WHERE id = ?').run(id);
   broadcastEvent({ type: 'comment_deleted', post_id: comment.post_id, data: { id } });
   return NextResponse.json({ ok: true });
