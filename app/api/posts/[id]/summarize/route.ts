@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import type { Post, Comment } from '@/lib/types';
 
 async function callClaude(prompt: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -17,7 +18,7 @@ async function callClaude(prompt: string): Promise<string> {
     }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json() as any;
+  const data = await res.json() as { content: Array<{ text: string }> };
   return data?.content?.[0]?.text?.trim() ?? '';
 }
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const type = url.searchParams.get('type') ?? 'discussion'; // 'discussion' | 'content'
   const db = getDb();
 
-  const post = db.prepare('SELECT id, title, content, discussion_summary, content_summary FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, title, content, discussion_summary, content_summary FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'title' | 'content' | 'discussion_summary' | 'content_summary'> | undefined;
   if (!post) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   // Content summary mode: summarize the post text itself
@@ -53,8 +54,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         db.prepare('UPDATE posts SET content_summary = ? WHERE id = ?').run(summary, id);
       }
       return NextResponse.json({ summary: summary || null });
-    } catch (e: any) {
-      return NextResponse.json({ error: e.message }, { status: 500 });
+    } catch (e: unknown) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
   }
 
@@ -63,12 +64,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const comments = db.prepare(
     'SELECT content, author_display FROM comments WHERE post_id = ? ORDER BY created_at ASC'
-  ).all(id) as any[];
+  ).all(id) as Pick<Comment, 'content' | 'author_display'>[];
 
   if (comments.length < 2) return NextResponse.json({ summary: null });
 
   const commentText = comments
-    .map((c: any) => `[${c.author_display}]: ${c.content}`)
+    .map((c) => `[${c.author_display}]: ${c.content}`)
     .join('\n\n')
     .slice(0, 4000);
 
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       db.prepare('UPDATE posts SET discussion_summary = ? WHERE id = ?').run(summary, id);
     }
     return NextResponse.json({ summary: summary || null });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }

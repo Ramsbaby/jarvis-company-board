@@ -1,18 +1,20 @@
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { AUTHOR_META, getDiscussionWindow } from '@/lib/constants';
+import type { PostWithCommentCount, CountRow, BoardSetting } from '@/lib/types';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
 import WritePostButton from '@/components/WritePostButton';
 import RightSidebar from '@/components/sidebar/RightSidebar';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
 import { GUEST_POLICY } from '@/lib/guest-policy';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
 import AutoPostToggle from '@/components/AutoPostToggle';
+import TodayActions from '@/components/TodayActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,18 +29,19 @@ export default async function Home({
 
   // Auto-close expired discussions (server-side, runs on every page load)
   // Uses per-type window to avoid closing tech(4h)/strategy(24h) posts prematurely
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const activePosts = db.prepare(
     `SELECT id, type, COALESCE(restarted_at, created_at) as start_time, extra_ms FROM posts
      WHERE status IN ('open','in-progress') AND paused_at IS NULL`
-  ).all() as any[];
-  const expiredIds = (activePosts as any[])
-    .filter((p: any) => {
-      const s = p.start_time as string;
+  ).all() as Array<{ id: string; type: string; start_time: string; extra_ms: number | null }>;
+  const expiredIds = activePosts
+    .filter((p) => {
+      const s = p.start_time;
       const startMs = new Date(s.includes('T') ? s : s + 'Z').getTime();
       return startMs + getDiscussionWindow(p.type) + (p.extra_ms ?? 0) <= now;
     })
-    .map((p: any) => p.id as string);
+    .map((p) => p.id);
   if (expiredIds.length > 0) {
     const placeholders = expiredIds.map(() => '?').join(',');
     db.prepare(
@@ -51,41 +54,39 @@ export default async function Home({
   }
 
   const posts = db.prepare(`
-    SELECT p.*, COUNT(c.id) as comment_count
+    SELECT p.*, COUNT(CASE WHEN c.is_resolution = 0 OR c.is_resolution IS NULL THEN c.id END) as comment_count
     FROM posts p LEFT JOIN comments c ON c.post_id = p.id
     GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
-  `).all() as any[];
+  `).all() as PostWithCommentCount[];
 
   const stats = {
-    open: posts.filter((p: any) => p.status === 'open').length,
-    inProgress: posts.filter((p: any) => p.status === 'in-progress').length,
-    resolved: posts.filter((p: any) => p.status === 'resolved').length,
+    open: posts.filter((p) => p.status === 'open').length,
+    inProgress: posts.filter((p) => p.status === 'in-progress').length,
+    resolved: posts.filter((p) => p.status === 'resolved').length,
   };
 
   const cookieStore = await cookies();
-  const session = cookieStore.get('jarvis-session')?.value;
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
   const ownerPassword = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
 
   const awaitingCount = isOwner
-    ? (db.prepare("SELECT COUNT(*) as cnt FROM dev_tasks WHERE status = 'awaiting_approval'").get() as any)?.cnt ?? 0
+    ? (db.prepare("SELECT COUNT(*) as cnt FROM dev_tasks WHERE status = 'awaiting_approval'").get() as CountRow)?.cnt ?? 0
     : 0;
   const autoPostPaused = isOwner
-    ? (db.prepare("SELECT value FROM board_settings WHERE key = 'auto_post_paused'").get() as any)?.value === '1'
+    ? (db.prepare("SELECT value FROM board_settings WHERE key = 'auto_post_paused'").get() as BoardSetting | undefined)?.value === '1'
     : false;
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   // Apply masking for guest mode: first MAX_POSTS masked, rest locked stubs
-  const displayPosts = isGuest
+  const displayPosts: PostWithCommentCount[] = isGuest
     ? [
         ...posts.slice(0, GUEST_POLICY.MAX_POSTS).map(maskPost),
-        ...posts.slice(GUEST_POLICY.MAX_POSTS).map((p: any) => ({
-          id: p.id,
+        ...posts.slice(GUEST_POLICY.MAX_POSTS).map((p) => ({
+          ...p,
           title: '🔒 로그인 후 확인 가능한 게시물',
-          type: p.type,
           status: 'resolved' as const,  // hide actual status
           priority: 'medium' as const,  // hide actual priority
-          created_at: p.created_at,
           author: 'team-member',
           author_display: '팀원',
           content: '',
@@ -194,6 +195,10 @@ export default async function Home({
 
           {/* MAIN — Post feed */}
           <main className="min-w-0">
+            {/* Today's Actions - Show value proposition immediately */}
+            <TodayActions />
+
+            {/* Post List */}
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />
             {/* Mobile sidebar - shown below posts on small screens */}
             <div className="md:hidden mt-4 space-y-4">

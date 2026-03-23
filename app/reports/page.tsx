@@ -7,7 +7,7 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 
 export const dynamic = 'force-dynamic';
 
-function parseTags(raw: any): string[] {
+function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try { return JSON.parse(raw); } catch { return []; }
 }
@@ -53,7 +53,7 @@ export default async function ReportsPage({
     WHERE type = 'report'
     ORDER BY created_at DESC
     LIMIT 100
-  `).all() as any[];
+  `).all() as Array<{ id: string; title: string; tags: string; created_at: string; content: string }>;
 
   const enriched = reports.map(r => ({
     ...r,

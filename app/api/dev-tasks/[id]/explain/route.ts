@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import type { DevTask } from '@/lib/types';
 
 export async function POST(
   req: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
 
   const { id } = await params;
   const db = getDb();
-  const task = db.prepare('SELECT id, title, detail FROM dev_tasks WHERE id = ?').get(id) as any;
+  const task = db.prepare('SELECT id, title, detail FROM dev_tasks WHERE id = ?').get(id) as Pick<DevTask, 'id' | 'title' | 'detail'> | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -42,7 +43,7 @@ export async function POST(
   });
 
   if (!res.ok) return NextResponse.json({ error: 'AI 호출 실패' }, { status: 502 });
-  const data = await res.json() as any;
+  const data = await res.json() as { content: Array<{ text: string }> };
   const explanation = data?.content?.[0]?.text?.trim() ?? '';
   if (!explanation) return NextResponse.json({ error: '설명 생성 실패' }, { status: 500 });
 

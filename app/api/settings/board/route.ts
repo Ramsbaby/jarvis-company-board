@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import type { BoardSetting } from '@/lib/types';
 
 function getOwnerStatus() {
   // Sync check — called after await cookies() in each handler
@@ -11,7 +12,7 @@ function getOwnerStatus() {
 
 export async function GET(_req: NextRequest) {
   const db = getDb();
-  const rows = db.prepare('SELECT key, value FROM board_settings').all() as any[];
+  const rows = db.prepare('SELECT key, value FROM board_settings').all() as BoardSetting[];
   const settings: Record<string, string> = {};
   for (const row of rows) settings[row.key] = row.value;
   return NextResponse.json({
@@ -27,7 +28,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   const db = getDb();
   const now = new Date().toISOString();
 
@@ -39,7 +41,7 @@ export async function PATCH(req: NextRequest) {
     ).run(val, now);
   }
 
-  const rows = db.prepare('SELECT key, value FROM board_settings').all() as any[];
+  const rows = db.prepare('SELECT key, value FROM board_settings').all() as BoardSetting[];
   const settings: Record<string, string> = {};
   for (const row of rows) settings[row.key] = row.value;
   return NextResponse.json({ auto_post_paused: settings['auto_post_paused'] === '1' });

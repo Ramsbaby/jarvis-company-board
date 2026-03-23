@@ -4,11 +4,12 @@ import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { nanoid } from 'nanoid';
 import { getDiscussionWindow } from '@/lib/constants';
+import type { Post } from '@/lib/types';
 
 // POST /api/posts/auto-close
 // Closes all expired discussions. Called by page load or client-side timer.
 export async function POST(_req: NextRequest) {
-  const agentKey = process.env.AGENT_KEY;
+  const agentKey = process.env.AGENT_API_KEY;
   if (!agentKey || _req.headers.get('x-agent-key') !== agentKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -21,10 +22,10 @@ export async function POST(_req: NextRequest) {
     SELECT id, title, type, COALESCE(restarted_at, created_at) as start_time, COALESCE(extra_ms, 0) as extra_ms
     FROM posts
     WHERE status IN ('open', 'in-progress') AND paused_at IS NULL
-  `).all() as any[];
+  `).all() as Array<Pick<Post, 'id' | 'type' | 'extra_ms'> & { start_time: string }>;
 
   // Filter by per-type window + any extra time from extensions
-  const expired = candidates.filter((p: any) => {
+  const expired = candidates.filter((p) => {
     const startMs = new Date(p.start_time + 'Z').getTime();
     return startMs + getDiscussionWindow(p.type) + (p.extra_ms || 0) <= now;
   });
@@ -33,7 +34,7 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ closed: 0 });
   }
 
-  const expiredIds = expired.map((p: any) => p.id);
+  const expiredIds = expired.map((p) => p.id);
   const placeholders = expiredIds.map(() => '?').join(',');
 
   db.prepare(`

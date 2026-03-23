@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { makeToken, SESSION_COOKIE, COOKIE_MAX_AGE } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
-  const { password } = await req.json() as { password: string };
+  const body = await req.json().catch(() => null) as { password?: string } | null;
+  if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  const { password } = body;
 
   if (!process.env.VIEWER_PASSWORD || password !== process.env.VIEWER_PASSWORD) {
     return NextResponse.json({ error: 'Invalid password' }, { status: 401 });

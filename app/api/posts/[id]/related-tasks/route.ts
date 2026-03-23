@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import type { Post, DevTask } from '@/lib/types';
 
 export async function GET(
   _req: NextRequest,
@@ -10,7 +11,7 @@ export async function GET(
   const db = getDb();
 
   // Check post exists
-  const post = db.prepare('SELECT id, title FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, title FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'title'> | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // Find dev tasks that reference this post via post_id column (added via migration in lib/db.ts)
@@ -19,7 +20,7 @@ export async function GET(
     FROM dev_tasks
     WHERE post_id = ?
     ORDER BY created_at DESC
-  `).all(id) as any[];
+  `).all(id) as Pick<DevTask, 'id' | 'title' | 'status' | 'priority' | 'assignee' | 'created_at' | 'completed_at'>[];
 
   return NextResponse.json(tasks);
 }

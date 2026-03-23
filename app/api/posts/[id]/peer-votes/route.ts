@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
+import type { IdRow, Comment } from '@/lib/types';
 
 // ── POST /api/posts/[id]/peer-votes ──────────────────────────────────────────
 // Agent-only: submit peer votes (best/worst) for comments in a post.
@@ -17,7 +18,7 @@ export async function POST(
   const { id: post_id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(post_id) as any;
+  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(post_id) as IdRow | undefined;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
 
   const body = await req.json() as {
@@ -57,7 +58,7 @@ export async function POST(
   for (const v of votes) {
     const comment = db.prepare(
       'SELECT id, post_id, author, is_resolution FROM comments WHERE id = ?',
-    ).get(v.comment_id) as any;
+    ).get(v.comment_id) as Pick<Comment, 'id' | 'post_id' | 'author' | 'is_resolution'> | undefined;
     if (!comment) {
       return NextResponse.json({ error: `Comment not found: ${v.comment_id}` }, { status: 404 });
     }
@@ -107,7 +108,7 @@ export async function POST(
     const isFirstVoteForPost = (firstVoteCheckStmt.get(post_id) as { cnt: number }).cnt === 0;
 
     for (const v of votes) {
-      const existing = existingVoteStmt.get(post_id, voter_id, v.vote_type) as any;
+      const existing = existingVoteStmt.get(post_id, voter_id, v.vote_type) as IdRow | undefined;
       insertVote.run(nanoid(), post_id, v.comment_id, voter_id, v.vote_type, v.reason ?? null);
 
       if (existing) {
@@ -115,11 +116,13 @@ export async function POST(
       } else {
         inserted++;
         // Award score only for newly inserted votes
-        const comment = db.prepare('SELECT author FROM comments WHERE id = ?').get(v.comment_id) as any;
-        if (v.vote_type === 'best') {
-          insertScore.run(nanoid(), comment.author, 'best_vote_received', 4, post_id, v.comment_id);
-        } else {
-          insertScore.run(nanoid(), comment.author, 'worst_vote_received', -3, post_id, v.comment_id);
+        const comment = db.prepare('SELECT author FROM comments WHERE id = ?').get(v.comment_id) as Pick<Comment, 'author'> | undefined;
+        if (comment) {
+          if (v.vote_type === 'best') {
+            insertScore.run(nanoid(), comment.author, 'best_vote_received', 4, post_id, v.comment_id);
+          } else {
+            insertScore.run(nanoid(), comment.author, 'worst_vote_received', -3, post_id, v.comment_id);
+          }
         }
       }
     }
@@ -166,7 +169,7 @@ export async function GET(
   const { id: post_id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(post_id) as any;
+  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(post_id) as IdRow | undefined;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
 
   const rows = db.prepare(`
@@ -193,13 +196,13 @@ export async function GET(
   const bestReason = topBestComment
     ? (db.prepare(
         `SELECT reason FROM peer_votes WHERE post_id = ? AND comment_id = ? AND vote_type = 'best' AND reason IS NOT NULL AND reason != '' ORDER BY created_at DESC LIMIT 1`
-      ).get(post_id, topBestComment.comment_id) as any)?.reason ?? null
+      ).get(post_id, topBestComment.comment_id) as { reason: string | null } | undefined)?.reason ?? null
     : null;
 
   const worstReason = topWorstComment
     ? (db.prepare(
         `SELECT reason FROM peer_votes WHERE post_id = ? AND comment_id = ? AND vote_type = 'worst' AND reason IS NOT NULL AND reason != '' ORDER BY created_at DESC LIMIT 1`
-      ).get(post_id, topWorstComment.comment_id) as any)?.reason ?? null
+      ).get(post_id, topWorstComment.comment_id) as { reason: string | null } | undefined)?.reason ?? null
     : null;
 
   return NextResponse.json({ votes: rows, bestReason, worstReason });

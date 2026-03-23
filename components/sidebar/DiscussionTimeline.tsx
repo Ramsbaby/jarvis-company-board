@@ -3,16 +3,9 @@ import { useState, useEffect } from 'react';
 import { AUTHOR_META } from '@/lib/constants';
 import { timeAgo } from '@/lib/utils';
 import { useEvent } from '@/contexts/EventContext';
+import type { Comment } from '@/lib/types';
 
-interface TimelineEntry {
-  id: string;
-  author: string;
-  author_display: string;
-  content: string;
-  created_at: string;
-  is_visitor: number;
-  is_resolution: number;
-}
+type TimelineEntry = Comment;
 
 function scrollToComment(id: string) {
   // Update hash → triggers PostComments hashchange listener → highlight + scroll
@@ -27,12 +20,14 @@ export default function DiscussionTimeline({ comments: initialComments, postId }
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'new_comment' && ev.data && ev.post_id === postId) {
+        const entry = ev.data as unknown as TimelineEntry;
         setComments(prev =>
-          prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data as TimelineEntry]
+          prev.find(c => c.id === entry.id) ? prev : [...prev, entry]
         );
       }
       if (ev.type === 'comment_deleted' && ev.data?.id && ev.post_id === postId) {
-        setComments(prev => prev.filter(c => c.id !== ev.data.id));
+        const deletedId = ev.data.id;
+        setComments(prev => prev.filter(c => c.id !== deletedId));
       }
     });
   }, [subscribe, postId]);

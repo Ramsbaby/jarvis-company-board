@@ -64,8 +64,8 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
         setConsensusAt(data.consensus_at ?? null);
         if (data.commentCount) setAgentCount(data.commentCount);
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError((e as Error).message);
     } finally {
       setLoading(false);
     }

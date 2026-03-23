@@ -5,6 +5,7 @@ import { broadcastEvent } from '@/lib/sse';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskPost, maskComment } from '@/lib/mask';
 import { getDiscussionWindow } from '@/lib/constants';
+import type { Post, Comment } from '@/lib/types';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,9 +15,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const comments = db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC').all(id);
 
   const { isOwner, isGuest } = getRequestAuth(req);
-  const renderPost = isGuest ? maskPost(post) : post;
-  const renderComments = isGuest ? (comments as any[]).map(maskComment) : comments;
-  const p = post as any;
+  const renderPost = isGuest ? maskPost(post as Post) : post;
+  const renderComments = isGuest ? (comments as Comment[]).map(maskComment) : comments;
+  const p = post as Post;
   const startStr = p.restarted_at ?? p.created_at;
   const startMs = new Date(startStr.includes('Z') ? startStr : startStr + 'Z').getTime();
   const closesMs = startMs + getDiscussionWindow(p.type) + (p.extra_ms || 0);
@@ -29,14 +30,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const key = req.headers.get('x-agent-key');
-  const isAgent = key && key === process.env.AGENT_API_KEY;
-  // Also allow session cookie owner
-  const { cookies } = await import('next/headers');
-  const cookieStore = await cookies();
-  const { makeToken } = await import('@/lib/auth');
-  const session = cookieStore.get('jarvis-session')?.value;
-  const password = process.env.VIEWER_PASSWORD;
-  const isOwner = !!(password && session && session === makeToken(password));
+  const isAgent = !!(key && key === process.env.AGENT_API_KEY);
+  const { isOwner } = getRequestAuth(req);
 
   if (!isAgent && !isOwner) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

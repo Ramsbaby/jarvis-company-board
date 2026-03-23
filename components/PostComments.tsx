@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { AUTHOR_META, getDiscussionWindow, MIN_COMMENT_LENGTH } from '@/lib/constants';
+import type { Comment } from '@/lib/types';
 import { timeAgo, fmtDateShort } from '@/lib/utils';
 import MarkdownContent from '@/components/MarkdownContent';
 import VisitorCommentForm from './VisitorCommentForm';
@@ -14,10 +15,11 @@ function DiscussionSummary({ postId, commentCount }: { postId: string; commentCo
 
   useEffect(() => {
     if (commentCount < 2) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch(`/api/posts/${postId}/summarize`)
-      .then(r => r.json())
-      .then(d => { if (d.summary) setSummary(d.summary); })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.summary) setSummary(d.summary); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [postId, commentCount]);
@@ -226,7 +228,7 @@ export default function PostComments({
   hideResolutionCard = false,
 }: {
   postId: string;
-  initialComments: any[];
+  initialComments: Comment[];
   isOwner: boolean;
   postCreatedAt: string;
   postStatus: string;
@@ -288,43 +290,52 @@ export default function PostComments({
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'new_comment' && ev.post_id === postId) {
+        if (!ev.data) return;
+        const newComment = ev.data as unknown as Comment;
         setComments(prev =>
-          prev.find(c => c.id === ev.data.id) ? prev : [...prev, ev.data]
+          prev.find(c => c.id === newComment.id) ? prev : [...prev, newComment]
         );
-        if (ev.data?.is_resolution) setLocalStatus('resolved');
-        setNewIds(prev => new Set(prev).add(ev.data.id));
-        lastNewCommentIdRef.current = ev.data.id;
+        if (ev.data.is_resolution) setLocalStatus('resolved');
+        setNewIds(prev => new Set(prev).add(newComment.id));
+        lastNewCommentIdRef.current = newComment.id;
         // Clear typing indicator for this agent
-        if (ev.data?.author) {
-          setTypingAgents(prev => prev.filter(a => a.agent !== ev.data.author));
-          clearTimeout(typingTimers.current[ev.data.author]);
+        if (ev.data.author) {
+          const agent = ev.data.author as string;
+          setTypingAgents(prev => prev.filter(a => a.agent !== agent));
+          clearTimeout(typingTimers.current[agent]);
         }
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        setToast(`💬 ${ev.data?.author_display || '팀원'}이 댓글을 달았습니다`);
+        setToast(`💬 ${ev.data.author_display || '팀원'}이 댓글을 달았습니다`);
         toastTimerRef.current = setTimeout(() => setToast(null), 5000);
       }
       if (ev.type === 'comment_deleted' && ev.post_id === postId) {
         setComments(prev => prev.filter(c => c.id !== ev.data?.id));
       }
       if (ev.type === 'comment_updated' && ev.post_id === postId) {
+        if (!ev.data) return;
+        const updatedId = ev.data.id;
+        const updatedContent = ev.data.content as string | undefined;
         setComments(prev => prev.map(c =>
-          c.id === ev.data?.id ? { ...c, content: ev.data.content } : c
+          c.id === updatedId ? { ...c, content: updatedContent ?? c.content } : c
         ));
       }
       // #21 Typing indicator
       if (ev.type === 'agent_typing' && ev.post_id === postId) {
+        if (!ev.data) return;
+        const agentId = ev.data.agent ?? '';
+        const agentLabel = (ev.data.label as string | undefined) ?? agentId;
         setTypingAgents(prev => {
-          const next = prev.filter(a => a.agent !== ev.data?.agent);
-          return [...next, { agent: ev.data?.agent, label: ev.data?.label ?? ev.data?.agent }];
+          const next = prev.filter(a => a.agent !== agentId);
+          return [...next, { agent: agentId, label: agentLabel }];
         });
-        clearTimeout(typingTimers.current[ev.data?.agent]);
-        typingTimers.current[ev.data?.agent] = setTimeout(() => {
-          setTypingAgents(prev => prev.filter(a => a.agent !== ev.data?.agent));
+        clearTimeout(typingTimers.current[agentId]);
+        typingTimers.current[agentId] = setTimeout(() => {
+          setTypingAgents(prev => prev.filter(a => a.agent !== agentId));
         }, 10000);
       }
       if (ev.type === 'post_updated' && ev.post_id === postId && ev.data?.restarted_at) {
         // 재개 시: 이사회 결론 댓글만 제거, AI 토론 댓글은 유지
-        setComments(prev => prev.filter((c: any) => !c.is_resolution));
+        setComments(prev => prev.filter((c) => !c.is_resolution));
         setLocalStatus('open');
         setPaused(false);
       }
@@ -426,10 +437,10 @@ export default function PostComments({
       window.removeEventListener('hashchange', activateHashHighlight);
       window.removeEventListener('comment-award-effect', handleAwardEffect);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   // #8 Build reply map
-  const replyMap: Record<string, any[]> = {};
+  const replyMap: Record<string, Comment[]> = {};
   for (const c of comments) {
     if (c.parent_id) {
       if (!replyMap[c.parent_id]) replyMap[c.parent_id] = [];
@@ -479,7 +490,7 @@ export default function PostComments({
   const agentComments = comments.filter(c => !c.is_visitor && !c.is_resolution);
   const humanComments = comments.filter(c => c.is_visitor);
 
-  function renderComment(c: any, isReply = false) {
+  function renderComment(c: Comment, isReply = false) {
     const isVisitor = Boolean(c.is_visitor);
     const isAgentComment = !isVisitor && c.author !== 'owner';
     const isResolution = Boolean(c.is_resolution);
@@ -982,13 +993,13 @@ export default function PostComments({
           {viewTab === 'ai' ? '🤖 AI 의견이 없습니다' : '👤 팀원 의견이 없습니다'}
         </div>
       )}
-      {rootComments.map((c: any) => (
+      {rootComments.map((c) => (
         <div key={c.id}>
           {renderComment(c, false)}
           {/* Replies — visually nested 1 level deep */}
           {(replyMap[c.id] ?? []).length > 0 && (
             <div className="ml-6 border-l-2 border-zinc-100 pl-3 space-y-2 mt-1">
-              {(replyMap[c.id] ?? []).map((reply: any) => renderComment(reply, true))}
+              {(replyMap[c.id] ?? []).map((reply) => renderComment(reply, true))}
             </div>
           )}
         </div>
@@ -1013,7 +1024,7 @@ export default function PostComments({
         <VisitorCommentForm
           postId={postId}
           isOwner={isOwner}
-          onSubmitted={comment => setComments(prev => prev.some(c => c.id === comment.id) ? prev : [...prev, comment])}
+          onSubmitted={comment => setComments(prev => prev.some(c => c.id === (comment as Comment).id) ? prev : [...prev, comment as unknown as Comment])}
         />
       </div>
     </section>

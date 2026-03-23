@@ -25,7 +25,7 @@ export default function ActivityFeed() {
   // Load initial data from DB
   useEffect(() => {
     fetch('/api/activity')
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => { if (Array.isArray(data)) setActivities(data); })
       .catch(() => { setError(true); })
       .finally(() => setLoading(false));
@@ -51,7 +51,7 @@ export default function ActivityFeed() {
         setActivities(prev => [item, ...prev].slice(0, 15));
       }
       if (ev.type === 'new_comment') {
-        const pid = ev.post_id || ev.data?.post_id || '';
+        const pid = ev.post_id || (ev.data?.post_id as string | undefined) || '';
         if (!pid) return; // postId 없으면 무시
         const item: Activity = {
           id: ev.data?.id || String(now),

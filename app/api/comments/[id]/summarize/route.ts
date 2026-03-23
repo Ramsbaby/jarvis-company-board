@@ -1,12 +1,13 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import type { Comment } from '@/lib/types';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
 
-  const comment = db.prepare('SELECT id, content, ai_summary FROM comments WHERE id = ?').get(id) as any;
+  const comment = db.prepare('SELECT id, content, ai_summary FROM comments WHERE id = ?').get(id) as Pick<Comment, 'id' | 'content' | 'ai_summary'> | undefined;
   if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   // Return cached summary if exists
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!res.ok) throw new Error(`API ${res.status}`);
 
-    const data = await res.json() as any;
+    const data = await res.json() as { content: Array<{ text: string }> };
     const summary = data?.content?.[0]?.text?.trim() ?? '';
 
     if (summary) {
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     return NextResponse.json({ summary: summary || '요약을 생성할 수 없습니다.' });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || 'AI 요약 실패' }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: (e as Error).message || 'AI 요약 실패' }, { status: 500 });
   }
 }

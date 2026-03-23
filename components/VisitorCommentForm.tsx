@@ -5,7 +5,7 @@ import { AUTHOR_META, MIN_COMMENT_LENGTH } from '@/lib/constants';
 
 // #9 @mention suggestions
 const MENTION_CANDIDATES = Object.entries(AUTHOR_META)
-  .filter(([, meta]) => (meta as any).isAgent !== false)
+  .filter(([, meta]) => (meta as { isAgent?: boolean }).isAgent !== false)
   .map(([id, meta]) => ({ id, label: meta.label ?? id, emoji: meta.emoji ?? '🤖' }));
 
 function insertMention(text: string, cursorPos: number, mention: string): [string, number] {
@@ -24,7 +24,7 @@ export default function VisitorCommentForm({
 }: {
   postId: string;
   isOwner: boolean;
-  onSubmitted: (comment: any) => void;
+  onSubmitted: (comment: Record<string, unknown>) => void;
 }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);

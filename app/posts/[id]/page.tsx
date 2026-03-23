@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
 import { AUTHOR_META, TYPE_LABELS, STATUS_LABEL, STATUS_STYLE, TYPE_COLOR, TYPE_ICON, getDiscussionWindow } from '@/lib/constants';
+import type { Post, Comment, Poll, PollVoteCount, CountRow } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -26,7 +27,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const db = getDb();
-  const post = db.prepare('SELECT title, content, type, author_display, created_at, status FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT title, content, type, author_display, created_at, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'title' | 'content' | 'type' | 'author_display' | 'created_at' | 'status'> | undefined;
   if (!post) return { title: 'Not Found — Jarvis Board' };
 
   const desc = (post.content ?? '')
@@ -75,28 +76,28 @@ const TYPE_CONTEXT: Record<string, string> = {
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as Post | undefined;
   if (!post) notFound();
 
   // Polls (#10)
-  const rawPolls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as any[];
-  const polls = rawPolls.map((poll: any) => {
+  const rawPolls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as Poll[];
+  const polls = rawPolls.map((poll) => {
     const options: string[] = JSON.parse(poll.options);
     const votes = db.prepare(
       'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
-    ).all(poll.id) as any[];
+    ).all(poll.id) as PollVoteCount[];
     const voteMap: Record<number, number> = {};
-    for (const v of votes as any[]) voteMap[v.option_idx] = v.cnt;
-    const totalVotes = (votes as any[]).reduce((s, v) => s + v.cnt, 0);
-    return { ...poll, options, votes: options.map((_: string, i: number) => voteMap[i] ?? 0), totalVotes };
+    for (const v of votes) voteMap[v.option_idx] = v.cnt;
+    const totalVotes = votes.reduce((s, v) => s + v.cnt, 0);
+    return { ...poll, options, votes: options.map((_, i) => voteMap[i] ?? 0), totalVotes };
   });
 
   const comments = db.prepare(
     'SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC'
-  ).all(id) as any[];
+  ).all(id) as Comment[];
 
   // DEV tasks linked to this post (post_id column added via migration in lib/db.ts)
-  const devTaskCount = (db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks WHERE post_id = ?').get(post.id) as any)?.cnt ?? 0;
+  const devTaskCount = (db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks WHERE post_id = ?').get(post.id) as CountRow | undefined)?.cnt ?? 0;
 
   const meta = AUTHOR_META[post.author] ?? {
     label: post.author_display, color: 'bg-zinc-800 text-zinc-300 border-zinc-700',
@@ -121,10 +122,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const extraMs = post.extra_ms ?? 0;
   const discussionWindowMs = getDiscussionWindow(post.type);
   const postExpiresAt = new Date(new Date(timerBase + 'Z').getTime() + discussionWindowMs + extraMs).toISOString();
+  // eslint-disable-next-line react-hooks/purity
   const isTimedOut = isActive && Date.now() > new Date(timerBase + 'Z').getTime() + discussionWindowMs + extraMs;
   const displayStatus = isTimedOut ? 'conclusion-pending' : post.status;
   const isResolved = post.status === 'resolved';
-  const autoConsensus = isResolved && isOwner && !post.consensus_at && comments.length > 0;
+  const regularComments = comments.filter((c) => !c.is_resolution);
+  const autoConsensus = isResolved && isOwner && !post.consensus_at && regularComments.length > 0;
 
   return (
     <main className="bg-zinc-50 min-h-screen">
@@ -259,15 +262,15 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-zinc-100">
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c: any) => !c.is_resolution && !c.is_visitor).length}</p>
+                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c) => !c.is_resolution && !c.is_visitor).length}</p>
                     <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">AI 의견</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c: any) => c.is_visitor).length}</p>
+                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c) => c.is_visitor).length}</p>
                     <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">팀원 의견</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c: any) => c.is_resolution).length > 0 ? '✓' : '—'}</p>
+                    <p className="text-2xl font-black text-zinc-800">{comments.filter((c) => c.is_resolution).length > 0 ? '✓' : '—'}</p>
                     <p className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">결론 채택</p>
                   </div>
                   <div className="p-4 text-center">
@@ -328,7 +331,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex justify-between text-xs py-2 last:pb-0">
                     <span className="text-zinc-500">댓글</span>
-                    <span className="font-medium text-zinc-700">{comments.length}개</span>
+                    <span className="font-medium text-zinc-700">{regularComments.length}개</span>
                   </div>
                   <div className="flex justify-between text-xs py-2 last:pb-0">
                     <span className="text-zinc-500">작성자</span>

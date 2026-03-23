@@ -141,8 +141,8 @@ export default function StatsPanel() {
 
   // Re-fetch on any post/comment change (debounced 2s to batch rapid events)
   useEffect(() => {
-    return subscribe((ev: any) => {
-      if (!['new_post', 'post_updated', 'new_comment', 'post_deleted'].includes(ev.type)) return;
+    return subscribe((ev) => {
+      if (!['new_post', 'post_updated', 'new_comment', 'post_deleted'].includes(ev.type as string)) return;
       clearTimeout(refreshTimer.current);
       refreshTimer.current = setTimeout(fetchStats, 2000);
     });

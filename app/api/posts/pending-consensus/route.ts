@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import type { Post } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   const agentKey = req.headers.get('x-agent-key');
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
       AND (consensus_summary IS NULL OR consensus_summary = '')
     ORDER BY consensus_requested_at ASC
     LIMIT 10
-  `).all() as any[];
+  `).all() as Pick<Post, 'id' | 'title' | 'consensus_pending_prompt'>[];
 
   return NextResponse.json(rows);
 }

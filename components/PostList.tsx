@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTHOR_META, TYPE_LABELS, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS, getDiscussionWindow } from '@/lib/constants';
+import type { PostWithCommentCount } from '@/lib/types';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
 import ForceCloseButton from './ForceCloseButton';
@@ -51,13 +52,13 @@ interface Stats {
   resolved: number;
 }
 
-function isHot(post: any): boolean {
+function isHot(post: PostWithCommentCount): boolean {
   const ageMs = Date.now() - new Date(post.created_at + 'Z').getTime();
   const ageHours = ageMs / (1000 * 60 * 60);
   return post.comment_count >= 5 && ageHours < 24;
 }
 
-function parseTags(raw: any): string[] {
+function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try { return JSON.parse(raw); } catch { return []; }
 }
@@ -69,8 +70,8 @@ function PostListInner({
   isOwner = false,
   isGuest = false,
 }: {
-  initialPosts: any[];
-  authorMeta: any;
+  initialPosts: PostWithCommentCount[];
+  authorMeta: typeof AUTHOR_META;
   stats: Stats;
   isOwner?: boolean;
   isGuest?: boolean;
@@ -117,7 +118,7 @@ function PostListInner({
       if (res.ok) {
         const data = await res.json();
         // Optimistic update: reflect paused_at change immediately without waiting for SSE
-        setPosts(p => p.map((post: any) =>
+        setPosts(p => p.map((post) =>
           post.id === postId
             ? { ...post, paused_at: data.paused ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null, extra_ms: data.extra_ms ?? post.extra_ms }
             : post
@@ -149,7 +150,7 @@ function PostListInner({
 
   // #1 Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searchResults, setSearchResults] = useState<PostWithCommentCount[] | null>(null);
   const [searching, setSearching] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -172,6 +173,7 @@ function PostListInner({
     searchDebounce.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/posts?search=${encodeURIComponent(searchQuery.trim())}`);
+        if (!res.ok) { setSearchResults([]); return; }
         const data = await res.json();
         setSearchResults(data.posts ?? data);
       } finally {
@@ -204,30 +206,41 @@ function PostListInner({
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'new_post') {
+        if (!ev.data) return;
         // Guest mode: add a locked stub instead of raw unmasked data
-        const newEntry = isGuest
-          ? { id: ev.data?.id, title: ev.data?.title, type: ev.data?.type, status: ev.data?.status,
-              priority: ev.data?.priority, created_at: ev.data?.created_at,
+        const newEntry: PostWithCommentCount = isGuest
+          ? { id: ev.data.id ?? '', title: ev.data.title ?? '', type: ev.data.type as string ?? '',
+              status: ev.data.status as string ?? 'open', priority: ev.data.priority as string ?? 'medium',
+              created_at: ev.data.created_at as string ?? '', updated_at: '',
+              resolved_at: null, restarted_at: null, paused_at: null, extra_ms: 0,
+              channel: '', discussion_summary: null, content_summary: null,
+              consensus_summary: null, consensus_at: null, consensus_requested_at: null,
+              consensus_pending_prompt: null,
               author: 'team-member', author_display: '팀원', content: '', comment_count: 0,
-              tags: ev.data?.tags, _locked: true }
-          : { ...ev.data, comment_count: 0 };
+              tags: ev.data.tags as string ?? '[]', agent_commenters: null, _locked: true }
+          : { ...(ev.data as unknown as PostWithCommentCount), comment_count: 0 };
         setPosts(p => [newEntry, ...p]);
       }
       if (ev.type === 'new_comment') {
-        setPosts(p => p.map((post: any) => {
+        setPosts(p => p.map((post) => {
           if (post.id !== ev.post_id) return post;
-          const updated: any = { ...post, comment_count: (post.comment_count || 0) + 1 };
-          if (ev.data?.is_resolution) updated.status = 'resolved';
+          const updated: PostWithCommentCount = { ...post };
+          if (ev.data?.is_resolution) {
+            // 결의 댓글은 status만 resolved로 변경 — comment_count 카운트 제외
+            updated.status = 'resolved';
+          } else {
+            updated.comment_count = (post.comment_count || 0) + 1;
+          }
           return updated;
         }));
       }
       if (ev.type === 'post_updated') {
-        setPosts(p => p.map((post: any) =>
+        setPosts(p => p.map((post) =>
           post.id === ev.post_id ? { ...post, ...ev.data } : post
         ));
       }
       if (ev.type === 'post_deleted') {
-        setPosts(p => p.filter((post: any) => post.id !== ev.post_id));
+        setPosts(p => p.filter((post) => post.id !== ev.post_id));
       }
     });
   }, [subscribe, isGuest]);
@@ -238,11 +251,12 @@ function PostListInner({
     setLoadingMore(true);
     try {
       const res = await fetch(`/api/posts?cursor=${cursor}&limit=50`);
+      if (!res.ok) return;
       const data = await res.json();
-      const newPosts: any[] = data.posts ?? [];
+      const newPosts: PostWithCommentCount[] = data.posts ?? [];
       setPosts(prev => {
-        const ids = new Set(prev.map((p: any) => p.id));
-        return [...prev, ...newPosts.filter((p: any) => !ids.has(p.id))];
+        const ids = new Set(prev.map((p) => p.id));
+        return [...prev, ...newPosts.filter((p) => !ids.has(p.id))];
       });
       setCursor(data.nextCursor ?? null);
       setHasMore(!!data.nextCursor);
@@ -265,14 +279,14 @@ function PostListInner({
 
   // 실제 포스트에 있는 유형만 동적으로 추출 (순서: ALL_TYPE_ORDER 기준)
   const typeCounts = Object.fromEntries(
-    ALL_TYPE_ORDER.map(t => [t, posts.filter((p: any) => p.type === t).length])
+    ALL_TYPE_ORDER.map(t => [t, posts.filter((p) => p.type === t).length])
   );
   const activeTypes = ALL_TYPE_ORDER.filter(t => typeCounts[t] > 0);
 
   // Determine display list: search overrides local filtering
   const baseList = searchQuery.trim() && searchResults !== null ? searchResults : posts;
 
-  const filtered = baseList.filter((p: any) => {
+  const filtered = baseList.filter((p) => {
     if (p.type === 'report') return false;
     if (showBookmarksOnly && !bookmarks.has(p.id)) return false;
     if (searchQuery.trim()) return true; // search results already filtered server-side
@@ -298,7 +312,7 @@ function PostListInner({
   });
 
   const uniqueAuthors = useMemo(() =>
-    [...new Set(posts.map((p: any) => p.author))].filter(a => authorMeta[a as string]),
+    [...new Set(posts.map((p) => p.author))].filter(a => authorMeta[a as keyof typeof AUTHOR_META]),
     [posts, authorMeta]
   );
 
@@ -323,7 +337,7 @@ function PostListInner({
 
   // Collect all tags from posts for tag cloud
   const allTagsFull = Array.from(
-    new Set(posts.flatMap((p: any) => parseTags(p.tags)))
+    new Set(posts.flatMap((p) => parseTags(p.tags)))
   ).slice(0, 24);
 
   return (
@@ -462,7 +476,7 @@ function PostListInner({
               )}
               <select
                 value={sortBy}
-                onChange={e => { setSortBy(e.target.value as any); setVisibleCount(10); }}
+                onChange={e => { setSortBy(e.target.value as 'newest' | 'oldest' | 'comments' | 'priority'); setVisibleCount(10); }}
                 className="text-xs border border-zinc-200 rounded-xl px-2.5 py-1.5 bg-white text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all cursor-pointer"
               >
                 <option value="newest">최신순</option>
@@ -574,9 +588,9 @@ function PostListInner({
           </div>
         ) : (
           <div className="space-y-2">
-            {visible.map((post: any) => {
+            {visible.map((post) => {
               // Locked stub — guest mode, post 4+
-              if ((post as any)._locked) {
+              if (post._locked) {
                 const typeColors: Record<string, string> = {
                   decision: 'bg-blue-50 border-blue-100',
                   discussion: 'bg-indigo-50 border-indigo-100',
@@ -635,7 +649,7 @@ function PostListInner({
               const expiresAt = new Date(expiresMs).toISOString();
               const isTimedOut = post.status === 'open' && !isPaused && clockNow > expiresMs;
               // Remaining time when paused (frozen at moment of pause)
-              const pausedAtMs = isPaused ? new Date((post.paused_at as string).endsWith('Z') ? post.paused_at : post.paused_at + 'Z').getTime() : 0;
+              const pausedAtMs = isPaused ? new Date((post.paused_at! as string).endsWith('Z') ? post.paused_at! : post.paused_at! + 'Z').getTime() : 0;
               const pausedRemainMs = isPaused ? Math.max(0, expiresMs - pausedAtMs) : 0;
               const pausedRemainMin = Math.floor(pausedRemainMs / 60000);
               const pausedRemainSec = Math.floor((pausedRemainMs % 60000) / 1000);

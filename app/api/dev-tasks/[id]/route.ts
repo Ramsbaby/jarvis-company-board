@@ -2,8 +2,8 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
-import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { getRequestAuth } from '@/lib/guest-guard';
+import type { DevTask, LogEntry, AttemptHistoryEntry, TaskStatusRow } from '@/lib/types';
 
 export async function GET(
   req: NextRequest,
@@ -16,7 +16,7 @@ export async function GET(
 
   const { id } = await params;
   const db = getDb();
-  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(task);
 }
@@ -29,17 +29,14 @@ export async function PATCH(
 
   const agentKey = req.headers.get('x-agent-key');
   const isAgent = agentKey === process.env.AGENT_API_KEY;
-
-  const session = req.cookies.get(SESSION_COOKIE)?.value;
-  const password = process.env.VIEWER_PASSWORD;
-  const isOwner = !!(password && session && session === makeToken(password));
+  const { isOwner } = getRequestAuth(req);
 
   if (!isAgent && !isOwner) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const body = await req.json();
-  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty } = body;
+  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail } = body;
 
   // Agents can set operational statuses; owner can approve/reject/close
   const agentAllowed = ['pending', 'in-progress', 'done', 'failed'];
@@ -51,20 +48,24 @@ export async function PATCH(
 
   // Agent can append a single log entry without changing status
   if (log_entry && isAgent && !status) {
-    const task = db.prepare('SELECT execution_log FROM dev_tasks WHERE id = ?').get(id) as any;
-    if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const logs: any[] = JSON.parse(task.execution_log || '[]');
-    logs.push({ time: now, message: log_entry });
-    db.prepare('UPDATE dev_tasks SET execution_log = ? WHERE id = ?')
-      .run(JSON.stringify(logs), id);
-    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+    const appendLog = db.transaction(() => {
+      const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
+      if (!task) return null;
+      const logs: LogEntry[] = (() => { try { return JSON.parse(task.execution_log || '[]') as LogEntry[]; } catch { return []; } })();
+      logs.push({ time: now, message: log_entry });
+      db.prepare('UPDATE dev_tasks SET execution_log = ? WHERE id = ?')
+        .run(JSON.stringify(logs), id);
+      return db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask;
+    });
+    const updated = appendLog();
+    if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
     return NextResponse.json({ ok: true });
   }
 
   // Owner can update expected_impact/difficulty/estimated_minutes metadata
   if ((expected_impact !== undefined || difficulty !== undefined || estimated_minutes !== undefined) && !status) {
-    const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+    const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     db.prepare(`UPDATE dev_tasks SET
       expected_impact = COALESCE(?, expected_impact),
@@ -72,7 +73,7 @@ export async function PATCH(
       estimated_minutes = COALESCE(?, estimated_minutes)
       WHERE id = ?`
     ).run(expected_impact || null, difficulty || null, estimated_minutes || null, id);
-    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask;
     broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
     return NextResponse.json({ ok: true });
   }
@@ -94,7 +95,7 @@ export async function PATCH(
 
   // State machine: enforce valid transitions — wrapped in transaction to prevent races
   type TransitionResult =
-    | { ok: true; task: any }
+    | { ok: true; task: DevTask }
     | { ok: false; code: 404 | 409; error: string };
 
   const updateStatus = db.transaction((
@@ -102,7 +103,7 @@ export async function PATCH(
     newStatus: string,
     _now: string,
   ): TransitionResult => {
-    const current = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(taskId) as any;
+    const current = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(taskId) as DevTask | undefined;
     if (!current) return { ok: false, code: 404, error: 'Not found' };
 
     const allowedFrom = validTransitions[current.status] ?? [];
@@ -122,8 +123,8 @@ export async function PATCH(
     } else if (newStatus === 'in-progress') {
       db.prepare('UPDATE dev_tasks SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?').run(newStatus, _now, taskId);
     } else if (newStatus === 'done') {
-      const t = db.prepare('SELECT execution_log FROM dev_tasks WHERE id = ?').get(taskId) as any;
-      const logs: any[] = JSON.parse(t?.execution_log || '[]');
+      const t = db.prepare('SELECT execution_log FROM dev_tasks WHERE id = ?').get(taskId) as Pick<DevTask, 'execution_log'> | undefined;
+      const logs: LogEntry[] = JSON.parse(t?.execution_log || '[]') as LogEntry[];
       if (log_entry) logs.push({ time: _now, message: log_entry });
 
       db.prepare(`UPDATE dev_tasks SET
@@ -143,8 +144,8 @@ export async function PATCH(
           taskId,
       );
     } else if (newStatus === 'pending') {
-      const existingHistory: any[] = (() => { try { return JSON.parse(current.attempt_history || '[]'); } catch { return []; } })();
-      const prevLogs: any[] = (() => { try { return JSON.parse(current.execution_log || '[]'); } catch { return []; } })();
+      const existingHistory: AttemptHistoryEntry[] = (() => { try { return JSON.parse(current.attempt_history || '[]') as AttemptHistoryEntry[]; } catch { return []; } })();
+      const prevLogs: LogEntry[] = (() => { try { return JSON.parse(current.execution_log || '[]') as LogEntry[]; } catch { return []; } })();
       const historyEntry = {
         attempt: existingHistory.length + 1,
         timestamp: _now,
@@ -156,12 +157,12 @@ export async function PATCH(
         log_count: prevLogs.length,
       };
       const newHistory = JSON.stringify([...existingHistory, historyEntry]);
-      db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]', attempt_history = ? WHERE id = ?`).run(newHistory, taskId);
+      db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]', attempt_history = ?, detail = COALESCE(?, detail) WHERE id = ?`).run(newHistory, detail || null, taskId);
     } else {
       db.prepare('UPDATE dev_tasks SET status = ? WHERE id = ?').run(newStatus, taskId);
     }
 
-    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(taskId) as any;
+    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(taskId) as DevTask;
     return { ok: true, task: updated };
   });
 
@@ -194,13 +195,11 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
-  const session = req.cookies.get(SESSION_COOKIE)?.value;
-  const password = process.env.VIEWER_PASSWORD;
-  const isOwner = !!(password && session && session === makeToken(password));
+  const { isOwner } = getRequestAuth(req);
   if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getDb();
-  const task = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(id) as any;
+  const task = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(id) as TaskStatusRow | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const deletable = ['pending', 'rejected', 'failed'];

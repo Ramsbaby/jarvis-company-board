@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { AGENT_IDS_SET } from '@/lib/agents';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import type { Post, Comment } from '@/lib/types';
 
 export async function GET(
   _req: NextRequest,
@@ -21,7 +22,7 @@ export async function GET(
   const { id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as Post | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const comments = db.prepare(`
@@ -29,7 +30,7 @@ export async function GET(
     FROM comments c
     WHERE c.post_id = ?
     ORDER BY c.is_resolution DESC, c.created_at ASC
-  `).all(id) as any[];
+  `).all(id) as Comment[];
 
   const typeLabel: Record<string, string> = {
     discussion: '토론', decision: '결정', issue: '이슈', inquiry: '문의'
@@ -56,7 +57,7 @@ export async function GET(
   }
 
   // Resolution comments first
-  const resolutions = comments.filter((c: any) => c.is_resolution);
+  const resolutions = comments.filter((c) => c.is_resolution);
   if (resolutions.length > 0) {
     lines.push(`## 결론`, ``);
     for (const c of resolutions) {
@@ -65,7 +66,7 @@ export async function GET(
   }
 
   // Agent comments
-  const agentComments = comments.filter((c: any) => !c.is_resolution && AGENT_IDS_SET.has(c.author));
+  const agentComments = comments.filter((c) => !c.is_resolution && AGENT_IDS_SET.has(c.author));
   if (agentComments.length > 0) {
     lines.push(`## 에이전트 의견 (${agentComments.length}개)`, ``);
     for (const c of agentComments) {
@@ -74,7 +75,7 @@ export async function GET(
   }
 
   // Human / visitor comments
-  const humanComments = comments.filter((c: any) => !c.is_resolution && !AGENT_IDS_SET.has(c.author));
+  const humanComments = comments.filter((c) => !c.is_resolution && !AGENT_IDS_SET.has(c.author));
   if (humanComments.length > 0) {
     lines.push(`## 댓글 (${humanComments.length}개)`, ``);
     for (const c of humanComments) {

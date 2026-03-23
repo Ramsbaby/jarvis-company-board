@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
+import type { DevTask } from '@/lib/types';
 
 function TaskDetail({ task, isWaiting, onDetailUpdate }: {
   task: { id: string; title: string; detail: string };
@@ -51,27 +52,6 @@ function TaskDetail({ task, isWaiting, onDetailUpdate }: {
         : '❓ 이게 뭔 작업이야?'}
     </button>
   );
-}
-
-interface DevTask {
-  id: string;
-  title: string;
-  detail: string;
-  priority: string;
-  source: string;
-  assignee: string;
-  status: string;
-  created_at: string;
-  approved_at?: string;
-  rejected_at?: string;
-  started_at?: string;
-  completed_at?: string;
-  expected_impact?: string;
-  actual_impact?: string;
-  impact_areas?: string;
-  estimated_minutes?: number;
-  difficulty?: string;
-  post_title?: string;
 }
 
 const PRIORITY_CONFIG: Record<string, { dot: string; badge: string; label: string }> = {
@@ -245,11 +225,16 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'dev_task_updated' && ev.data?.task) {
+        const task = ev.data.task as unknown as DevTask;
         setTasks(prev => {
-          const exists = prev.some(t => t.id === ev.data.task.id);
-          if (exists) return prev.map(t => t.id === ev.data.task.id ? ev.data.task : t);
-          return [ev.data.task, ...prev];
+          const exists = prev.some(t => t.id === task.id);
+          if (exists) return prev.map(t => t.id === task.id ? task : t);
+          return [task, ...prev];
         });
+      }
+      if (ev.type === 'dev_task_deleted' && ev.data?.id) {
+        const deletedId = ev.data.id;
+        setTasks(prev => prev.filter(t => t.id !== deletedId));
       }
     });
   }, [subscribe]);
@@ -516,6 +501,19 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                       {isLoading ? (
                         <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
                       ) : '📋 검토 요청'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Delete — rejected / failed 태스크 */}
+                {(task.status === 'rejected' || task.status === 'failed') && (
+                  <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      disabled={isLoading}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                    >
+                      {isLoading ? <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin inline-block" /> : '🗑 삭제'}
                     </button>
                   </div>
                 )}

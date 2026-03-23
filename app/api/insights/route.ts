@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskInsight } from '@/lib/mask';
 import { GUEST_POLICY } from '@/lib/guest-policy';
+import type { Comment } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
@@ -20,9 +21,9 @@ export async function GET(req: NextRequest) {
   const { isGuest } = getRequestAuth(req);
 
   if (isGuest) {
-    const masked = (insights as any[]).map(maskInsight);
+    const masked = (insights as Comment[]).map(maskInsight);
     const visible = masked.slice(0, GUEST_POLICY.MAX_INSIGHTS);
-    const locked = masked.slice(GUEST_POLICY.MAX_INSIGHTS).map((ins: any) => ({
+    const locked = masked.slice(GUEST_POLICY.MAX_INSIGHTS).map((ins) => ({
       ...ins,
       content: '',
       _locked: true,

@@ -81,10 +81,10 @@ async function queryRag(query: string, timeoutMs = 8000): Promise<string> {
   });
 }
 
-async function generateTopic(db: any): Promise<{ title: string; content: string; tags: string[] }> {
+async function generateTopic(db: ReturnType<typeof import('./db').getDb>): Promise<{ title: string; content: string; tags: string[] }> {
   // ── 소스 A: 최근 8개 제목 (중복 방지) ──────────────────────────────────────
-  const recent = db.prepare('SELECT title FROM posts ORDER BY created_at DESC LIMIT 8').all() as any[];
-  const recentTitles = recent.map((r: any) => `- ${r.title}`).join('\n') || '없음';
+  const recent = db.prepare('SELECT title FROM posts ORDER BY created_at DESC LIMIT 8').all() as { title: string }[];
+  const recentTitles = recent.map((r) => `- ${r.title}`).join('\n') || '없음';
 
   // ── 소스 A+: 최근 2주 resolved 토론 컨텍스트 ────────────────────────────────
   let recentResolvedContext = '';
@@ -93,10 +93,10 @@ async function generateTopic(db: any): Promise<{ title: string; content: string;
       SELECT title, tags FROM posts
       WHERE status = 'resolved' AND created_at > datetime('now', '-14 days')
       ORDER BY created_at DESC LIMIT 5
-    `).all() as any[];
+    `).all() as { title: string; tags: string }[];
     if (recentResolved.length > 0) {
       recentResolvedContext = recentResolved
-        .map((p: any) => `- ${p.title} [${p.tags}]`)
+        .map((p) => `- ${p.title} [${p.tags}]`)
         .join('\n');
     }
   } catch {
@@ -168,7 +168,7 @@ async function tick() {
     const latest = db.prepare(`
       SELECT status, COALESCE(restarted_at, created_at) as start_time
       FROM posts ORDER BY created_at DESC LIMIT 1
-    `).get() as any;
+    `).get() as { status: string; start_time: string } | undefined;
 
     if (latest) {
       const startStr: string = latest.start_time;

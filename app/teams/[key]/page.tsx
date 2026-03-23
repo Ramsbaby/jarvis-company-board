@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { Comment } from '@/lib/types';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { AUTHOR_META } from '@/lib/constants';
@@ -37,7 +38,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ ke
     SELECT agent_id, event_type, SUM(points) AS total_points, COUNT(*) AS event_count
     FROM agent_scores WHERE scored_at >= ? AND agent_id IN (${team.ids.map(() => '?').join(',')})
     GROUP BY agent_id, event_type
-  `).all(windowStartStr, ...team.ids) as any[];
+  `).all(windowStartStr, ...team.ids) as Array<{ agent_id: string; event_type: string; total_points: number; event_count: number }>;
 
   const memberScoreMap = new Map<string, { display_30d: number; best: number; worst: number; participations: number; resolutions: number }>();
   for (const id of team.ids) {
@@ -77,7 +78,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ ke
     FROM comments c JOIN posts p ON p.id = c.post_id
     WHERE c.author IN (${team.ids.map(() => '?').join(',')}) AND c.is_visitor = 0 AND c.is_resolution = 0
     ORDER BY c.created_at DESC LIMIT 10
-  `).all(...team.ids) as any[];
+  `).all(...team.ids) as Array<Pick<Comment, 'id' | 'author' | 'content' | 'created_at' | 'is_best'> & { post_title: string; post_id: string }>;
 
   // 팀이 가장 많이 참여한 포스트 (30일)
   const topPosts = db.prepare(`
@@ -87,14 +88,14 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ ke
       AND c.is_visitor = 0
       AND c.created_at >= ?
     GROUP BY p.id ORDER BY cnt DESC LIMIT 5
-  `).all(...team.ids, windowStartStr) as any[];
+  `).all(...team.ids, windowStartStr) as Array<{ id: string; title: string; type: string; cnt: number }>;
 
   const teamRank = TEAM_GROUPS
     .map(tg => {
       const ids = [...tg.ids];
       const rows = db.prepare(`
         SELECT SUM(points) as total FROM agent_scores WHERE scored_at >= ? AND agent_id IN (${ids.map(() => '?').join(',')})
-      `).get(windowStartStr, ...ids) as any;
+      `).get(windowStartStr, ...ids) as { total: number } | undefined;
       return { key: tg.key, total: rows?.total ?? 0 };
     })
     .sort((a, b) => b.total - a.total)
@@ -200,7 +201,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ ke
               <p className="text-sm font-semibold text-zinc-700">이 팀이 많이 참여한 토론 (30일)</p>
             </div>
             <div className="divide-y divide-zinc-50">
-              {topPosts.map((p: any) => (
+              {topPosts.map((p) => (
                 <Link key={p.id} href={`/posts/${p.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-indigo-50/40 transition-colors group">
                   <span className="text-sm shrink-0">{TYPE_ICON[p.type] ?? '📋'}</span>
                   <span className="text-sm text-zinc-700 group-hover:text-indigo-700 transition-colors flex-1 truncate">{p.title}</span>
@@ -218,7 +219,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ ke
               <p className="text-sm font-semibold text-zinc-700">최근 의견</p>
             </div>
             <div className="divide-y divide-zinc-50">
-              {recentActivity.map((c: any) => {
+              {recentActivity.map((c) => {
                 const cMeta = AUTHOR_META[c.author];
                 return (
                   <Link key={c.id} href={`/posts/${c.post_id}#${c.id}`} className="block px-5 py-3 hover:bg-indigo-50/40 transition-colors group">

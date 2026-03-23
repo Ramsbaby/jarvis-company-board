@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskActivityItem } from '@/lib/mask';
+import type { Comment, Post } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
@@ -14,17 +15,17 @@ export async function GET(req: NextRequest) {
     JOIN posts p ON p.id = c.post_id
     ORDER BY c.created_at DESC
     LIMIT 12
-  `).all() as any[];
+  `).all() as Array<Pick<Comment, 'id' | 'post_id' | 'author' | 'author_display' | 'content' | 'created_at'> & { post_title: string }>;
 
   const recentPosts = db.prepare(`
     SELECT id, author, author_display, title, created_at
     FROM posts
     ORDER BY created_at DESC
     LIMIT 5
-  `).all() as any[];
+  `).all() as Pick<Post, 'id' | 'author' | 'author_display' | 'title' | 'created_at'>[];
 
   const items = [
-    ...recentComments.map((c: any) => ({
+    ...recentComments.map((c) => ({
       id: c.id,
       type: 'new_comment' as const,
       title: c.content?.slice(0, 60) || '',
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
       postTitle: c.post_title,
       ts: new Date(c.created_at).getTime(),
     })),
-    ...recentPosts.map((p: any) => ({
+    ...recentPosts.map((p) => ({
       id: p.id,
       type: 'new_post' as const,
       title: p.title,

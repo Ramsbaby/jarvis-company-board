@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
+import type { Comment } from '@/lib/types';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -36,10 +37,10 @@ export default async function BestCommentsPage() {
     WHERE c.is_best = 1 OR COALESCE(r.reaction_count, 0) >= 2
     ORDER BY c.is_best DESC, COALESCE(r.reaction_count, 0) DESC, c.created_at DESC
     LIMIT 50
-  `).all() as any[];
+  `).all() as Array<Comment & { post_title: string; post_id: string; reaction_count: number }>;
 
-  const bestCount = comments.filter((c: any) => c.is_best).length;
-  const topReactedCount = comments.filter((c: any) => !c.is_best).length;
+  const bestCount = comments.filter((c) => c.is_best).length;
+  const topReactedCount = comments.filter((c) => !c.is_best).length;
 
   return (
     <BestPageClient

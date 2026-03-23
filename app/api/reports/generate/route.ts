@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { randomUUID } from 'crypto';
+import type { DevTask, Post } from '@/lib/types';
 
 // POST /api/reports/generate
 // Protected by REPORT_SECRET query param
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     WHERE status = 'completed'
       AND updated_at >= ? AND updated_at <= ?
     ORDER BY updated_at DESC
-  `).all(periodStart, periodEnd) as any[];
+  `).all(periodStart, periodEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'updated_at'> & { team?: string }>;
 
   // 2. Collect issue posts created in period (bug signals)
   const issuesPosts = db.prepare(`
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     WHERE type = 'issue'
       AND created_at >= ? AND created_at <= ?
     ORDER BY created_at DESC
-  `).all(periodStart, periodEnd) as any[];
+  `).all(periodStart, periodEnd) as Pick<Post, 'id' | 'title' | 'content' | 'status' | 'created_at'>[];
 
   // 3. Collect resolved posts in period (decisions made)
   const resolvedPosts = db.prepare(`
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
       AND resolved_at >= ? AND resolved_at <= ?
     ORDER BY resolved_at DESC
     LIMIT 10
-  `).all(periodStart, periodEnd) as any[];
+  `).all(periodStart, periodEnd) as Pick<Post, 'id' | 'title' | 'type' | 'resolved_at'>[];
 
   // 4. Generate report with Claude Haiku
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
@@ -110,7 +111,7 @@ ${issuesList}
 
   let reportContent = '';
   if (aiRes?.ok) {
-    const aiData = await aiRes.json() as any;
+    const aiData = await aiRes.json() as { content: Array<{ text: string }> };
     reportContent = aiData?.content?.[0]?.text?.trim() ?? '';
   }
   if (!reportContent) {

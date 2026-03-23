@@ -6,6 +6,7 @@ import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
 import { callLLM, MODEL_QUALITY } from '@/lib/llm';
 import { AGENT_IDS_SET } from '@/lib/agents';
+import type { Post, Comment } from '@/lib/types';
 
 async function triggerAutoReply(
   db: ReturnType<typeof import('@/lib/db').getDb>,
@@ -22,13 +23,13 @@ async function triggerAutoReply(
 
   try {
     // 페르소나 시스템 프롬프트 조회 (personas 테이블 — Mac Mini에서 동기화)
-    const personaRow = db.prepare('SELECT system_prompt FROM personas WHERE id = ?').get(agentAuthor) as any;
+    const personaRow = db.prepare('SELECT system_prompt FROM personas WHERE id = ?').get(agentAuthor) as { system_prompt: string } | undefined;
     const systemPrompt = personaRow?.system_prompt || null;
 
-    const postData = db.prepare('SELECT title FROM posts WHERE id = ?').get(postId) as any;
+    const postData = db.prepare('SELECT title FROM posts WHERE id = ?').get(postId) as Pick<Post, 'title'> | undefined;
     const thread = db.prepare(
       'SELECT author, author_display, content FROM comments WHERE (id = ? OR parent_id = ?) AND id != ? ORDER BY created_at ASC LIMIT 10'
-    ).all(parentCommentId, parentCommentId, ownerCommentId) as any[];
+    ).all(parentCommentId, parentCommentId, ownerCommentId) as Pick<Comment, 'author' | 'author_display' | 'content'>[];
 
     const threadContext = thread
       .map(c => `[${c.author_display}]: ${c.content.slice(0, 250)}`)
@@ -76,7 +77,7 @@ ${threadContext}
         signal: AbortSignal.timeout(30000),
       });
       if (res.ok) {
-        const data = await res.json() as any;
+        const data = await res.json() as { content: Array<{ text: string }> };
         reply = data?.content?.[0]?.text?.trim() ?? null;
       } else {
         const errBody = await res.text().catch(() => '');
@@ -124,7 +125,7 @@ async function generateSummary(content: string): Promise<string | null> {
       }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as any;
+    const data = await res.json() as { content: Array<{ text: string }> };
     return data?.content?.[0]?.text?.trim() || null;
   } catch { return null; }
 }
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT id, status, paused_at FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, status, paused_at FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'status' | 'paused_at'> | undefined;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
 
   // Block agent comments when discussion is paused
@@ -156,7 +157,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (isAgent) {
     // 에이전트 댓글
-    const { author, author_display, content, is_resolution = false, parent_id = null } = await req.json();
+    const agentBody = await req.json().catch(() => null);
+    if (!agentBody) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    const { author, author_display, content, is_resolution = false, parent_id = null } = agentBody;
     if (!author || !content) return NextResponse.json({ error: 'author, content required' }, { status: 400 });
 
     // 강제마감(conclusion-pending) 또는 마감(resolved) 상태: 결의 댓글(is_resolution)만 허용
@@ -195,7 +198,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: '댓글은 팀원(에이전트) 및 대표만 작성할 수 있습니다' }, { status: 403 });
   }
 
-  const body = await req.json() as { content?: string; parent_id?: string };
+  const body = await req.json().catch(() => null) as { content?: string; parent_id?: string } | null;
+  if (!body) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   const content = (body.content ?? '').trim();
   const parent_id = body.parent_id ?? null;
   if (content.length < 5) return NextResponse.json({ error: '댓글은 5자 이상 입력해주세요' }, { status: 400 });
@@ -221,7 +225,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (parent_id && !post.paused_at && (process.env.ANTHROPIC_API_KEY || process.env.GROQ_API_KEY)) {
     const parentComment = db.prepare(
       'SELECT author, author_display FROM comments WHERE id = ?'
-    ).get(parent_id) as any;
+    ).get(parent_id) as Pick<Comment, 'author' | 'author_display'> | undefined;
 
     if (parentComment && AGENT_IDS_SET.has(parentComment.author)) {
       // Fire-and-forget: does not block response

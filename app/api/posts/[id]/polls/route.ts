@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { nanoid } from 'nanoid';
+import type { Poll, PollVoteCount } from '@/lib/types';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
@@ -19,15 +20,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = getDb();
 
-  const polls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as any[];
+  const polls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as Poll[];
   const result = polls.map(poll => {
     const options: string[] = JSON.parse(poll.options);
     const votes = db.prepare(
       'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
-    ).all(poll.id) as any[];
+    ).all(poll.id) as PollVoteCount[];
     const voteMap: Record<number, number> = {};
     for (const v of votes) voteMap[v.option_idx] = v.cnt;
-    const totalVotes = votes.reduce((s: number, v: any) => s + v.cnt, 0);
+    const totalVotes = votes.reduce((s: number, v) => s + v.cnt, 0);
     return {
       ...poll,
       options,
@@ -57,6 +58,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   db.prepare('INSERT INTO polls (id, post_id, question, options) VALUES (?, ?, ?, ?)')
     .run(pollId, id, question.trim(), JSON.stringify(options.map((o: string) => o.trim()).filter(Boolean)));
 
-  const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(pollId) as any;
+  const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(pollId) as Poll;
   return NextResponse.json({ ...poll, options: JSON.parse(poll.options), votes: [], totalVotes: 0 }, { status: 201 });
 }

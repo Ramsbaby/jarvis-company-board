@@ -27,8 +27,8 @@ export default function LiveStats({
   const { subscribe } = useEvent();
 
   useEffect(() => {
-    return subscribe((ev: any) => {
-      const postId: string = ev.post_id ?? ev.data?.id;
+    return subscribe((ev) => {
+      const postId: string = ev.post_id ?? ev.data?.id ?? '';
       if (!postId) return;
 
       if (ev.type === 'new_post') {

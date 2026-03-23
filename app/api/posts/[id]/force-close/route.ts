@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { broadcastEvent } from '@/lib/sse';
 import { nanoid } from 'nanoid';
+import type { PostStatus } from '@/lib/types';
 
 // POST /api/posts/[id]/force-close
 // Owner only: immediately close an active discussion.
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT id, status FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, status FROM posts WHERE id = ?').get(id) as PostStatus | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (post.status === 'resolved') {
     return NextResponse.json({ error: 'Already resolved' }, { status: 409 });

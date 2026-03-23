@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
 import MarkdownContent from '@/components/MarkdownContent';
+import type { DevTask } from '@/lib/types';
 
 interface SourcePost {
   id: string;
@@ -16,37 +17,6 @@ interface SourcePost {
 }
 
 interface LogEntry { time: string; message: string; }
-
-interface DevTask {
-  id: string;
-  title: string;
-  detail: string;
-  priority: string;
-  source: string;
-  assignee: string;
-  status: string;
-  created_at: string;
-  approved_at?: string;
-  rejected_at?: string;
-  started_at?: string;
-  completed_at?: string;
-  result_summary?: string;
-  changed_files?: string;
-  execution_log?: string;
-  rejection_note?: string;
-  expected_impact?: string;
-  actual_impact?: string;
-  impact_areas?: string;
-  improvement_score?: number;
-  user_visible?: string;
-  risk_reduced?: string;
-  impact_analyzed_at?: string;
-  estimated_minutes?: number;
-  difficulty?: string;
-  post_id?: string;
-  post_title?: string;
-  attempt_history?: string;
-}
 
 interface AttemptEntry {
   attempt: number;
@@ -282,7 +252,7 @@ function FollowUpTaskForm({ taskId, taskTitle, sourceId, boardUrl }: {
     setSubmitting(true);
     try {
       const newId = `followup-${taskId.slice(0, 8)}-${Date.now()}`;
-      await fetch('/api/dev-tasks', {
+      const res = await fetch('/api/dev-tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -295,10 +265,13 @@ function FollowUpTaskForm({ taskId, taskTitle, sourceId, boardUrl }: {
           priority: 'medium',
         }),
       });
+      if (!res.ok) throw new Error(`태스크 등록 실패 (${res.status})`);
       setSubmitted(true);
       setText('');
       setOpen(false);
-    } catch { /* ignore */ } finally { setSubmitting(false); }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '태스크 등록 중 오류가 발생했습니다.');
+    } finally { setSubmitting(false); }
   }
 
   if (submitted) return (
@@ -363,8 +336,8 @@ export default function TaskDetailClient({
   const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(() => {
     if (!initialTask.impact_analyzed_at) return null;
     return {
-      improvement_score: initialTask.improvement_score,
-      user_visible: initialTask.user_visible,
+      improvement_score: initialTask.improvement_score ?? undefined,
+      user_visible: initialTask.user_visible ?? undefined,
       risk_reduced: initialTask.risk_reduced ?? undefined,
       impact_analyzed_at: initialTask.impact_analyzed_at,
       cached: true,
@@ -393,7 +366,7 @@ export default function TaskDetailClient({
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'dev_task_updated' && ev.data?.task?.id === task.id) {
-        setTask(ev.data.task);
+        setTask(ev.data.task as unknown as DevTask);
         setLastUpdated(new Date());
       }
     });
@@ -480,7 +453,7 @@ export default function TaskDetailClient({
         setTask(prev => ({
           ...prev, status: 'rejected',
           rejected_at: new Date().toISOString(),
-          rejection_note: rejectNote || undefined,
+          rejection_note: rejectNote || null,
         }));
         setShowRejectForm(false);
         router.refresh();
@@ -508,10 +481,10 @@ export default function TaskDetailClient({
       if (res.ok) {
         setTask(prev => ({
           ...prev, status: 'pending',
-          rejected_at: undefined, rejection_note: undefined,
-          approved_at: undefined, started_at: undefined,
-          completed_at: undefined, result_summary: undefined,
-          changed_files: undefined, execution_log: undefined,
+          rejected_at: null, rejection_note: null,
+          approved_at: null, started_at: null,
+          completed_at: null, result_summary: null,
+          changed_files: '[]', execution_log: '[]',
         }));
         router.refresh();
       } else if (res.status === 401) {
@@ -534,21 +507,24 @@ export default function TaskDetailClient({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ status: 'pending' }),
+        body: JSON.stringify({ status: 'pending', detail: retryNote.trim() }),
       });
       if (res.ok) {
         setTask(prev => ({
           ...prev, status: 'pending',
-          rejected_at: undefined, rejection_note: undefined,
-          approved_at: undefined, started_at: undefined,
-          completed_at: undefined, result_summary: undefined,
-          changed_files: undefined, execution_log: undefined,
+          detail: retryNote.trim(),
+          rejected_at: null, rejection_note: null,
+          approved_at: null, started_at: null,
+          completed_at: null, result_summary: null,
+          changed_files: '[]', execution_log: '[]',
         }));
         setShowRetryForm(false);
         setRetryNote('');
       } else if (res.status === 401) {
         setActionError('세션이 만료되었습니다.');
         setTimeout(() => router.push('/login'), 1500);
+      } else {
+        setActionError(`재시도 요청 실패 (${res.status})`);
       }
     } catch {
       setActionError('네트워크 오류.');
@@ -648,7 +624,7 @@ export default function TaskDetailClient({
 
   async function handleCycleDifficulty() {
     const order = ['easy', 'medium', 'hard'] as const;
-    const current = task.difficulty as string | undefined;
+    const current = task.difficulty;
     const idx = order.indexOf(current as typeof order[number]);
     const next = order[(idx + 1) % order.length];
     setTask(prev => ({ ...prev, difficulty: next }));
@@ -679,9 +655,9 @@ export default function TaskDetailClient({
   const impactAreas: string[] = (() => { try { return JSON.parse(task.impact_areas || '[]'); } catch { return []; } })();
   const attemptHistory: AttemptEntry[] = (() => { try { return JSON.parse(task.attempt_history || '[]'); } catch { return []; } })();
 
-  const waitTime  = elapsed(task.created_at, task.approved_at ?? task.rejected_at);
-  const workTime  = elapsed(task.started_at, task.completed_at);
-  const totalTime = elapsed(task.created_at, task.completed_at ?? task.rejected_at);
+  const waitTime  = elapsed(task.created_at, (task.approved_at ?? task.rejected_at) ?? undefined);
+  const workTime  = elapsed(task.started_at ?? undefined, task.completed_at ?? undefined);
+  const totalTime = elapsed(task.created_at, (task.completed_at ?? task.rejected_at) ?? undefined);
   const sourcePostId = task.source?.startsWith('board:') ? task.source.replace('board:', '') : null;
 
   const cronMin = Math.floor(cronSecs / 60);
@@ -1422,7 +1398,7 @@ export default function TaskDetailClient({
                 : isDone || isLive || isFailed
                 ? '승인 완료'
                 : '승인 후 Jarvis 코드 작업이 시작됩니다'}
-              time={task.approved_at ?? task.rejected_at}
+              time={(task.approved_at ?? task.rejected_at) ?? undefined}
               elapsedLabel={waitTime && (isDone || isLive || isFailed) ? `검토 소요 ${waitTime}` : null}
               done={!isRejected && !!task.approved_at && !isApproved}
               active={isApproved} rejected={isRejected}
@@ -1443,7 +1419,7 @@ export default function TaskDetailClient({
                 : isFailed
                 ? '작업 중 오류 발생 — 재시도 가능'
                 : '승인 후 Jarvis가 자동으로 코드를 수정합니다'}
-              time={task.started_at}
+              time={task.started_at ?? undefined}
               done={isDone} active={isLive} pulse={isLive} rejected={isFailed || isRejected}
             />
 
@@ -1458,7 +1434,7 @@ export default function TaskDetailClient({
                 : isFailed
                 ? '작업 실패로 미완료 — 재시도하면 다시 시작됩니다'
                 : '코드 작업 완료 시 자동으로 기록됩니다'}
-              time={task.completed_at}
+              time={task.completed_at ?? undefined}
               elapsedLabel={workTime ? `작업 소요 ${workTime}` : null}
               done={isDone} active={false} rejected={isRejected || isFailed}
             />
@@ -1576,7 +1552,7 @@ export default function TaskDetailClient({
                 <div className="flex-1">
                   <p className="text-sm font-bold text-emerald-800">Jarvis 작업 완료</p>
                   <p className="text-xs text-emerald-600 mt-0.5">
-                    {task.started_at && task.completed_at ? `${elapsed(task.started_at, task.completed_at)} 소요` : fmt(task.completed_at)}
+                    {task.started_at && task.completed_at ? `${elapsed(task.started_at, task.completed_at)} 소요` : fmt(task.completed_at ?? undefined)}
                   </p>
                 </div>
                 {/* Link back to source post */}

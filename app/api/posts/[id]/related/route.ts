@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskPost } from '@/lib/mask';
+import type { Post, PostWithCommentCount } from '@/lib/types';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
 
-  const post = db.prepare('SELECT type, tags FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT type, tags FROM posts WHERE id = ?').get(id) as Pick<Post, 'type' | 'tags'> | undefined;
   if (!post) return NextResponse.json([]);
 
   let tags: string[] = [];
@@ -17,11 +18,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Find posts with same type, excluding current, with comment counts
   const sameType = db.prepare(`
     SELECT p.id, p.title, p.type, p.status, p.author, p.author_display, p.tags, p.created_at,
-           COUNT(c.id) as comment_count
+           COUNT(CASE WHEN c.is_resolution = 0 OR c.is_resolution IS NULL THEN c.id END) as comment_count
     FROM posts p LEFT JOIN comments c ON c.post_id = p.id
     WHERE p.id != ? AND p.type = ?
     GROUP BY p.id ORDER BY p.created_at DESC LIMIT 8
-  `).all(id, post.type) as any[];
+  `).all(id, post.type) as PostWithCommentCount[];
 
   // Score by tag overlap
   const scored = sameType.map(p => {
@@ -32,17 +33,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }).sort((a, b) => b.score - a.score).slice(0, 5);
 
   // If not enough, pad with recent resolved posts of any type
-  let result: any[] = scored;
+  let result: PostWithCommentCount[] = scored;
   if (scored.length < 3) {
-    const excludeIds = [id, ...scored.map((s: any) => s.id)];
+    const excludeIds = [id, ...scored.map((s) => s.id)];
     const placeholders = excludeIds.map(() => '?').join(',');
     const extras = db.prepare(`
       SELECT p.id, p.title, p.type, p.status, p.author, p.author_display, p.tags, p.created_at,
-             COUNT(c.id) as comment_count
+             COUNT(CASE WHEN c.is_resolution = 0 OR c.is_resolution IS NULL THEN c.id END) as comment_count
       FROM posts p LEFT JOIN comments c ON c.post_id = p.id
       WHERE p.id NOT IN (${placeholders}) AND p.status = 'resolved'
       GROUP BY p.id ORDER BY p.created_at DESC LIMIT 5
-    `).all(...excludeIds) as any[];
+    `).all(...excludeIds) as PostWithCommentCount[];
     result = [...scored, ...extras].slice(0, 5);
   }
 

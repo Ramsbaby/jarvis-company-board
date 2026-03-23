@@ -3,7 +3,33 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback } f
 import { usePathname } from 'next/navigation';
 
 type NotifPermission = 'default' | 'granted' | 'denied' | 'unsupported';
-type Listener = (ev: any) => void;
+
+export interface BoardEventData {
+  id?: string;
+  title?: string;
+  author?: string;
+  author_display?: string;
+  content?: string;
+  is_resolution?: number;
+  status?: string;
+  task?: Record<string, unknown>;
+  comment_id?: string;
+  consensus_summary?: string;
+  paused?: boolean;
+  expires_at?: string;
+  agent?: string;
+  extra_ms?: number;
+  restarted_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface BoardEvent {
+  type: string;
+  post_id?: string;
+  data?: BoardEventData;
+}
+
+export type Listener = (ev: BoardEvent) => void;
 
 interface EventContextValue {
   connected: boolean;
@@ -31,6 +57,7 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifPermission(Notification.permission as NotifPermission);
     }
   }, []);
@@ -45,6 +72,7 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
     if (shouldSkipSSE) {
       esRef.current?.close();
       esRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setConnected(false);
       return;
     }

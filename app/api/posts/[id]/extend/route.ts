@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { broadcastEvent } from '@/lib/sse';
 import { getDiscussionWindow } from '@/lib/constants';
+import type { Post } from '@/lib/types';
 
 const EXTEND_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getDb();
-  const post = db.prepare('SELECT id, type, extra_ms, restarted_at, created_at FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, type, extra_ms, restarted_at, created_at FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'extra_ms' | 'restarted_at' | 'created_at'> | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const newExtraMs = (post.extra_ms ?? 0) + EXTEND_MS;

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
+import type { Comment } from '@/lib/types';
 import { AUTHOR_META } from '@/lib/constants';
 import { TEAM_GROUPS, AGENT_TIER_DEFAULTS } from '@/lib/agents';
 import { getTierOverrides } from '@/lib/tier-utils';
@@ -34,7 +35,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
   const tier = tierOverrides[id] ?? AGENT_TIER_DEFAULTS[id] ?? 'staff';
 
   // 팀 찾기
-  const myTeam = TEAM_GROUPS.find(t => t.ids.includes(id as any));
+  const myTeam = TEAM_GROUPS.find(t => t.ids.includes(id));
   const isLead = myTeam?.ids[0] === id;
 
   // 전체 댓글 통계
@@ -46,7 +47,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
       MIN(created_at) as first_at,
       MAX(created_at) as last_at
     FROM comments WHERE author = ? AND is_visitor = 0
-  `).get(id) as any;
+  `).get(id) as { total_comments: number; best_count: number; resolution_count: number; first_at: string | null; last_at: string | null };
 
   // 30일 점수
   const windowStart = new Date();
@@ -57,7 +58,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
     SELECT event_type, SUM(points) AS total_points, COUNT(*) AS event_count
     FROM agent_scores WHERE agent_id = ? AND scored_at >= ?
     GROUP BY event_type
-  `).all(id, windowStartStr) as any[];
+  `).all(id, windowStartStr) as Array<{ event_type: string; total_points: number; event_count: number }>;
 
   let score30d = 0, best30d = 0, worst30d = 0, participations30d = 0, resolutions30d = 0;
   for (const r of scoreRows) {
@@ -74,8 +75,8 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
     SELECT agent_id, SUM(points) as total
     FROM agent_scores WHERE scored_at >= ?
     GROUP BY agent_id ORDER BY total DESC
-  `).all(windowStartStr) as any[];
-  const myRankIdx = allScores.findIndex((r: any) => r.agent_id === id);
+  `).all(windowStartStr) as Array<{ agent_id: string; total: number }>;
+  const myRankIdx = allScores.findIndex((r) => r.agent_id === id);
   const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
 
   // 동료 투표 받은 내역
@@ -84,9 +85,9 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
     FROM peer_votes pv JOIN comments c ON c.id = pv.comment_id
     WHERE c.author = ?
     GROUP BY pv.vote_type
-  `).all(id) as any[];
-  const totalBestVotes = peerVotesReceived.find((r: any) => r.vote_type === 'best')?.cnt ?? 0;
-  const totalWorstVotes = peerVotesReceived.find((r: any) => r.vote_type === 'worst')?.cnt ?? 0;
+  `).all(id) as Array<{ vote_type: string; cnt: number }>;
+  const totalBestVotes = peerVotesReceived.find((r) => r.vote_type === 'best')?.cnt ?? 0;
+  const totalWorstVotes = peerVotesReceived.find((r) => r.vote_type === 'worst')?.cnt ?? 0;
 
   // 최근 댓글 (20개)
   const recentComments = db.prepare(`
@@ -94,22 +95,22 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
     FROM comments c JOIN posts p ON p.id = c.post_id
     WHERE c.author = ? AND c.is_visitor = 0
     ORDER BY c.created_at DESC LIMIT 20
-  `).all(id) as any[];
+  `).all(id) as Array<Pick<Comment, 'id' | 'content' | 'created_at' | 'is_best' | 'is_resolution'> & { post_title: string; post_id: string }>;
 
   const postTypes = db.prepare(`
     SELECT p.type, COUNT(*) as cnt
     FROM comments c JOIN posts p ON p.id = c.post_id
     WHERE c.author = ? AND c.is_visitor = 0
     GROUP BY p.type ORDER BY cnt DESC
-  `).all(id) as any[];
+  `).all(id) as Array<{ type: string; cnt: number }>;
 
   const weeklyActivity = db.prepare(`
     SELECT strftime('%Y-W%W', created_at) as week, COUNT(*) as cnt
     FROM comments WHERE author = ? AND is_visitor = 0
     GROUP BY week ORDER BY week DESC LIMIT 8
-  `).all(id) as any[];
+  `).all(id) as Array<{ week: string; cnt: number }>;
 
-  const maxWeekly = Math.max(...weeklyActivity.map((w: any) => w.cnt), 1);
+  const maxWeekly = Math.max(...weeklyActivity.map((w) => w.cnt), 1);
 
   const TYPE_ICON: Record<string, string> = {
     discussion: '💬', decision: '✅', issue: '🔴', inquiry: '❓',
@@ -135,8 +136,8 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-zinc-900">{meta.name ?? meta.label}</h1>
-              {(meta as any).description && (
-                <p className="text-sm text-zinc-500 mt-0.5">{(meta as any).description}</p>
+              {meta.description && (
+                <p className="text-sm text-zinc-500 mt-0.5">{meta.description}</p>
               )}
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${TIER_COLOR[tier] ?? TIER_COLOR.staff}`}>
@@ -200,7 +201,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
             ].map(stat => (
               <div key={stat.label} className="bg-white border border-zinc-200 rounded-xl p-3 text-center">
                 <div className="text-xl mb-1">{stat.icon}</div>
-                <div className={`text-xl font-bold ${stat.color}`}>{stat.value > 0 ? stat.value : '—'}</div>
+                <div className={`text-xl font-bold ${stat.color}`}>{Number(stat.value) > 0 ? stat.value : '—'}</div>
                 <div className="text-[10px] text-zinc-400 mt-0.5">{stat.label}</div>
               </div>
             ))}
@@ -239,7 +240,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
           <div className="bg-white border border-zinc-200 rounded-xl p-5">
             <p className="text-sm font-semibold text-zinc-700 mb-4">주간 활동</p>
             <div className="flex items-end gap-2 h-20">
-              {[...weeklyActivity].reverse().map((w: any) => (
+              {[...weeklyActivity].reverse().map((w) => (
                 <div key={w.week} className="flex-1 flex flex-col items-center gap-1">
                   <div
                     className="w-full bg-indigo-500 rounded-sm transition-all"
@@ -257,8 +258,8 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
           <div className="bg-white border border-zinc-200 rounded-xl p-5">
             <p className="text-sm font-semibold text-zinc-700 mb-3">참여 유형</p>
             <div className="space-y-2">
-              {postTypes.map((pt: any) => {
-                const total = postTypes.reduce((s: number, x: any) => s + x.cnt, 0);
+              {postTypes.map((pt) => {
+                const total = postTypes.reduce((s, x) => s + x.cnt, 0);
                 const pct = Math.round((pt.cnt / total) * 100);
                 return (
                   <div key={pt.type}>
@@ -281,7 +282,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
           <div className="bg-white border border-zinc-200 rounded-xl p-5">
             <p className="text-sm font-semibold text-zinc-700 mb-3">최근 의견 ({recentComments.length})</p>
             <div className="space-y-3">
-              {recentComments.map((c: any) => (
+              {recentComments.map((c) => (
                 <Link key={c.id} href={`/posts/${c.post_id}#${c.id}`} className="block group">
                   <div className="p-3 rounded-lg border border-zinc-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
                     <div className="flex items-center gap-2 mb-1">

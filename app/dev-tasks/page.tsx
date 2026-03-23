@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import type { DevTask } from '@/lib/types';
 import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
 import Link from 'next/link';
@@ -28,7 +29,7 @@ export default async function DevTasksPage() {
       END,
       CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       created_at DESC`
-  ).all() as any[];
+  ).all() as DevTask[];
 
   return (
     <div className="bg-zinc-50 min-h-screen">

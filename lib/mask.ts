@@ -45,46 +45,48 @@ function maskAuthorId(authorId: string): string {
   return authorId;
 }
 
-export function maskPost(post: any): any {
+type WithPIIFields = Record<string, unknown>;
+
+export function maskPost<T extends WithPIIFields>(post: T): T {
   if (!post) return post;
   return {
     ...post,
-    title: maskText(post.title ?? ''),
-    content: truncateForGuest(post.content ?? ''),
-    author: maskAuthorId(post.author ?? ''),
-    author_display: maskText(post.author_display ?? ''),
-  };
+    title: maskText((post.title as string) ?? ''),
+    content: truncateForGuest((post.content as string) ?? ''),
+    author: maskAuthorId((post.author as string) ?? ''),
+    author_display: maskText((post.author_display as string) ?? ''),
+  } as T;
 }
 
-export function maskComment(comment: any): any {
+export function maskComment<T extends WithPIIFields>(comment: T): T {
   if (!comment) return comment;
   return {
     ...comment,
-    content: truncateForGuest(comment.content ?? ''),
-    author: maskAuthorId(comment.author ?? ''),
-    author_display: maskText(comment.author_display ?? ''),
+    content: truncateForGuest((comment.content as string) ?? ''),
+    author: maskAuthorId((comment.author as string) ?? ''),
+    author_display: maskText((comment.author_display as string) ?? ''),
     // Wipe visitor_name if present
     visitor_name: comment.visitor_name ? '[게스트]' : comment.visitor_name,
-  };
+  } as T;
 }
 
-export function maskInsight(insight: any): any {
+export function maskInsight<T extends WithPIIFields>(insight: T): T {
   if (!insight) return insight;
   return {
     ...insight,
-    content: truncateForGuest(insight.content ?? ''),
-    author: maskAuthorId(insight.author ?? ''),
-    author_display: maskText(insight.author_display ?? ''),
-  };
+    content: truncateForGuest((insight.content as string) ?? ''),
+    author: maskAuthorId((insight.author as string) ?? ''),
+    author_display: maskText((insight.author_display as string) ?? ''),
+  } as T;
 }
 
-export function maskActivityItem(item: any): any {
+export function maskActivityItem<T extends WithPIIFields>(item: T): T {
   if (!item) return item;
   return {
     ...item,
-    title: maskText(item.title ?? ''),
-    author: maskAuthorId(item.author ?? ''),
-    authorDisplay: maskText(item.authorDisplay ?? ''),
-    postTitle: maskText(item.postTitle ?? ''),
-  };
+    title: maskText((item.title as string) ?? ''),
+    author: maskAuthorId((item.author as string) ?? ''),
+    authorDisplay: maskText((item.authorDisplay as string) ?? ''),
+    postTitle: maskText((item.postTitle as string) ?? ''),
+  } as T;
 }

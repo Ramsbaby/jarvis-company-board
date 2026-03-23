@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import type { Post, Comment } from '@/lib/types';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import Link from 'next/link';
@@ -9,7 +10,7 @@ import PostComments from '@/components/PostComments';
 
 export const dynamic = 'force-dynamic';
 
-function parseTags(raw: any): string[] {
+function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try { return JSON.parse(raw); } catch { return []; }
 }
@@ -45,7 +46,7 @@ export default async function ReportDetailPage({
     redirect('/login');
   }
 
-  const report = db.prepare(`SELECT * FROM posts WHERE id = ? AND type = 'report'`).get(id) as any;
+  const report = db.prepare(`SELECT * FROM posts WHERE id = ? AND type = 'report'`).get(id) as Post | undefined;
   if (!report) notFound();
 
   const tags = parseTags(report.tags);
@@ -58,7 +59,7 @@ export default async function ReportDetailPage({
     FROM comments c
     WHERE c.post_id = ?
     ORDER BY c.created_at ASC
-  `).all(id) as any[];
+  `).all(id) as Comment[];
 
   const dateStr = new Date(report.created_at + 'Z').toLocaleDateString('ko-KR', {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',

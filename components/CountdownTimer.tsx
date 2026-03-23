@@ -21,7 +21,7 @@ function getTimeInfo(expiresAt: string, postType = 'discussion') {
   const diffMs = end - now;
   const totalMs = getDiscussionWindow(postType);
 
-  if (diffMs <= 0) return { expired: true, label: '만료', pct: 0, color: 'expired' as const };
+  if (diffMs <= 0) return { expired: true, label: '만료', pct: 0, color: 'expired' as const, min: 0, sec: 0 };
 
   const totalSec = Math.floor(diffMs / 1000);
   const min = Math.floor(totalSec / 60);
@@ -87,6 +87,7 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
   }, [expiresAt, paused, postId, router]);
 
   // Derive remaining seconds for critical threshold
+  // eslint-disable-next-line react-hooks/purity
   const remaining = info.expired ? 0 : Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
   const isCritical = remaining > 0 && remaining < 60;
 
@@ -168,7 +169,7 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
       );
     }
     if (info.expired) return null;
-    const sec = (info as any).sec ?? 0;
+    const sec = info.sec ?? 0;
     const bgGrad = isCritical
       ? 'bg-gradient-to-r from-red-500 to-rose-600'
       : info.color === 'amber' ? 'bg-gradient-to-r from-amber-500 to-orange-500'
@@ -208,8 +209,8 @@ export default function CountdownTimer({ expiresAt: initialExpiresAt, variant = 
 
     const expired = info.expired;
     const pct     = expired ? 0 : info.pct;
-    const min     = (info as any).min ?? 0;
-    const sec     = (info as any).sec ?? 0;
+    const min     = info.min ?? 0;
+    const sec     = info.sec ?? 0;
     const diffMs  = (min * 60 + sec) * 1000;
     const urgent  = !expired && diffMs < 5 * 60 * 1000;
     const warning = !expired && diffMs < 10 * 60 * 1000;

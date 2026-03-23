@@ -2,10 +2,11 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { callLLM, LLMError } from '@/lib/llm';
+import type { DevTask, LogEntry } from '@/lib/types';
 
 const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-function buildCachedResponse(task: any) {
+function buildCachedResponse(task: DevTask) {
   return {
     one_line: task.actual_impact?.split('\n')[0] ?? '',
     actual_impact: task.actual_impact ?? '',
@@ -24,7 +25,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const db = getDb();
-  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!task.impact_analyzed_at) return NextResponse.json({ cached: false }, { status: 204 });
   return NextResponse.json(buildCachedResponse(task));
@@ -37,7 +38,7 @@ export async function POST(
   const { id } = await params;
   const db = getDb();
 
-  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as any;
+  const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (task.status !== 'done') return NextResponse.json({ error: '완료된 태스크만 분석 가능합니다' }, { status: 400 });
 
@@ -50,8 +51,8 @@ export async function POST(
   }
 
   const changedFiles: string[] = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
-  const logs: any[] = (() => { try { return JSON.parse(task.execution_log || '[]'); } catch { return []; } })();
-  const lastLogs = logs.slice(-10).map((l: any) => l.message).join('\n');
+  const logs: LogEntry[] = (() => { try { return JSON.parse(task.execution_log || '[]') as LogEntry[]; } catch { return []; } })();
+  const lastLogs = logs.slice(-10).map((l) => l.message).join('\n');
 
   const prompt = `다음 자동화 개발 작업의 결과를 분석해서 임팩트 리포트를 작성해주세요.
 
@@ -75,7 +76,7 @@ ${lastLogs || '없음'}
 
   try {
     const text = await callLLM(prompt, { maxTokens: 600, timeoutMs: 20000 });
-    let parsed: any = {};
+    let parsed: { one_line?: string; actual_impact?: string; impact_areas?: string[]; improvement_score?: number; user_visible?: boolean | null; risk_reduced?: string | null } = {};
     try { parsed = JSON.parse(text); } catch { parsed = { one_line: text.slice(0, 100), actual_impact: text }; }
 
     const actualImpactText = parsed.actual_impact || parsed.one_line || '';
@@ -90,7 +91,7 @@ ${lastLogs || '없음'}
     ).run(actualImpactText, impactAreasJson, improvementScore, userVisible, riskReduced, analyzedAt, id);
 
     return NextResponse.json({ ...parsed, impact_analyzed_at: analyzedAt, saved: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof LLMError && err.isTimeout) {
       return NextResponse.json({ error: 'Timeout' }, { status: 504 });
     }

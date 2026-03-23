@@ -2,28 +2,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useEvent } from '@/contexts/EventContext';
+import type { DevTask } from '@/lib/types';
 
-interface DevTask {
-  id: string;
-  title: string;
-  detail: string;
-  priority: string;
-  source: string;
-  assignee: string;
-  status: string;
-  created_at: string;
-  approved_at?: string;
-  started_at?: string;
-  completed_at?: string;
-  rejected_at?: string;
-  result_summary?: string;
-  execution_log?: string;
-  expected_impact?: string;
-  actual_impact?: string;
-  impact_areas?: string;
-  estimated_minutes?: number;
-  difficulty?: string;
-}
+interface LogEntry { time: string; message: string; }
 
 const PRIORITY_DOT: Record<string, string> = {
   urgent: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-blue-400', low: 'bg-zinc-300',
@@ -91,7 +72,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
 
   useEffect(() => {
     fetch('/api/dev-tasks', { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => { setTasks(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
@@ -99,10 +80,11 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
   useEffect(() => {
     return subscribe((ev) => {
       if (ev.type === 'dev_task_updated' && ev.data?.task) {
+        const task = ev.data.task as unknown as DevTask;
         setTasks(prev => {
-          const exists = prev.some(t => t.id === ev.data.task.id);
-          if (exists) return prev.map(t => t.id === ev.data.task.id ? ev.data.task : t);
-          return [ev.data.task, ...prev];
+          const exists = prev.some(t => t.id === task.id);
+          if (exists) return prev.map(t => t.id === task.id ? task : t);
+          return [task, ...prev];
         });
       }
     });
@@ -317,8 +299,8 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
 
           {activeFilter === 'in-progress' && filteredTasks.map(task => {
             const isExp = expandedId === task.id;
-            let logEntries: any[] = [];
-            try { logEntries = JSON.parse(task.execution_log || '[]'); } catch {}
+            let logEntries: LogEntry[] = [];
+            try { logEntries = JSON.parse(task.execution_log || '[]') as LogEntry[]; } catch {}
             const lastLog = logEntries[logEntries.length - 1];
             const showRemaining = !!(task.estimated_minutes && task.started_at);
             const remaining = showRemaining ? calcRemaining(task.started_at!, task.estimated_minutes!) : 0;
@@ -366,7 +348,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
                     )}
                     {logEntries.length > 0 && (
                       <div className="bg-zinc-900 rounded-lg p-2.5 space-y-1 max-h-24 overflow-y-auto">
-                        {logEntries.slice(-4).map((entry: any, i: number) => (
+                        {logEntries.slice(-4).map((entry, i) => (
                           <p key={i} className="text-[10px] text-emerald-400 font-mono leading-snug">
                             <span className="text-zinc-500 mr-1.5">{entry.time?.slice(11, 16)}</span>
                             {entry.message}

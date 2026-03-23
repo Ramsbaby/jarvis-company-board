@@ -28,7 +28,7 @@ interface Draft {
 
 interface Props {
   onClose: () => void;
-  onCreated: (post: any) => void;
+  onCreated: (post: Record<string, unknown>) => void;
 }
 
 export default function WritePostModal({ onClose, onCreated }: Props) {
@@ -109,10 +109,11 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, content, type }),
       });
+      if (!res.ok) return;
       const data = await res.json();
       setSuggestedTags(data.tags || []);
     } catch {
-      /* ignore */
+      /* network error — silently ignore for non-critical tag suggestion */
     } finally {
       setLoadingSuggestions(false);
     }
@@ -126,6 +127,7 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
       const res = await fetch('/api/posts/owner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           title: title.trim(),
           type,
@@ -139,8 +141,8 @@ export default function WritePostModal({ onClose, onCreated }: Props) {
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       onCreated(post);
       onClose();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError((e as Error).message);
     } finally {
       setLoading(false);
     }

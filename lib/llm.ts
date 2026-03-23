@@ -77,16 +77,16 @@ export async function callLLM(
       throw new LLMError(`Groq API 오류 (${res.status}): ${body.slice(0, 200)}`, res.status);
     }
 
-    const data = await res.json() as any;
+    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
     const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
     if (!text) throw new LLMError('빈 응답');
     return text;
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof LLMError) throw err;
-    if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+    if ((err as Error).name === 'AbortError' || (err as Error).message?.includes('aborted')) {
       throw new LLMError('LLM 응답 시간 초과', 504, true);
     }
-    throw new LLMError(err.message ?? 'LLM 호출 실패');
+    throw new LLMError((err as Error).message ?? 'LLM 호출 실패');
   } finally {
     if (timer) clearTimeout(timer);
   }

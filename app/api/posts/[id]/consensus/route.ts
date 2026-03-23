@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
+import type { Post, Comment } from '@/lib/types';
 
 export const SYSTEM_PROMPT = `당신은 자비스 컴퍼니 이사회 수석 결의 담당자입니다.
 
@@ -81,7 +82,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const db = getDb();
-  const row = db.prepare('SELECT consensus_summary, consensus_at, consensus_requested_at, consensus_pending_prompt FROM posts WHERE id = ?').get(id) as any;
+  const row = db.prepare('SELECT consensus_summary, consensus_at, consensus_requested_at, consensus_pending_prompt FROM posts WHERE id = ?').get(id) as Pick<Post, 'consensus_summary' | 'consensus_at' | 'consensus_requested_at' | 'consensus_pending_prompt'> | undefined;
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const pending = !!(row.consensus_requested_at && !row.consensus_summary);
 
@@ -119,12 +120,13 @@ export async function POST(
 
   const { id } = await params;
   const db = getDb();
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as Post | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // If agent is submitting results (x-agent-key + body has consensus field)
   if (isAgent) {
-    const body = await _req.json().catch(() => ({})) as any;
+    const body = await _req.json().catch(() => null) as { consensus?: string } | null;
+    if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     if (body.consensus) {
       const now = new Date().toISOString();
       db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ?, consensus_requested_at = NULL, consensus_pending_prompt = NULL WHERE id = ?')
@@ -138,17 +140,17 @@ export async function POST(
     SELECT author, author_display, content, is_visitor FROM comments
     WHERE post_id = ? AND (is_resolution IS NULL OR is_resolution = 0)
     ORDER BY created_at ASC
-  `).all(id) as any[];
+  `).all(id) as Pick<Comment, 'author' | 'author_display' | 'content' | 'is_visitor'>[];
 
   if (allComments.length === 0) {
     return NextResponse.json({ error: '분석할 의견이 없습니다' }, { status: 400 });
   }
 
-  const agentComments = allComments.filter((c: any) => !c.is_visitor);
-  const visitorComments = allComments.filter((c: any) => c.is_visitor);
-  const agentText = agentComments.map((c: any) => `[${c.author_display || c.author}]: ${c.content}`).join('\n\n');
+  const agentComments = allComments.filter((c) => !c.is_visitor);
+  const visitorComments = allComments.filter((c) => c.is_visitor);
+  const agentText = agentComments.map((c) => `[${c.author_display || c.author}]: ${c.content}`).join('\n\n');
   const visitorSection = visitorComments.length > 0
-    ? `\n\n### 방문자/외부 의견 (${visitorComments.length}건)\n${visitorComments.map((c: any) => `[${c.author_display || c.author}]: ${c.content}`).join('\n\n')}`
+    ? `\n\n### 방문자/외부 의견 (${visitorComments.length}건)\n${visitorComments.map((c) => `[${c.author_display || c.author}]: ${c.content}`).join('\n\n')}`
     : '';
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
   const userPrompt = `## 토론 정보\n제목: ${post.title}\n유형: ${post.type ?? 'discussion'}\n날짜: ${today}\n총 의견 수: ${allComments.length}개 (에이전트 ${agentComments.length}명, 방문자 ${visitorComments.length}명)\n\n## 팀 에이전트 의견 (${agentComments.length}건)\n${agentText || '(에이전트 의견 없음)'}${visitorSection}\n\n---\n위 토론의 모든 의견을 종합하여 이사회 최종 결의안을 작성해주세요.\n지정된 마크다운 형식을 정확히 따르고, 모호한 표현 없이 실행 가능한 수준으로 작성하세요.`;

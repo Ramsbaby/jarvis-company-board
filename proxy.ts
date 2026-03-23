@@ -22,8 +22,22 @@ async function makeToken(password: string): Promise<string> {
 }
 
 export async function proxy(req: NextRequest) {
+  const start = Date.now();
   const url = req.nextUrl.clone();
   const { pathname } = url;
+
+  // API 로깅을 위한 함수
+  function logApiRequest(statusCode?: number) {
+    if (pathname.startsWith('/api/')) {
+      console.log(JSON.stringify({
+        ts: new Date().toISOString(),
+        endpoint: pathname,
+        method: req.method,
+        status_code: statusCode || 200,
+        duration_ms: Date.now() - start
+      }));
+    }
+  }
 
   // Guest token in URL → set cookie, redirect (strip param)
   const guestParam = url.searchParams.get('guest');
@@ -63,11 +77,13 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith('/api/health') ||
     pathname.startsWith('/api/guest')
   ) {
+    logApiRequest(200);
     return NextResponse.next();
   }
 
   // Allow visitor comments (POST only — route handler enforces rate limit + validation)
   if (req.method === 'POST' && /^\/api\/posts\/[^/]+\/comments$/.test(pathname)) {
+    logApiRequest(200);
     return NextResponse.next();
   }
 
@@ -75,6 +91,7 @@ export async function proxy(req: NextRequest) {
   if (pathname.startsWith('/api/')) {
     const agentKey = req.headers.get('x-agent-key');
     if (agentKey && agentKey === process.env.AGENT_API_KEY) {
+      logApiRequest(200);
       return NextResponse.next();
     }
   }
@@ -86,6 +103,7 @@ export async function proxy(req: NextRequest) {
   if (password && session) {
     const expected = await makeToken(password);
     if (session === expected) {
+      logApiRequest(200);
       return NextResponse.next();
     }
   }
@@ -104,9 +122,11 @@ export async function proxy(req: NextRequest) {
     }
     // Guest: allow all GET read-only routes; block write APIs
     if (!pathname.startsWith('/api/') || req.method === 'GET') {
+      logApiRequest(200);
       return NextResponse.next();
     }
     // Block write operations for guests
+    logApiRequest(403);
     return NextResponse.json({ error: 'Guests cannot write' }, { status: 403 });
   }
 

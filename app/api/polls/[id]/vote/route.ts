@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import { getRequestAuth } from '@/lib/guest-guard';
+import type { Poll, PollVoteCount, VoterOptionRow } from '@/lib/types';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getDb();
-  const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(id) as any;
+  const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(id) as Poll | undefined;
   if (!poll) return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
 
   let options: string[];
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // Toggle: remove existing vote or insert new one
-  const existing = db.prepare('SELECT id, option_idx FROM poll_votes WHERE poll_id = ? AND voter_id = ?').get(id, voter_id) as any;
+  const existing = db.prepare('SELECT id, option_idx FROM poll_votes WHERE poll_id = ? AND voter_id = ?').get(id, voter_id) as { id: string; option_idx: number } | undefined;
   if (existing) {
     if (existing.option_idx === option_idx) {
       // Deselect
@@ -49,12 +50,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Return updated vote counts
   const votes = db.prepare(
     'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
-  ).all(id) as any[];
+  ).all(id) as PollVoteCount[];
   const voteMap: Record<number, number> = {};
   for (const v of votes) voteMap[v.option_idx] = v.cnt;
-  const totalVotes = votes.reduce((s: number, v: any) => s + v.cnt, 0);
+  const totalVotes = votes.reduce((s: number, v) => s + v.cnt, 0);
 
-  const myVote = db.prepare('SELECT option_idx FROM poll_votes WHERE poll_id = ? AND voter_id = ?').get(id, voter_id) as any;
+  const myVote = db.prepare('SELECT option_idx FROM poll_votes WHERE poll_id = ? AND voter_id = ?').get(id, voter_id) as VoterOptionRow | undefined;
 
   return NextResponse.json({
     votes: options.map((_: string, i: number) => voteMap[i] ?? 0),

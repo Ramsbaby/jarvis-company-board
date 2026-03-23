@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import DOMPurify from 'isomorphic-dompurify';
+import type { ExtraProps } from 'react-markdown';
+import type { Element } from 'hast';
 
 interface MarkdownContentProps {
   content: string;
@@ -142,11 +144,11 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
         remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
         rehypePlugins={[rehypeHighlight]}
         components={{
-          blockquote({ node, children }: any) {
+          blockquote({ node, children }: React.ComponentPropsWithoutRef<'blockquote'> & ExtraProps) {
             // Detect Obsidian callout via first child text
-            const firstPara = node?.children?.find(
-              (n: any) => n.type === 'element' && n.tagName === 'p',
-            );
+            const firstPara = (node as Element | undefined)?.children?.find(
+              (n) => (n as Element).type === 'element' && (n as Element).tagName === 'p',
+            ) as Element | undefined;
             const firstTextNode = firstPara?.children?.[0];
             const firstText = firstTextNode?.type === 'text' ? firstTextNode.value : '';
             const match = firstText.match(/^\[!(\w+)\](?:\s+(.+))?/);
@@ -173,7 +175,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
               </blockquote>
             );
           },
-          code({ node, className: cls, children, ...props }: any) {
+          code({ node: _node, className: cls, children, ...props }: React.ComponentPropsWithoutRef<'code'> & ExtraProps) {
             const match = /language-(\w+)/.exec(cls || '');
             const lang = match?.[1] || '';
             const codeString = String(children).replace(/\n$/, '');
@@ -198,7 +200,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
               </div>
             );
           },
-          img({ src, alt, ...props }: any) {
+          img({ src, alt, ...props }: React.ComponentPropsWithoutRef<'img'> & ExtraProps) {
             return (
               <img
                 src={src}
@@ -209,7 +211,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
               />
             );
           },
-          a({ href, children, ...props }: any) {
+          a({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'> & ExtraProps) {
             const isExternal = href?.startsWith('http');
             return (
               <a
@@ -223,7 +225,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
               </a>
             );
           },
-          table({ children, ...props }: any) {
+          table({ children, ...props }: React.ComponentPropsWithoutRef<'table'> & ExtraProps) {
             return (
               <div className="overflow-x-auto my-3">
                 <table className="min-w-full" {...props}>{children}</table>

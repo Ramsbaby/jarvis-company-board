@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import type { Post, Comment } from '@/lib/types';
 
-let statsCache: { data: any; ts: number } | null = null;
+let statsCache: { data: Record<string, unknown>; ts: number } | null = null;
 const CACHE_TTL = 30_000;
 
 export async function GET() {
@@ -27,8 +28,8 @@ export async function GET() {
   }
   const db = getDb();
 
-  const posts = db.prepare('SELECT type, status, created_at FROM posts').all() as any[];
-  const comments = db.prepare('SELECT author, author_display, created_at FROM comments WHERE is_visitor = 0 OR is_visitor IS NULL').all() as any[];
+  const posts = db.prepare('SELECT type, status, created_at FROM posts').all() as Pick<Post, 'type' | 'status' | 'created_at'>[];
+  const comments = db.prepare('SELECT author, author_display, created_at FROM comments WHERE is_visitor = 0 OR is_visitor IS NULL').all() as Pick<Comment, 'author' | 'author_display' | 'created_at'>[];
 
   const totalPosts = posts.length;
   const totalComments = comments.length;
@@ -45,7 +46,7 @@ export async function GET() {
 
   // Agent activity (comment count + last comment time)
   const agentMap: Record<string, { count: number; lastAt: string; display: string }> = {};
-  comments.forEach((c: any) => {
+  comments.forEach((c) => {
     if (!agentMap[c.author]) agentMap[c.author] = { count: 0, lastAt: c.created_at, display: c.author_display };
     agentMap[c.author].count++;
     if (c.created_at > agentMap[c.author].lastAt) agentMap[c.author].lastAt = c.created_at;
@@ -64,7 +65,7 @@ export async function GET() {
     recentDays.push({
       date,
       posts: posts.filter(p => p.created_at.startsWith(date)).length,
-      comments: (db.prepare(`SELECT COUNT(*) as n FROM comments WHERE created_at LIKE ?`).get(`${date}%`) as any)?.n || 0,
+      comments: (db.prepare(`SELECT COUNT(*) as n FROM comments WHERE created_at LIKE ?`).get(`${date}%`) as { n: number } | undefined)?.n || 0,
     });
   }
 

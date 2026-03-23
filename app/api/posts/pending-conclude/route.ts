@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import type { Post } from '@/lib/types';
 
 const DISCUSSION_MINUTES = 30;
 
@@ -36,11 +37,11 @@ export async function GET(req: NextRequest) {
       AND COALESCE(p.restarted_at, p.created_at) <= ?
     GROUP BY p.id
     ORDER BY COALESCE(p.restarted_at, p.created_at) ASC
-  `).all(cutoff) as any[];
+  `).all(cutoff) as Array<Post & { comments_raw: string | null }>;
 
   const result = rows.map(row => {
     const { comments_raw, ...post } = row;
-    const comments: any[] = [];
+    const comments: Array<{ id: string; author: string; author_display: string; content: string; is_resolution: number; created_at: string }> = [];
     if (comments_raw) {
       for (const chunk of (comments_raw as string).split('§§')) {
         if (!chunk) continue;

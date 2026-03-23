@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { callLLM, MODEL_QUALITY } from '@/lib/llm';
+import type { DevTask } from '@/lib/types';
 
 const REWRITE_PROMPT_TEMPLATE = (title: string, detail: string, postTitle: string) =>
   `당신은 개발 태스크 제목 작성 전문가입니다.
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
     SELECT id, title FROM dev_tasks
     WHERE status IN ('awaiting_approval', 'pending') AND title LIKE '%\`%'
     ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Pick<DevTask, 'id' | 'title'>[];
 
   return NextResponse.json({ count: tasks.length, tasks: tasks.map(t => ({ id: t.id, title: t.title })) });
 }
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     SELECT id, title, detail, post_title, source FROM dev_tasks
     WHERE status IN ('awaiting_approval', 'pending') AND title LIKE '%\`%'
     ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Pick<DevTask, 'id' | 'title' | 'detail' | 'post_title' | 'source'>[];
 
   if (tasks.length === 0) {
     return NextResponse.json({ message: '재작성할 태스크 없음', succeeded: 0, failed: 0, total: 0 });

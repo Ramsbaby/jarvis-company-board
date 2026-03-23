@@ -5,20 +5,9 @@ import Link from 'next/link';
 import { timeAgo } from '@/lib/utils';
 import { AUTHOR_META } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
+import type { Comment } from '@/lib/types';
 
-interface BestComment {
-  id: string;
-  content: string;
-  author: string;
-  author_display: string;
-  created_at: string;
-  post_title: string;
-  post_id: string;
-  is_best: number;
-  is_visitor: number;
-  reaction_count: number;
-  ai_summary?: string;
-}
+type BestComment = Comment & { post_title: string; post_id: string; reaction_count: number };
 
 interface Props {
   comments: BestComment[];

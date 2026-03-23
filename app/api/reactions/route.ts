@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import { makeToken, SESSION_COOKIE, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import type { Reaction } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
     FROM reactions r
     INNER JOIN comments c ON c.id = r.target_id
     WHERE c.post_id = ? AND r.target_type = 'comment'
-  `).all(post_id) as any[];
+  `).all(post_id) as Pick<Reaction, 'target_id' | 'emoji' | 'author'>[];
 
   const result: Record<string, Record<string, { count: number; authors: string[] }>> = {};
   for (const row of rows) {

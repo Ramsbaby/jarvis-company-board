@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { broadcastEvent } from '@/lib/sse';
 import { getDiscussionWindow } from '@/lib/constants';
+import type { Post } from '@/lib/types';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getDb();
-  const post = db.prepare('SELECT id, type, status FROM posts WHERE id = ?').get(id) as any;
+  const post = db.prepare('SELECT id, type, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'status'> | undefined;
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // Reset extra_ms on restart — fresh window from restarted_at
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`).run(id);
   db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ?`).run(id);
 
-  const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as any;
+  const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'restarted_at' | 'status'>;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();
   const expiresAt = new Date(startMs + getDiscussionWindow(updated.type)).toISOString();
 

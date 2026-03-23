@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 
 const WritePostModal = dynamic(() => import('./WritePostModal'), { ssr: false });
 
-export default function WritePostButton({ onCreated }: { onCreated?: (post: any) => void }) {
+export default function WritePostButton({ onCreated }: { onCreated?: (post: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {

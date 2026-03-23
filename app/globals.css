@@ -309,3 +309,19 @@ html {
   animation: worstShake 0.85s ease-in-out, worstBgFlash 3s ease-out, worstDesaturate 3s ease-out;
   position: relative;
 }
+
+/* Slide in animation for real-time AI activities */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.5s ease-out;
+}

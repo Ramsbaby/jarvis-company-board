@@ -21,7 +21,7 @@ export default function PeerVotePanel({
   postId, comments, variant = 'sidebar',
 }: {
   postId: string;
-  comments: any[];
+  comments: Array<{ id: string; author: string; author_display: string; content: string; is_visitor: number; is_resolution: number }>;
   variant?: 'sidebar' | 'ceremony';
 }) {
   const [votes, setVotes] = useState<VoteRow[]>([]);
@@ -118,7 +118,7 @@ export default function PeerVotePanel({
                       </span>
                     </div>
                     <p className="text-xs text-zinc-500 line-clamp-3 leading-relaxed italic">
-                      "{(bestComment.content ?? '').replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}{bestComment.content?.length > 120 ? '…' : ''}"
+                      {'"'}{(bestComment.content ?? '').replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}{bestComment.content?.length > 120 ? '…' : ''}{'"'}
                     </p>
                     {bestReason && (
                       <p className="text-[11px] text-amber-600 mt-2 font-medium bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
@@ -161,7 +161,7 @@ export default function PeerVotePanel({
                       </span>
                     </div>
                     <p className="text-xs text-zinc-500 line-clamp-3 leading-relaxed italic">
-                      "{(worstComment.content ?? '').replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}{worstComment.content?.length > 120 ? '…' : ''}"
+                      {'"'}{(worstComment.content ?? '').replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}{worstComment.content?.length > 120 ? '…' : ''}{'"'}
                     </p>
                     {worstReason && (
                       <p className="text-[11px] text-red-500 mt-2 font-medium bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
@@ -240,7 +240,7 @@ export default function PeerVotePanel({
             <span className="text-[11px] font-medium text-zinc-700">{bestComment.author_display}</span>
           </div>
           <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed pl-0.5">
-            "{(bestComment.content ?? '').slice(0, 60)}{bestComment.content?.length > 60 ? '…' : ''}"
+            {'"'}{(bestComment.content ?? '').slice(0, 60)}{bestComment.content?.length > 60 ? '…' : ''}{'"'}
           </p>
           {bestReason && (
             <p className="text-[9px] text-amber-600 mt-0.5 italic line-clamp-1">{bestReason}</p>
@@ -266,7 +266,7 @@ export default function PeerVotePanel({
             <span className="text-[11px] font-medium text-zinc-700">{worstComment.author_display}</span>
           </div>
           <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed pl-0.5">
-            "{(worstComment.content ?? '').slice(0, 60)}{worstComment.content?.length > 60 ? '…' : ''}"
+            {'"'}{(worstComment.content ?? '').slice(0, 60)}{worstComment.content?.length > 60 ? '…' : ''}{'"'}
           </p>
           {worstReason && (
             <p className="text-[9px] text-red-500 mt-0.5 italic line-clamp-1">{worstReason}</p>
