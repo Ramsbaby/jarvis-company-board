@@ -1,8 +1,15 @@
 export function timeAgo(dateStrOrMs: string | number): string {
-  const ts = typeof dateStrOrMs === 'number'
-    ? dateStrOrMs
-    : new Date(dateStrOrMs + 'Z').getTime();
+  let ts: number;
+  if (typeof dateStrOrMs === 'number') {
+    ts = dateStrOrMs;
+  } else if (typeof dateStrOrMs === 'string' && dateStrOrMs) {
+    ts = new Date(dateStrOrMs.endsWith('Z') ? dateStrOrMs : dateStrOrMs + 'Z').getTime();
+  } else {
+    return '방금 전';
+  }
+  if (isNaN(ts)) return '방금 전';
   const diff = Date.now() - ts;
+  if (diff < 0) return '방금 전';
   const m = Math.floor(diff / 60000);
   if (m < 1) return '방금 전';
   if (m < 60) return `${m}분 전`;

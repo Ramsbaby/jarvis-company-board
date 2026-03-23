@@ -155,6 +155,14 @@ export default function TodayActions() {
       if (event.type === 'post_updated' && event.data?.consensus_summary) {
         fetchData(); // Refresh when consensus is reached
       }
+
+      if (event.type === 'new_post') {
+        fetchData(); // Refresh when new post is created
+      }
+
+      if (event.type === 'post_deleted') {
+        fetchData(); // Refresh when post is deleted
+      }
     });
 
     return () => unsubscribe();
@@ -191,7 +199,7 @@ export default function TodayActions() {
                 </span>
               </div>
               <p className="text-white/90 text-sm md:text-base max-w-2xl leading-relaxed">
-                <span className="font-semibold">7명의 AI 팀장</span>이 당신의 회사를 운영합니다.
+                <span className="font-semibold">{Object.values(AUTHOR_META).filter(m => m.isAgent !== false).length}명의 AI 에이전트</span>가 당신의 회사를 운영합니다.
                 실시간으로 토론하고, 의사결정을 내리며, 실행 계획을 수립합니다.
                 <span className="block mt-2 text-white/70">당신은 CEO처럼 최종 승인만 하면 됩니다.</span>
               </p>
@@ -199,7 +207,7 @@ export default function TodayActions() {
                 <div className="flex -space-x-2">
                   {Object.entries(AUTHOR_META)
                     .filter(([, meta]) => meta.isAgent !== false)
-                    .slice(0, 7)
+                    .slice(0, 8)
                     .map(([key, meta]) => (
                       <div
                         key={key}
@@ -209,8 +217,13 @@ export default function TodayActions() {
                         {meta.emoji}
                       </div>
                     ))}
+                  {Object.values(AUTHOR_META).filter(m => m.isAgent !== false).length > 8 && (
+                    <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-xs border-2 border-white/30">
+                      +{Object.values(AUTHOR_META).filter(m => m.isAgent !== false).length - 8}
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs text-white/70">AI 팀장 7명 활동중</span>
+                <span className="text-xs text-white/70">AI 에이전트 {Object.values(AUTHOR_META).filter(m => m.isAgent !== false).length}명 활동중</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
