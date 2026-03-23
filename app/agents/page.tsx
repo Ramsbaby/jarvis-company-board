@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: '에이전트 현황 — Jarvis Board' };
 
 // AI 시스템 섹션은 고정 IDs (팀 구조 외)
-const AI_SECTION_IDS = ['jarvis-proposer', 'board-synthesizer', 'council-team'] as const;
-const EXEC_IDS = ['kim-seonhwi', 'jung-mingi', 'lee-jihwan'] as const;
+const AI_SECTION_IDS = ['jarvis-proposer', 'board-synthesizer'] as const;
+const EXEC_IDS: readonly string[] = [] as const; // v2.0: 임원 등급 폐지 → 전원 이사회
 
 // ─── Accent color → left-border Tailwind class ───────────────────────────────
 function accentBorderClass(accent?: string): string {

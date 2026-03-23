@@ -1,6 +1,7 @@
 // ── Single Source of Truth: 에이전트 ID · 기본 티어 · UI 그룹 ─────────────────
 // 새 에이전트 추가 시 이 파일의 AGENT_ROSTER만 수정하면 된다.
 // scores, leaderboard, comments, export 라우트가 모두 여기서 import한다.
+// v2.0: 21명 → 5명 구조조정 (2026-03-23)
 
 export type AgentTier = 'executives' | 'team-lead' | 'staff';
 
@@ -13,38 +14,16 @@ export interface AgentDef {
 }
 
 export const AGENT_ROSTER: readonly AgentDef[] = [
-  // ── 임원진 ──────────────────────────────────────────────────────────────────
-  { id: 'kim-seonhwi', tier: 'executives', uiGroup: '임원진' },
-  { id: 'jung-mingi',  tier: 'executives', uiGroup: '임원진' },
-  { id: 'lee-jihwan',  tier: 'executives', uiGroup: '임원진' },
+  // ── 5인 이사회 체제 ────────────────────────────────────────────────────────
+  { id: 'infra-lead',   tier: 'team-lead', uiGroup: '이사회' },  // 박태성 — 기술 총괄
+  { id: 'product-team', tier: 'team-lead', uiGroup: '이사회' },  // 차민준 — 제품+데이터
+  { id: 'lee-jihwan',   tier: 'team-lead', uiGroup: '이사회' },  // 이지환 — 전략 총괄
+  { id: 'jung-mingi',   tier: 'team-lead', uiGroup: '이사회' },  // 정민기 — 운영+재무
+  { id: 'llm-critic',   tier: 'team-lead', uiGroup: '이사회' },  // 권태민 — 비평가
 
-  // ── 이사회 팀장급 ─────────────────────────────────────────────────────────────
-  { id: 'infra-lead',   tier: 'team-lead', uiGroup: '이사회' },
-  { id: 'career-lead',  tier: 'team-lead', uiGroup: '이사회' },
-  { id: 'brand-lead',   tier: 'team-lead', uiGroup: '이사회' },
-  { id: 'finance-lead', tier: 'team-lead', uiGroup: '이사회' },
-  { id: 'record-lead',  tier: 'team-lead', uiGroup: '이사회' },
-
-  // ── 실무 담당 ─────────────────────────────────────────────────────────────────
-  { id: 'infra-team',   tier: 'staff', uiGroup: '전문가' },
-  { id: 'brand-team',   tier: 'staff', uiGroup: '전문가' },
-  { id: 'record-team',  tier: 'staff', uiGroup: '전문가' },
-  { id: 'trend-team',   tier: 'staff', uiGroup: '전문가' },
-  { id: 'growth-team',  tier: 'staff', uiGroup: '전문가' },
-  { id: 'academy-team', tier: 'staff', uiGroup: '전문가' },
-  { id: 'audit-team',   tier: 'staff', uiGroup: '전문가' },
-  { id: 'llm-critic',   tier: 'staff', uiGroup: '전문가' },
-
-  // ── 추가 실무 담당 ────────────────────────────────────────────────────────────
-  { id: 'devops-team',   tier: 'staff', uiGroup: '전문가' },
-  { id: 'finance-team',  tier: 'staff', uiGroup: '전문가' },
-  { id: 'product-team',  tier: 'staff', uiGroup: '전문가' },
-  { id: 'data-team',     tier: 'staff', uiGroup: '전문가' },
-
-  // ── AI 시스템 (staff 티어, 이사회/전문가 그룹) ────────────────────────────────
-  { id: 'board-synthesizer', tier: 'staff', uiGroup: '이사회' },
+  // ── AI 시스템 ──────────────────────────────────────────────────────────────
+  { id: 'board-synthesizer', tier: 'staff', uiGroup: '전문가' },
   { id: 'jarvis-proposer',   tier: 'staff', uiGroup: '전문가' },
-  { id: 'council-team',      tier: 'staff', uiGroup: '전문가' },
 ] as const;
 
 /** 모든 에이전트 ID — O(1) 소속 확인에 사용 */
@@ -65,14 +44,11 @@ export interface TeamGroup {
   ids: readonly string[];
 }
 
-/** 팀 기반 조직 구조 — 첫 번째 ID가 팀 리드 */
+/** 5인 이사회 — 각자 독립 영역 담당 */
 export const TEAM_GROUPS: readonly TeamGroup[] = [
-  { key: 'infra',   label: '인프라팀',    emoji: '⚙️',  ids: ['infra-lead', 'infra-team', 'devops-team'] },
-  { key: 'brand',   label: '브랜드팀',    emoji: '✨',  ids: ['brand-lead', 'brand-team'] },
-  { key: 'growth',  label: '성장팀',      emoji: '📈',  ids: ['career-lead', 'growth-team', 'data-team'] },
-  { key: 'finance', label: '재무팀',      emoji: '💰',  ids: ['finance-lead', 'finance-team'] },
-  { key: 'record',  label: '기록팀',      emoji: '📝',  ids: ['record-lead', 'record-team'] },
-  { key: 'ai',      label: 'AI/프로덕트', emoji: '🧪',  ids: ['llm-critic', 'trend-team', 'product-team'] },
-  { key: 'audit',   label: '감사팀',      emoji: '🔍',  ids: ['audit-team'] },
-  { key: 'academy', label: '아카데미',    emoji: '📖',  ids: ['academy-team'] },
+  { key: 'tech',       label: '기술',       emoji: '⚙️',  ids: ['infra-lead'] },
+  { key: 'product',    label: '제품+데이터', emoji: '📊',  ids: ['product-team'] },
+  { key: 'strategy',   label: '전략',       emoji: '🎯',  ids: ['lee-jihwan'] },
+  { key: 'operations', label: '운영+재무',   emoji: '📋',  ids: ['jung-mingi'] },
+  { key: 'audit',      label: '비평/감사',   emoji: '🔍',  ids: ['llm-critic'] },
 ] as const;
