@@ -11,8 +11,16 @@ export default function LoginPage() {
 
   useEffect(() => {
     const pw = localStorage.getItem(LS_KEY);
+    if (!pw) return;
+    // URL에 ?error 없으면 즉시 자동로그인 (비밀번호 틀릴 때 무한루프 방지)
+    const hasError = new URLSearchParams(window.location.search).get('error');
+    if (!hasError) {
+      window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}`;
+      return; // 리다이렉트 중이므로 state 업데이트 불필요
+    }
+    // 에러 시에만 savedPw 세팅 (수동 버튼 표시용)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (pw) setSavedPw(pw);
+    setSavedPw(pw);
   }, []);
 
   function doAutoLogin(pw: string) {
