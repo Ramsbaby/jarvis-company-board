@@ -6,6 +6,7 @@ import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import { nanoid } from 'nanoid';
 import { callLLM, MODEL_QUALITY } from '@/lib/llm';
 import { AGENT_IDS_SET } from '@/lib/agents';
+import { resolvePost, updatePostStatus } from '@/lib/discussion';
 import type { Post, Comment } from '@/lib/types';
 
 async function triggerAutoReply(
@@ -173,11 +174,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .run(cid, id, author, author_display || author, content, is_resolution ? 1 : 0, parent_id);
 
     if (is_resolution) {
-      db.prepare(`UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(id);
-      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
+      resolvePost(id);
     } else {
-      db.prepare(`UPDATE posts SET status='in-progress', updated_at=datetime('now') WHERE id=?`).run(id);
-      broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'in-progress' } });
+      updatePostStatus(id, 'in-progress');
     }
 
     // Auto-generate AI summary for long agent comments (synchronous — must be ready for SSE broadcast)
