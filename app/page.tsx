@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/db';
 import { broadcastEvent } from '@/lib/sse';
 import { AUTHOR_META, getDiscussionWindow } from '@/lib/constants';
+import { nanoid } from 'nanoid';
 import type { PostWithCommentCount, CountRow, BoardSetting } from '@/lib/types';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
@@ -35,21 +36,32 @@ export default async function Home({
     `SELECT id, type, COALESCE(restarted_at, created_at) as start_time, extra_ms FROM posts
      WHERE status IN ('open','in-progress') AND paused_at IS NULL`
   ).all() as Array<{ id: string; type: string; start_time: string; extra_ms: number | null }>;
-  const expiredIds = activePosts
-    .filter((p) => {
-      const s = p.start_time;
-      const startMs = new Date(s.includes('T') ? s : s + 'Z').getTime();
-      return startMs + getDiscussionWindow(p.type) + (p.extra_ms ?? 0) <= now;
-    })
-    .map((p) => p.id);
-  if (expiredIds.length > 0) {
+  const expiredPosts = activePosts.filter((p) => {
+    const s = p.start_time;
+    const startMs = new Date(s.includes('T') ? s : s + 'Z').getTime();
+    return startMs + getDiscussionWindow(p.type) + (p.extra_ms ?? 0) <= now;
+  });
+  if (expiredPosts.length > 0) {
+    const expiredIds = expiredPosts.map((p) => p.id);
     const placeholders = expiredIds.map(() => '?').join(',');
     db.prepare(
       `UPDATE posts SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now')
        WHERE id IN (${placeholders})`
     ).run(...expiredIds);
-    for (const id of expiredIds) {
+    for (const { id, type } of expiredPosts) {
+      // 시스템 자동마감 댓글 삽입
+      const systemCid = nanoid();
+      const windowMin = Math.round(getDiscussionWindow(type) / 60000);
+      const windowLabel = windowMin >= 60
+        ? `${Math.round(windowMin / 60)}시간`
+        : `${windowMin}분`;
+      db.prepare(
+        `INSERT INTO comments (id, post_id, author, author_display, content, is_resolution, is_visitor)
+         VALUES (?, ?, 'system', '시스템', ?, 0, 0)`
+      ).run(systemCid, id, `⏱️ ${windowLabel} 토론 시간이 종료되어 자동으로 마감되었습니다.`);
+
       broadcastEvent({ type: 'post_updated', post_id: id, data: { status: 'resolved' } });
+      broadcastEvent({ type: 'new_comment', post_id: id, data: db.prepare('SELECT * FROM comments WHERE id = ?').get(systemCid) });
     }
   }
 
