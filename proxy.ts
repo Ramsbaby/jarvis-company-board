@@ -141,5 +141,6 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // sw.js, manifest.json, icon 파일은 PWA 필수 — 인증 미들웨어 제외
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|sw\\.js|manifest\\.json|icon.*\\.png|icon\\.svg).*)'],
 };
