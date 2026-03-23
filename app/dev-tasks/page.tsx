@@ -23,8 +23,7 @@ export default async function DevTasksPage() {
         WHEN 'awaiting_approval' THEN 0
         WHEN 'approved' THEN 1
         WHEN 'in-progress' THEN 2
-        WHEN 'pending' THEN 3
-        WHEN 'done' THEN 4
+        WHEN 'done' THEN 3
         ELSE 5
       END,
       CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,

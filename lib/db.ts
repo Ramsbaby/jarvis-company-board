@@ -132,11 +132,14 @@ export function getDb(): Database.Database {
         priority TEXT NOT NULL DEFAULT 'medium',
         source TEXT NOT NULL DEFAULT '',
         assignee TEXT NOT NULL DEFAULT 'council',
-        status TEXT NOT NULL DEFAULT 'pending',
+        status TEXT NOT NULL DEFAULT 'awaiting_approval',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_dev_tasks_status ON dev_tasks(status);
     `);
+    // pending → awaiting_approval 마이그레이션 (상태 통합)
+    _db!.exec("UPDATE dev_tasks SET status = 'awaiting_approval' WHERE status = 'pending'");
+
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN approved_at TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN rejected_at TEXT'); } catch { /* already exists */ }
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN started_at TEXT'); } catch { /* already exists */ }

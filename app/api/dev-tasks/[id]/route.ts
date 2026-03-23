@@ -39,8 +39,8 @@ export async function PATCH(
   const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail } = body;
 
   // Agents can set operational statuses; owner can approve/reject/close
-  const agentAllowed = ['pending', 'in-progress', 'done', 'failed'];
-  const ownerAllowed = ['awaiting_approval', 'approved', 'rejected', 'pending', 'in-progress', 'done', 'failed'];
+  const agentAllowed = ['awaiting_approval', 'in-progress', 'done', 'failed'];
+  const ownerAllowed = ['awaiting_approval', 'approved', 'rejected', 'in-progress', 'done', 'failed'];
   const allowed = isAgent ? agentAllowed : ownerAllowed;
 
   const db = getDb();
@@ -84,13 +84,12 @@ export async function PATCH(
   }
 
   const validTransitions: Record<string, string[]> = {
-    pending:           ['awaiting_approval', 'pending'],
-    awaiting_approval: ['approved', 'rejected', 'pending'],
-    approved:          ['in-progress', 'rejected', 'pending'],
-    'in-progress':     ['done', 'pending', 'failed'],
-    done:              ['pending'],
-    rejected:          ['pending'],
-    failed:            ['pending', 'done'],  // agent가 실제 완료 결과 보고 가능 (stale-watcher 오탐 복구)
+    awaiting_approval: ['approved', 'rejected'],
+    approved:          ['in-progress', 'rejected', 'awaiting_approval'],
+    'in-progress':     ['done', 'awaiting_approval', 'failed'],
+    done:              ['awaiting_approval'],
+    rejected:          ['awaiting_approval'],
+    failed:            ['awaiting_approval', 'done'],  // agent가 실제 완료 결과 보고 가능 (stale-watcher 오탐 복구)
   };
 
   // State machine: enforce valid transitions — wrapped in transaction to prevent races
@@ -143,7 +142,8 @@ export async function PATCH(
           impact_areas ? JSON.stringify(impact_areas) : null,
           taskId,
       );
-    } else if (newStatus === 'pending') {
+    } else if (newStatus === 'awaiting_approval' && ['done', 'rejected', 'failed', 'in-progress', 'approved'].includes(current.status)) {
+      // 재시도/초기화: 이전 시도 이력 보존
       const existingHistory: AttemptHistoryEntry[] = (() => { try { return JSON.parse(current.attempt_history || '[]') as AttemptHistoryEntry[]; } catch { return []; } })();
       const prevLogs: LogEntry[] = (() => { try { return JSON.parse(current.execution_log || '[]') as LogEntry[]; } catch { return []; } })();
       const historyEntry = {
@@ -157,7 +157,7 @@ export async function PATCH(
         log_count: prevLogs.length,
       };
       const newHistory = JSON.stringify([...existingHistory, historyEntry]);
-      db.prepare(`UPDATE dev_tasks SET status = 'pending', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]', attempt_history = ?, detail = COALESCE(?, detail) WHERE id = ?`).run(newHistory, detail || null, taskId);
+      db.prepare(`UPDATE dev_tasks SET status = 'awaiting_approval', approved_at = NULL, rejected_at = NULL, rejection_note = NULL, started_at = NULL, completed_at = NULL, result_summary = NULL, changed_files = '[]', execution_log = '[]', attempt_history = ?, detail = COALESCE(?, detail) WHERE id = ?`).run(newHistory, detail || null, taskId);
     } else {
       db.prepare('UPDATE dev_tasks SET status = ? WHERE id = ?').run(newStatus, taskId);
     }
@@ -202,7 +202,7 @@ export async function DELETE(
   const task = db.prepare('SELECT status FROM dev_tasks WHERE id = ?').get(id) as TaskStatusRow | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const deletable = ['pending', 'rejected', 'failed'];
+  const deletable = ['awaiting_approval', 'rejected', 'failed'];
   if (!deletable.includes(task.status)) {
     return NextResponse.json({ error: `'${task.status}' 상태는 삭제할 수 없습니다` }, { status: 409 });
   }

@@ -77,8 +77,7 @@ const SOURCE_STATUS_LABEL: Record<string, string> = {
 
 // Status pill config
 const STATUS_PILL: Record<string, { label: string; className: string }> = {
-  pending:            { label: '미제출',            className: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
-  awaiting_approval:  { label: '🔍 검토 요청됨',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  awaiting_approval:  { label: '🔍 검토 대기',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
   approved:           { label: '✅ 승인됨',          className: 'bg-teal-50 text-teal-700 border-teal-200' },
   'in-progress':      { label: '⚙️ Jarvis 작업 중', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   done:               { label: '🎉 완료',            className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -359,7 +358,7 @@ export default function TaskDetailClient({
   const isRejected = task.status === 'rejected';
   const isAwaiting = task.status === 'awaiting_approval';
   const isApproved = task.status === 'approved';
-  const isPending  = task.status === 'pending';
+  const isPending  = false; // pending 상태 제거됨 — awaiting_approval로 통합
   const isFailed   = task.status === 'failed';
 
   // SSE real-time updates
@@ -476,11 +475,11 @@ export default function TaskDetailClient({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ status: 'pending' }),
+        body: JSON.stringify({ status: 'awaiting_approval' }),
       });
       if (res.ok) {
         setTask(prev => ({
-          ...prev, status: 'pending',
+          ...prev, status: 'awaiting_approval',
           rejected_at: null, rejection_note: null,
           approved_at: null, started_at: null,
           completed_at: null, result_summary: null,
@@ -507,11 +506,11 @@ export default function TaskDetailClient({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ status: 'pending', detail: retryNote.trim() }),
+        body: JSON.stringify({ status: 'awaiting_approval', detail: retryNote.trim() }),
       });
       if (res.ok) {
         setTask(prev => ({
-          ...prev, status: 'pending',
+          ...prev, status: 'awaiting_approval',
           detail: retryNote.trim(),
           rejected_at: null, rejection_note: null,
           approved_at: null, started_at: null,
@@ -664,7 +663,7 @@ export default function TaskDetailClient({
   const cronSecDisplay = cronSecs % 60;
   const cronProgress = ((5 * 60 - cronSecs) / (5 * 60)) * 100;
 
-  const statusPill = STATUS_PILL[task.status] ?? STATUS_PILL.pending;
+  const statusPill = STATUS_PILL[task.status] ?? STATUS_PILL.awaiting_approval;
 
   const stripeClass = isDone     ? 'bg-gradient-to-r from-emerald-400 to-teal-400' :
                       isLive     ? 'bg-gradient-to-r from-indigo-400 to-violet-400' :

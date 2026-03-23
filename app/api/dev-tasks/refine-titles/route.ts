@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const tasks = db.prepare(`
     SELECT id, title FROM dev_tasks
-    WHERE status IN ('awaiting_approval', 'pending') AND title LIKE '%\`%'
+    WHERE status IN ('awaiting_approval') AND title LIKE '%\`%'
     ORDER BY created_at DESC
   `).all() as Pick<DevTask, 'id' | 'title'>[];
 
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   const db = getDb();
   const tasks = db.prepare(`
     SELECT id, title, detail, post_title, source FROM dev_tasks
-    WHERE status IN ('awaiting_approval', 'pending') AND title LIKE '%\`%'
+    WHERE status IN ('awaiting_approval') AND title LIKE '%\`%'
     ORDER BY created_at DESC
   `).all() as Pick<DevTask, 'id' | 'title' | 'detail' | 'post_title' | 'source'>[];
 

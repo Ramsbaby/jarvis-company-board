@@ -123,13 +123,6 @@ const STATUS_STYLE: Record<string, StatusStyle> = {
     badgeCls: 'bg-zinc-100 border-zinc-200 text-zinc-400',
     badgeLabel: '✕ 반려',
   },
-  pending: {
-    outerBorder: 'border-zinc-200',
-    stripe: null,
-    innerBg: 'bg-white',
-    badgeCls: 'bg-zinc-50 border-zinc-200 text-zinc-500',
-    badgeLabel: '미제출',
-  },
   failed: {
     outerBorder: 'border-red-200',
     stripe: 'bg-gradient-to-r from-red-300 to-rose-300',
@@ -145,7 +138,6 @@ const TAB_BADGE_CLS: Record<string, string> = {
   'in-progress':     'bg-indigo-500 text-white',
   done:              'bg-emerald-500 text-white',
   rejected:          'bg-zinc-400 text-white',
-  pending:           'bg-zinc-200 text-zinc-600',
   failed:            'bg-red-400 text-white',
 };
 
@@ -154,7 +146,6 @@ const STATUS_TABS = [
   { key: 'awaiting_approval', label: '검토 요청됨' },
   { key: 'approved',          label: '승인됨' },
   { key: 'in-progress',       label: 'Jarvis 작업 중' },
-  { key: 'pending',           label: '미제출' },
   { key: 'done',              label: '완료' },
   { key: 'rejected',          label: '반려' },
   { key: 'failed',            label: '실패' },
@@ -294,7 +285,6 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     awaiting_approval: tasks.filter(t => t.status === 'awaiting_approval'),
     approved:          tasks.filter(t => t.status === 'approved'),
     'in-progress':     tasks.filter(t => t.status === 'in-progress'),
-    pending:           tasks.filter(t => t.status === 'pending'),
     done:              tasks.filter(t => t.status === 'done'),
     rejected:          tasks.filter(t => t.status === 'rejected'),
     failed:            tasks.filter(t => t.status === 'failed'),
@@ -308,7 +298,6 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     { label: 'Jarvis 작업 중',   key: 'in-progress',        color: 'bg-indigo-50 border-indigo-200 text-indigo-700', dot: 'bg-indigo-400', pulse: true },
     { label: '완료',             key: 'done',               color: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-400', pulse: false },
     { label: '반려',             key: 'rejected',           color: 'bg-zinc-50 border-zinc-200 text-zinc-500',    dot: 'bg-zinc-300',    pulse: false },
-    { label: '미제출',           key: 'pending',            color: 'bg-zinc-50 border-zinc-200 text-zinc-400',    dot: 'bg-zinc-200',    pulse: false },
     { label: '실패',             key: 'failed',             color: 'bg-red-50 border-red-200 text-red-600',       dot: 'bg-red-400',     pulse: false },
   ];
 
@@ -373,7 +362,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         <div className="space-y-3">
           {filtered.map(task => {
             const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.low;
-            const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending;
+            const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.awaiting_approval;
             const isWaiting = task.status === 'awaiting_approval';
             const isLoading = actionLoading === task.id;
             const diffCfg = task.difficulty ? DIFFICULTY_CONFIG[task.difficulty] : null;
@@ -483,24 +472,15 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   )}
                 </Link>
 
-                {/* Submit for review / Delete — pending 태스크 */}
-                {task.status === 'pending' && (
-                  <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
+                {/* Delete — awaiting_approval 태스크 */}
+                {task.status === 'awaiting_approval' && (
+                  <div className="flex justify-end items-center gap-1 px-4 pb-3 pt-2 border-t border-zinc-100">
                     <button
                       onClick={() => handleDelete(task.id)}
                       disabled={isLoading}
                       className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
                     >
                       🗑 삭제
-                    </button>
-                    <button
-                      onClick={() => handleAction(task.id, 'awaiting_approval')}
-                      disabled={isLoading}
-                      className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 text-white hover:bg-zinc-900 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
-                    >
-                      {isLoading ? (
-                        <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
-                      ) : '📋 검토 요청'}
                     </button>
                   </div>
                 )}
