@@ -97,6 +97,27 @@ function PostListInner({
     return () => clearInterval(t);
   }, []);
 
+  // Client-side auto-close: 타이머 만료된 포스트를 즉시 resolved로 전환
+  // (서버 auto-close는 다음 페이지 로드 시에만 실행되므로 실시간 반영 필요)
+  useEffect(() => {
+    const now = clockNow;
+    setPosts(prev => {
+      let changed = false;
+      const next = prev.map(p => {
+        if (p.status !== 'open' && p.status !== 'in-progress') return p;
+        if (p.paused_at) return p;
+        const base = p.restarted_at ?? p.created_at;
+        const expiresMs = new Date(base + 'Z').getTime() + getDiscussionWindow(p.type) + (p.extra_ms ?? 0);
+        if (now > expiresMs) {
+          changed = true;
+          return { ...p, status: 'resolved' };
+        }
+        return p;
+      });
+      return changed ? next : prev;
+    });
+  }, [clockNow]);
+
   // #11 Bookmarks (localStorage)
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
