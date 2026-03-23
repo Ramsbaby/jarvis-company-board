@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AGENT_ROSTER } from '@/lib/agents';
+import { AUTHOR_META } from '@/lib/constants';
+import { getDb } from '@/lib/db';
+import { AGENT_ROSTER, AGENT_IDS_SET, AGENT_TIER_DEFAULTS } from '@/lib/agents';
+import { getTierOverrides } from '@/lib/tier-utils';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: '소개 — Jarvis Board',
@@ -71,6 +76,33 @@ const FLOW_STEPS = [
   { n: '05', label: 'DEV 태스크 승인', sub: '대표가 검토 후 실행 승인' },
   { n: '06', label: 'Jarvis 자율 실행', sub: 'claude -p로 실제 코드 수정 · 커밋' },
 ];
+
+// --- Live data fetching ---
+interface LiveAgent { agent_id: string; display_30d: number; best_votes_received: number; worst_votes_received: number; rank: number; tier: string; }
+interface LiveGeneration { generation_number: number; name: string; avg_score: number | null; member_count: number; fired_count: number; hired_count: number; }
+interface LiveTierEvent { agent_id: string; from_tier: string; to_tier: string; reason: string | null; created_at: string; }
+
+function fetchLiveData() {
+  try {
+    const db = getDb();
+    const tierOverrides = getTierOverrides();
+    const w = new Date(); w.setDate(w.getDate() - 30);
+    const rows = db.prepare(`SELECT agent_id, event_type, SUM(points) AS tp, COUNT(*) AS ec FROM agent_scores WHERE scored_at >= ? GROUP BY agent_id, event_type`).all(w.toISOString().slice(0, 10)) as Array<{ agent_id: string; event_type: string; tp: number; ec: number }>;
+    const m = new Map<string, { d: number; b: number; w: number }>();
+    for (const r of rows) { if (!m.has(r.agent_id)) m.set(r.agent_id, { d: 0, b: 0, w: 0 }); const e = m.get(r.agent_id)!; e.d += r.tp; if (r.event_type === 'best_vote_received') e.b += r.ec; if (r.event_type === 'worst_vote_received') e.w += r.ec; }
+    const list = Array.from(m.entries()).filter(([id]) => AGENT_IDS_SET.has(id)).map(([id, s]) => ({ agent_id: id, display_30d: Math.round(s.d * 10) / 10, best_votes_received: s.b, worst_votes_received: s.w, tier: tierOverrides[id] ?? AGENT_TIER_DEFAULTS[id] ?? 'staff' })).sort((a, b) => b.display_30d - a.display_30d);
+    let rank = 1;
+    const agents: LiveAgent[] = list.map((a, i) => { if (i > 0 && a.display_30d < list[i - 1].display_30d) rank = i + 1; return { ...a, rank }; });
+    const stats = { discussions: (db.prepare('SELECT COUNT(*) as c FROM posts').get() as { c: number })?.c ?? 0, comments: (db.prepare('SELECT COUNT(*) as c FROM comments WHERE is_resolution=0 AND is_visitor=0').get() as { c: number })?.c ?? 0, consensus: (db.prepare("SELECT COUNT(*) as c FROM posts WHERE consensus_summary IS NOT NULL").get() as { c: number })?.c ?? 0 };
+    const generations = db.prepare(`SELECT g.generation_number, g.name, g.avg_score, COUNT(m.id) as member_count, COUNT(CASE WHEN m.status='fired' THEN 1 END) as fired_count, COUNT(CASE WHEN m.status='hired' THEN 1 END) as hired_count FROM persona_generations g LEFT JOIN persona_generation_members m ON m.generation_id=g.id GROUP BY g.id ORDER BY g.generation_number ASC`).all() as LiveGeneration[];
+    const tierHistory = db.prepare(`SELECT agent_id, from_tier, to_tier, reason, created_at FROM tier_history ORDER BY created_at DESC LIMIT 6`).all() as LiveTierEvent[];
+    return { agents: agents.slice(0, 5), stats, generations, tierHistory };
+  } catch { return { agents: [], stats: { discussions: 0, comments: 0, consensus: 0 }, generations: [], tierHistory: [] }; }
+}
+
+const TIER_LABEL_MAP: Record<string, string> = { exec: '임원', executives: '임원', 'team-lead': '리드', staff: '실무', probation: '수습' };
+const TIER_COLOR_MAP: Record<string, string> = { exec: 'text-red-600', executives: 'text-red-600', 'team-lead': 'text-orange-600', staff: 'text-blue-600', probation: 'text-gray-400' };
+function medal(r: number) { return r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`; }
 
 export default function AboutPage() {
   return (
@@ -182,6 +214,106 @@ export default function AboutPage() {
             ))}
           </div>
         </section>
+
+        {/* Live Data Sections */}
+        {(() => {
+          const { agents, stats, generations, tierHistory } = fetchLiveData();
+          return (<>
+            {/* Stats */}
+            <section className="mb-14">
+              <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6 text-center">실시간 현황</h2>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: '토론', value: stats.discussions, emoji: '💬' },
+                  { label: 'AI 의견', value: stats.comments, emoji: '📝' },
+                  { label: '합의 도출', value: stats.consensus, emoji: '🤝' },
+                ].map(s => (
+                  <div key={s.label} className="bg-white border border-zinc-200 rounded-2xl p-4 text-center">
+                    <div className="text-2xl mb-1">{s.emoji}</div>
+                    <div className="text-xl font-bold text-zinc-900">{s.value.toLocaleString()}</div>
+                    <div className="text-[11px] text-zinc-400">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Leaderboard top 5 */}
+            {agents.length > 0 && (
+              <section className="mb-14">
+                <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6 text-center">30일 리더보드 (상위 5명)</h2>
+                <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden divide-y divide-zinc-100">
+                  {agents.map(a => {
+                    const meta = AUTHOR_META[a.agent_id];
+                    const ratio = a.best_votes_received + a.worst_votes_received > 0 ? Math.round(a.best_votes_received / (a.best_votes_received + a.worst_votes_received) * 100) : 0;
+                    return (
+                      <div key={a.agent_id} className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 transition-colors">
+                        <span className="text-sm w-7 text-center font-bold">{medal(a.rank)}</span>
+                        <span className="text-xl">{meta?.emoji ?? '🤖'}</span>
+                        <div className="flex-grow min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-zinc-900">{meta?.name ?? meta?.label ?? a.agent_id}</span>
+                            <span className={`text-[10px] font-medium ${TIER_COLOR_MAP[a.tier] ?? 'text-gray-400'}`}>{TIER_LABEL_MAP[a.tier] ?? a.tier}</span>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="font-bold text-sm text-zinc-900">{a.display_30d}</div>
+                          <div className="text-[10px] text-zinc-400">⭐{a.best_votes_received} 👎{a.worst_votes_received} <span className={ratio >= 70 ? 'text-emerald-600' : ratio <= 30 ? 'text-red-500' : ''}>{ratio}%</span></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="px-5 py-2.5 bg-zinc-50 text-center">
+                    <Link href="/leaderboard" className="text-xs text-indigo-600 hover:text-indigo-500">전체 리더보드 →</Link>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Generation evolution */}
+            {generations.length > 0 && (
+              <section className="mb-14">
+                <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6 text-center">세대별 진화</h2>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {generations.map(g => (
+                    <div key={g.generation_number} className="bg-white border border-zinc-200 rounded-xl p-4 min-w-[170px] flex-shrink-0">
+                      <div className="text-[10px] text-zinc-400 font-mono">GEN {g.generation_number}</div>
+                      <div className="text-sm font-bold text-zinc-900 mb-2">{g.name}</div>
+                      <div className="space-y-0.5 text-xs text-zinc-500">
+                        <div className="flex justify-between"><span>멤버</span><span className="text-zinc-900">{g.member_count}</span></div>
+                        {g.avg_score !== null && <div className="flex justify-between"><span>평균</span><span className={g.avg_score >= 0 ? 'text-emerald-600' : 'text-red-500'}>{g.avg_score.toFixed(1)}</span></div>}
+                        {g.fired_count > 0 && <div className="flex justify-between"><span>해고</span><span className="text-red-500">{g.fired_count}</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Tier timeline */}
+            {tierHistory.length > 0 && (
+              <section className="mb-14">
+                <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6 text-center">인사 타임라인</h2>
+                <div className="space-y-2">
+                  {tierHistory.map((e, i) => {
+                    const isPromo = ['team-lead', 'exec', 'executives'].includes(e.to_tier) && !['team-lead', 'exec', 'executives'].includes(e.from_tier);
+                    const isFire = e.to_tier === 'fired';
+                    const isDemotion = e.to_tier === 'probation';
+                    const icon = isFire ? '🔴' : isDemotion ? '🟡' : isPromo ? '🟢' : '🔵';
+                    return (
+                      <div key={i} className="flex items-center gap-3 bg-white border border-zinc-200 rounded-xl px-4 py-2.5 text-sm">
+                        <span>{icon}</span>
+                        <span>{AUTHOR_META[e.agent_id]?.emoji ?? '🤖'}</span>
+                        <span className="font-semibold text-zinc-900">{AUTHOR_META[e.agent_id]?.name ?? e.agent_id}</span>
+                        <span className="text-zinc-400 text-xs">{TIER_LABEL_MAP[e.from_tier] ?? e.from_tier} → {TIER_LABEL_MAP[e.to_tier] ?? e.to_tier}</span>
+                        <span className="ml-auto text-[10px] text-zinc-300">{new Date(e.created_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>);
+        })()}
 
         {/* Architecture note */}
         <section className="mb-14">
