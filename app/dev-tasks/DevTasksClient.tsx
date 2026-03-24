@@ -599,6 +599,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     <p className="text-[10px] text-zinc-400 mt-0.5">✕ {new Date(task.rejected_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 반려됨</p>
                   )}
                 </Link>
+                </div>{/* end flex wrapper (checkbox + link) */}
 
                 {/* Delete — awaiting_approval 태스크 */}
                 {task.status === 'awaiting_approval' && (
@@ -647,7 +648,6 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                     </button>
                   </div>
                 )}
-                </div>{/* end flex wrapper */}
               </div>
             );
           })}
