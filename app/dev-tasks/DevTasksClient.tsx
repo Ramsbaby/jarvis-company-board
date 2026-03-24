@@ -767,35 +767,35 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
             const groupTaskIds = new Set(group.tasks.map(t => t.id));
 
             return (
-              <div key={group.groupId} className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
+              <div key={group.groupId} className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
                 {/* Group header */}
                 <button
                   onClick={() => toggleGroup(group.groupId)}
-                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-700/40 transition-colors"
+                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-indigo-50/60 transition-colors"
                 >
                   {isExpanded
-                    ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                    : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    ? <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-indigo-400 shrink-0" />
                   }
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-slate-200 truncate">
+                    <h3 className="text-sm font-semibold text-zinc-800 truncate">
                       📦 {group.label}
                     </h3>
                     {/* Progress bar */}
                     <div className="flex items-center gap-2 mt-2">
-                      <div className="flex-1 h-1 rounded-full bg-slate-600 overflow-hidden">
+                      <div className="flex-1 h-1 rounded-full bg-zinc-200 overflow-hidden">
                         {total > 0 && (
                           <div className="h-full flex">
                             {doneCount > 0 && (
                               <div className="bg-emerald-500 h-full" style={{ width: `${(doneCount / total) * 100}%` }} />
                             )}
                             {inProgressCount > 0 && (
-                              <div className="bg-blue-500 h-full" style={{ width: `${(inProgressCount / total) * 100}%` }} />
+                              <div className="bg-indigo-500 h-full" style={{ width: `${(inProgressCount / total) * 100}%` }} />
                             )}
                           </div>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 tabular-nums shrink-0">
+                      <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">
                         {doneCount}/{total}
                       </span>
                     </div>
@@ -803,17 +803,17 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   {/* Status badges */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     {awaitingCount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-medium">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 font-medium">
                         🔍 {awaitingCount}
                       </span>
                     )}
                     {inProgressCount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-400 font-medium">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
                         ⚙ {inProgressCount}
                       </span>
                     )}
                     {allDone && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-medium">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
                         🎉 완료
                       </span>
                     )}
@@ -822,7 +822,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
 
                 {/* Expanded child tasks */}
                 {isExpanded && (
-                  <div className="ml-6 border-l-2 border-slate-700 pl-4 pb-3 pr-3 space-y-2">
+                  <div className="ml-6 border-l-2 border-indigo-200 pl-4 pb-3 pr-3 space-y-2">
                     {group.tasks.map(task => {
                       const deps = parseDependsOn(task.depends_on);
                       const depsInGroup = deps.filter(d => groupTaskIds.has(d));
@@ -836,10 +836,10 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                           {/* Dependency indicator */}
                           {depsInGroup.length > 0 && (
                             <div className="flex items-center gap-1 mb-1 ml-1">
-                              <span className={`w-3 h-3 flex items-center justify-center rounded-full ${allDepsDone ? 'bg-emerald-500/20' : 'bg-slate-600'}`}>
-                                {allDepsDone && <Check className="w-2 h-2 text-emerald-400" />}
+                              <span className={`w-3 h-3 flex items-center justify-center rounded-full ${allDepsDone ? 'bg-emerald-100' : 'bg-zinc-200'}`}>
+                                {allDepsDone && <Check className="w-2 h-2 text-emerald-600" />}
                               </span>
-                              <span className="text-[9px] text-slate-500">
+                              <span className="text-[9px] text-zinc-500">
                                 {allDepsDone ? '선행 완료' : `선행 ${depsInGroup.length}개 대기`}
                               </span>
                             </div>

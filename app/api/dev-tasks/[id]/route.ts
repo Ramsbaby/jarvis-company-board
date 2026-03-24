@@ -68,14 +68,18 @@ export async function PATCH(
     const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const dependsOnStr = depends_on !== undefined ? (typeof depends_on === 'string' ? depends_on : JSON.stringify(depends_on)) : null;
-    db.prepare(`UPDATE dev_tasks SET
-      expected_impact = COALESCE(?, expected_impact),
-      difficulty = COALESCE(?, difficulty),
-      estimated_minutes = COALESCE(?, estimated_minutes),
-      group_id = COALESCE(?, group_id),
-      depends_on = COALESCE(?, depends_on)
-      WHERE id = ?`
-    ).run(expected_impact || null, difficulty || null, estimated_minutes || null, group_id !== undefined ? group_id : null, dependsOnStr, id);
+    // group_id는 명시적 null 허용 (그룹 해제), COALESCE 대신 조건 분기
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    if (expected_impact !== undefined) { updates.push('expected_impact = ?'); values.push(expected_impact || null); }
+    if (difficulty !== undefined) { updates.push('difficulty = ?'); values.push(difficulty || null); }
+    if (estimated_minutes !== undefined) { updates.push('estimated_minutes = ?'); values.push(estimated_minutes || null); }
+    if (group_id !== undefined) { updates.push('group_id = ?'); values.push(group_id); }
+    if (dependsOnStr !== null) { updates.push('depends_on = ?'); values.push(dependsOnStr); }
+    if (updates.length > 0) {
+      values.push(id);
+      db.prepare(`UPDATE dev_tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    }
     const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask;
     broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
     return NextResponse.json({ ok: true });
