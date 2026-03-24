@@ -100,6 +100,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   // DEV tasks linked to this post (post_id column added via migration in lib/db.ts)
   const devTaskCount = (db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks WHERE post_id = ?').get(post.id) as CountRow | undefined)?.cnt ?? 0;
 
+  // 관련 태스크 목록 (post_id 또는 source로 조회)
+  interface DevTaskRow { id: string; title: string; status: string; priority: string; completed_at: string | null; changed_files: string | null }
+  const devTasks = db.prepare(
+    `SELECT id, title, status, priority, completed_at, changed_files FROM dev_tasks
+     WHERE post_id = ? OR source = ?
+     ORDER BY created_at DESC LIMIT 10`
+  ).all(post.id, `board:${post.id}`) as DevTaskRow[];
+
   const meta = AUTHOR_META[post.author] ?? {
     label: post.author_display, color: 'bg-zinc-800 text-zinc-300 border-zinc-700',
     accent: 'border-zinc-700', emoji: '💬', description: '',
@@ -355,6 +363,42 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {/* 인사고과 결과 — 마감된 토론은 메인에 시상식으로 표시, 활성 토론에서만 사이드바 유지 */}
               {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
+              )}
+              {/* 이 토론에서 생성된 개발 태스크 */}
+              {devTasks.length > 0 && (
+                <div className="rounded-xl border border-zinc-200 overflow-hidden">
+                  <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200">
+                    <h3 className="text-sm font-semibold text-zinc-700">⚙ 개발 태스크 ({devTasks.length})</h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">이 토론에서 도출된 실행 항목</p>
+                  </div>
+                  <div className="divide-y divide-zinc-100">
+                    {devTasks.map((t: DevTaskRow) => {
+                      const statusCfg: Record<string, { dot: string; label: string }> = {
+                        awaiting_approval: { dot: 'bg-amber-400', label: '검토중' },
+                        approved: { dot: 'bg-teal-400', label: '승인됨' },
+                        'in-progress': { dot: 'bg-indigo-400', label: '작업중' },
+                        done: { dot: 'bg-emerald-400', label: '완료' },
+                        rejected: { dot: 'bg-zinc-300', label: '반려' },
+                        failed: { dot: 'bg-red-400', label: '실패' },
+                      };
+                      const sc = statusCfg[t.status] ?? { dot: 'bg-zinc-300', label: t.status };
+                      const changedCount = (() => { try { return JSON.parse(t.changed_files || '[]').length; } catch { return 0; } })();
+                      return (
+                        <Link key={t.id} href={`/dev-tasks/${t.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 transition-colors">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${sc.dot}`} />
+                          <span className="text-xs text-zinc-700 flex-1 truncate">{t.title}</span>
+                          <span className="text-[10px] text-zinc-400 shrink-0">{sc.label}</span>
+                          {t.status === 'done' && changedCount > 0 && (
+                            <span className="text-[10px] text-emerald-600 shrink-0">📁 {changedCount}</span>
+                          )}
+                          {t.status === 'done' && changedCount === 0 && (
+                            <span className="text-[10px] text-yellow-600 shrink-0">⚠ 변경없음</span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
               <RelatedPosts postId={id} isGuest={isGuest} />
             </div>
