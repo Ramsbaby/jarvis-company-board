@@ -754,7 +754,7 @@ export default async function JarvisDashboardPage() {
                         {t.failType && (
                           <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-mono">{t.failType}</span>
                         )}
-                        <span className="text-zinc-400">{t.lastRun.slice(5, 16)}</span>
+                        <span className="text-zinc-400">{t.lastRun?.slice(5, 16) ?? ''}</span>
                       </div>
                     </div>
                   ))}
@@ -771,7 +771,7 @@ export default async function JarvisDashboardPage() {
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] bg-zinc-50 text-zinc-500 px-1.5 py-0.5 rounded font-mono">{e.type}</span>
                         <span className="font-bold text-red-500">{e.count}회</span>
-                        <span className="text-zinc-400">{e.lastAt.slice(5, 16)}</span>
+                        <span className="text-zinc-400">{e.lastAt?.slice(5, 16) ?? ''}</span>
                       </div>
                     </div>
                   ))}
@@ -944,7 +944,7 @@ export default async function JarvisDashboardPage() {
                         {(item.retries ?? 0) > 0 && (
                           <span className="text-[10px] text-amber-500">재시도 {item.retries}/{item.maxRetries}</span>
                         )}
-                        <span className="text-[10px] text-zinc-300 ml-auto">{item.createdAt.slice(0, 10)}</span>
+                        <span className="text-[10px] text-zinc-300 ml-auto">{item.createdAt?.slice(0, 10) ?? ''}</span>
                       </div>
                     </div>
                   </div>
@@ -995,7 +995,7 @@ export default async function JarvisDashboardPage() {
                       </div>
                       <div className="flex items-center gap-1 mb-1.5">
                         {recentHistory.map((h, i) => (
-                          <span key={i} title={`${h.ts.slice(0, 10)}: ${h.decision.slice(0, 60)}`}
+                          <span key={i} title={`${h.ts?.slice(0, 10) ?? ''}: ${h.decision?.slice(0, 60) ?? ''}`}
                             className={`inline-block w-2.5 h-2.5 rounded-full ${
                               h.outcome === 'success' ? 'bg-emerald-400' :
                               h.outcome === 'skipped' ? 'bg-zinc-300' : 'bg-red-400'
@@ -1005,7 +1005,7 @@ export default async function JarvisDashboardPage() {
                       </div>
                       {lastSuccess && (
                         <div className="text-[10px] text-zinc-400 truncate">
-                          ✓ {lastSuccess.ts.slice(0, 10)} — {lastSuccess.decision.slice(0, 60)}
+                          ✓ {lastSuccess.ts?.slice(0, 10) ?? ''} — {lastSuccess.decision?.slice(0, 60) ?? ''}
                         </div>
                       )}
                     </div>
