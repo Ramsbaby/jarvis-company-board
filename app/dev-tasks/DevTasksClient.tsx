@@ -1,8 +1,9 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEvent } from '@/contexts/EventContext';
+import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import type { DevTask } from '@/lib/types';
 
 function TaskDetail({ task, isWaiting, onDetailUpdate }: {
@@ -205,6 +206,79 @@ function parseImpactAreas(raw?: string): string[] {
   }
 }
 
+function parseDependsOn(raw?: string): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Sort tasks by dependency order: tasks with no deps first, then topologically */
+function sortByDependency(tasks: DevTask[]): DevTask[] {
+  const taskMap = new Map(tasks.map(t => [t.id, t]));
+  const sorted: DevTask[] = [];
+  const visited = new Set<string>();
+
+  function visit(task: DevTask) {
+    if (visited.has(task.id)) return;
+    visited.add(task.id);
+    const deps = parseDependsOn(task.depends_on);
+    for (const depId of deps) {
+      const dep = taskMap.get(depId);
+      if (dep) visit(dep);
+    }
+    sorted.push(task);
+  }
+
+  for (const task of tasks) visit(task);
+  return sorted;
+}
+
+interface TaskGroup {
+  groupId: string;
+  label: string;
+  tasks: DevTask[];
+}
+
+/** Group tasks: returns { groups: TaskGroup[], ungrouped: DevTask[] } */
+function groupTasks(tasks: DevTask[]): { groups: TaskGroup[]; ungrouped: DevTask[] } {
+  const groupMap = new Map<string, DevTask[]>();
+  const ungrouped: DevTask[] = [];
+
+  for (const task of tasks) {
+    if (task.group_id) {
+      const list = groupMap.get(task.group_id) || [];
+      list.push(task);
+      groupMap.set(task.group_id, list);
+    } else {
+      ungrouped.push(task);
+    }
+  }
+
+  const groups: TaskGroup[] = [];
+  for (const [groupId, groupTasks] of groupMap) {
+    const sorted = sortByDependency(groupTasks);
+    const label = sorted[0]?.post_title || sorted[0]?.title || groupId;
+    groups.push({ groupId, label, tasks: sorted });
+  }
+
+  // Sort groups: groups with in-progress tasks first, then by earliest created_at
+  groups.sort((a, b) => {
+    const aActive = a.tasks.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
+    const bActive = b.tasks.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
+    if (aActive && !bActive) return -1;
+    if (!aActive && bActive) return 1;
+    const aTime = Math.min(...a.tasks.map(t => new Date(t.created_at).getTime()));
+    const bTime = Math.min(...b.tasks.map(t => new Date(t.created_at).getTime()));
+    return bTime - aTime;
+  });
+
+  return { groups, ungrouped };
+}
+
 export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask[] }) {
   const router = useRouter();
   const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
@@ -214,6 +288,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   const [bulkLoading, setBulkLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const { subscribe } = useEvent();
 
   useEffect(() => {
@@ -329,6 +404,14 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     }
   }
 
+  function toggleGroup(groupId: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
+      return next;
+    });
+  }
+
   const grouped = {
     all:               tasks,
     awaiting_approval: tasks.filter(t => t.status === 'awaiting_approval'),
@@ -343,6 +426,213 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   const filtered = searchQuery.trim()
     ? tabFiltered.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()) || (t.detail ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
     : tabFiltered;
+
+  // Group filtered tasks for rendering
+  const { groups: taskGroups, ungrouped: ungroupedTasks } = useMemo(() => groupTasks(filtered), [filtered]);
+
+  // Auto-expand groups that have active tasks, collapse completed groups
+  useEffect(() => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      for (const g of taskGroups) {
+        const allDone = g.tasks.every(t => t.status === 'done' || t.status === 'rejected');
+        if (!allDone && !next.has(g.groupId)) {
+          next.add(g.groupId);
+        }
+      }
+      return next;
+    });
+  // Only run on initial mount and when groups change structurally
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskGroups.map(g => g.groupId).join(',')]);
+
+  function renderTaskCard(task: DevTask) {
+    const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.low;
+    const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.awaiting_approval;
+    const isWaiting = task.status === 'awaiting_approval';
+    const isLoading = actionLoading === task.id;
+    const diffCfg = task.difficulty ? DIFFICULTY_CONFIG[task.difficulty] : null;
+    const impactAreas = parseImpactAreas(task.impact_areas);
+
+    // 유령 태스크 감지: done인데 changed_files가 비어있음
+    const changedFiles = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
+    const isGhostDone = task.status === 'done' && changedFiles.length === 0;
+    const canSelect = ['awaiting_approval', 'rejected', 'failed'].includes(task.status);
+
+    return (
+      <div
+        key={task.id}
+        className={`rounded-xl border overflow-hidden transition-shadow hover:shadow-md ${st.outerBorder} ${selectedIds.has(task.id) ? 'ring-2 ring-indigo-400' : ''}`}
+      >
+        {/* Status stripe */}
+        {st.stripe && <div className={`h-1 w-full ${st.stripe}`} />}
+
+        <div className={`flex items-start gap-2 p-4 ${st.innerBg}`}>
+          {/* Checkbox for bulk selection */}
+          {canSelect && (
+            <input
+              type="checkbox"
+              checked={selectedIds.has(task.id)}
+              onChange={(e) => { e.stopPropagation(); toggleSelect(task.id); }}
+              className="mt-1 w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-300 flex-shrink-0"
+            />
+          )}
+
+          <Link
+            href={`/dev-tasks/${task.id}`}
+            className={`block flex-1 hover:shadow-inner transition-all group`}
+          >
+            {/* Context bar: source → assignee → time (맥락 최우선) */}
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              {task.post_title ? (
+                <span className="text-[10px] text-indigo-500 font-medium truncate max-w-[220px]" title={task.post_title}>
+                  🔗 {task.post_title}
+                </span>
+              ) : task.source?.startsWith('board:') ? (
+                <span className="text-[10px] text-indigo-400 font-medium">🔗 이사회 토론</span>
+              ) : task.source?.startsWith('manual:') ? (
+                <span className="text-[10px] text-zinc-400">✏️ 수동 등록</span>
+              ) : task.source?.startsWith('cron:') ? (
+                <span className="text-[10px] text-zinc-400">🤖 자동 감지</span>
+              ) : null}
+              {task.assignee && (
+                <>
+                  <span className="text-zinc-200 text-[10px]">·</span>
+                  <span className="text-[10px] text-zinc-600 font-medium bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded">
+                    {task.assignee}팀
+                  </span>
+                </>
+              )}
+              <span className="text-zinc-200 text-[10px] ml-auto hidden sm:inline">·</span>
+              <span className="text-[10px] text-zinc-400 ml-auto sm:ml-0">{timeAgo(task.created_at)}</span>
+            </div>
+
+            {/* Header row */}
+            <div className="flex items-start gap-3 mb-2.5">
+              <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+              <div className="flex-1 min-w-0">
+                {/* 태스크 제목 — 코드 포함 시 인라인 코드 표시 */}
+                <h3 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">
+                  {renderTitle(task.title)}
+                </h3>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${st.badgeCls}`}>{st.badgeLabel}</span>
+                  {isGhostDone && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md border font-medium bg-yellow-50 border-yellow-300 text-yellow-700">⚠ 변경 없음</span>
+                  )}
+                  {task.status === 'rejected' && task.rejection_note && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md border bg-zinc-50 border-zinc-200 text-zinc-500 truncate max-w-[180px]" title={task.rejection_note}>
+                      💬 {task.rejection_note.slice(0, 30)}{task.rejection_note.length > 30 ? '…' : ''}
+                    </span>
+                  )}
+                  {diffCfg && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${diffCfg.cls}`}>{diffCfg.label}</span>
+                  )}
+                  {task.estimated_minutes != null && task.estimated_minutes > 0 && (
+                    <span className="text-[10px] text-zinc-400">⏱ {task.estimated_minutes}분</span>
+                  )}
+                  {impactAreas.map(area => {
+                    const ac = IMPACT_AREA_CONFIG[area];
+                    return (
+                      <span key={area} className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200">
+                        {ac ? `${ac.emoji} ${ac.label}` : area}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+              <svg
+                className="w-4 h-4 text-zinc-300 group-hover:text-indigo-400 transition-colors shrink-0 mt-0.5"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+
+            {/* Detail — 있으면 표시, 없으면 "쉬운 설명" 버튼 */}
+            <TaskDetail task={task} isWaiting={isWaiting} onDetailUpdate={(id, detail) => {
+              setTasks(prev => prev.map(t => t.id === id ? { ...t, detail } : t));
+            }} />
+
+            {/* Impact lines */}
+            {task.expected_impact && task.status !== 'done' && (
+              <p className="text-[11px] text-zinc-500 italic mb-1.5">
+                💡 {task.expected_impact.length > 80 ? task.expected_impact.slice(0, 80) + '…' : task.expected_impact}
+              </p>
+            )}
+            {task.actual_impact && task.status === 'done' && (
+              <p className="text-[11px] text-emerald-600 italic mb-1.5">
+                ✨ {task.actual_impact.length > 80 ? task.actual_impact.slice(0, 80) + '…' : task.actual_impact}
+              </p>
+            )}
+
+            {/* Timestamps */}
+            {task.approved_at && (
+              <p className="text-[10px] text-emerald-500 mt-1">✓ {new Date(task.approved_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 승인됨</p>
+            )}
+            {task.started_at && (
+              <p className="text-[10px] text-indigo-500 mt-0.5">▶ {new Date(task.started_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 시작됨</p>
+            )}
+            {task.completed_at && (
+              <p className="text-[10px] text-emerald-600 mt-0.5">✓ {new Date(task.completed_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 완료됨</p>
+            )}
+            {task.rejected_at && (
+              <p className="text-[10px] text-zinc-400 mt-0.5">✕ {new Date(task.rejected_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 반려됨</p>
+            )}
+          </Link>
+        </div>{/* end flex wrapper (checkbox + link) */}
+
+        {/* Delete — awaiting_approval 태스크 */}
+        {task.status === 'awaiting_approval' && (
+          <div className="flex justify-end items-center gap-1 px-4 pb-3 pt-2 border-t border-zinc-100">
+            <button
+              onClick={() => handleDelete(task.id)}
+              disabled={isLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              🗑 삭제
+            </button>
+          </div>
+        )}
+
+        {/* Delete — rejected / failed 태스크 */}
+        {(task.status === 'rejected' || task.status === 'failed') && (
+          <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
+            <button
+              onClick={() => handleDelete(task.id)}
+              disabled={isLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              {isLoading ? <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin inline-block" /> : '🗑 삭제'}
+            </button>
+          </div>
+        )}
+
+        {/* Approve/Reject — 우측 정렬, 버튼 크기 확대 */}
+        {isWaiting && (
+          <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-amber-100 bg-amber-50/40">
+            <button
+              onClick={() => handleAction(task.id, 'rejected')}
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              ✕ 반려
+            </button>
+            <button
+              onClick={() => handleAction(task.id, 'approved')}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
+            >
+              {isLoading ? (
+                <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
+              ) : '✓ 승인하고 작업 시작'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const STATS = [
     { label: '검토 요청됨',      key: 'awaiting_approval', color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-400',   pulse: true },
@@ -464,193 +754,108 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(task => {
-            const cfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.low;
-            const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.awaiting_approval;
-            const isWaiting = task.status === 'awaiting_approval';
-            const isLoading = actionLoading === task.id;
-            const diffCfg = task.difficulty ? DIFFICULTY_CONFIG[task.difficulty] : null;
-            const impactAreas = parseImpactAreas(task.impact_areas);
+          {/* Grouped tasks */}
+          {taskGroups.map(group => {
+            const isExpanded = expandedGroups.has(group.groupId);
+            const doneCount = group.tasks.filter(t => t.status === 'done').length;
+            const total = group.tasks.length;
+            const allDone = doneCount === total;
+            const inProgressCount = group.tasks.filter(t => t.status === 'in-progress').length;
+            const awaitingCount = group.tasks.filter(t => t.status === 'awaiting_approval').length;
 
-            // 유령 태스크 감지: done인데 changed_files가 비어있음
-            const changedFiles = (() => { try { return JSON.parse(task.changed_files || '[]'); } catch { return []; } })();
-            const isGhostDone = task.status === 'done' && changedFiles.length === 0;
-            const canSelect = ['awaiting_approval', 'rejected', 'failed'].includes(task.status);
+            // Build a set of all task IDs in this group for dependency checking
+            const groupTaskIds = new Set(group.tasks.map(t => t.id));
 
             return (
-              <div
-                key={task.id}
-                className={`rounded-xl border overflow-hidden transition-shadow hover:shadow-md ${st.outerBorder} ${selectedIds.has(task.id) ? 'ring-2 ring-indigo-400' : ''}`}
-              >
-                {/* Status stripe */}
-                {st.stripe && <div className={`h-1 w-full ${st.stripe}`} />}
-
-                <div className={`flex items-start gap-2 p-4 ${st.innerBg}`}>
-                  {/* Checkbox for bulk selection */}
-                  {canSelect && (
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(task.id)}
-                      onChange={(e) => { e.stopPropagation(); toggleSelect(task.id); }}
-                      className="mt-1 w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-300 flex-shrink-0"
-                    />
-                  )}
-
-                <Link
-                  href={`/dev-tasks/${task.id}`}
-                  className={`block flex-1 hover:shadow-inner transition-all group`}
+              <div key={group.groupId} className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
+                {/* Group header */}
+                <button
+                  onClick={() => toggleGroup(group.groupId)}
+                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-700/40 transition-colors"
                 >
-                  {/* Context bar: source → assignee → time (맥락 최우선) */}
-                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                    {task.post_title ? (
-                      <span className="text-[10px] text-indigo-500 font-medium truncate max-w-[220px]" title={task.post_title}>
-                        🔗 {task.post_title}
-                      </span>
-                    ) : task.source?.startsWith('board:') ? (
-                      <span className="text-[10px] text-indigo-400 font-medium">🔗 이사회 토론</span>
-                    ) : task.source?.startsWith('manual:') ? (
-                      <span className="text-[10px] text-zinc-400">✏️ 수동 등록</span>
-                    ) : task.source?.startsWith('cron:') ? (
-                      <span className="text-[10px] text-zinc-400">🤖 자동 감지</span>
-                    ) : null}
-                    {task.assignee && (
-                      <>
-                        <span className="text-zinc-200 text-[10px]">·</span>
-                        <span className="text-[10px] text-zinc-600 font-medium bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded">
-                          {task.assignee}팀
-                        </span>
-                      </>
-                    )}
-                    <span className="text-zinc-200 text-[10px] ml-auto hidden sm:inline">·</span>
-                    <span className="text-[10px] text-zinc-400 ml-auto sm:ml-0">{timeAgo(task.created_at)}</span>
-                  </div>
-
-                  {/* Header row */}
-                  <div className="flex items-start gap-3 mb-2.5">
-                    <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
-                    <div className="flex-1 min-w-0">
-                      {/* 태스크 제목 — 코드 포함 시 인라인 코드 표시 */}
-                      <h3 className="text-sm font-semibold text-zinc-900 leading-snug group-hover:text-indigo-700">
-                        {renderTitle(task.title)}
-                      </h3>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${cfg.badge}`}>{cfg.label}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${st.badgeCls}`}>{st.badgeLabel}</span>
-                        {isGhostDone && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md border font-medium bg-yellow-50 border-yellow-300 text-yellow-700">⚠ 변경 없음</span>
+                  {isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  }
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-200 truncate">
+                      📦 {group.label}
+                    </h3>
+                    {/* Progress bar */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="flex-1 h-1 rounded-full bg-slate-600 overflow-hidden">
+                        {total > 0 && (
+                          <div className="h-full flex">
+                            {doneCount > 0 && (
+                              <div className="bg-emerald-500 h-full" style={{ width: `${(doneCount / total) * 100}%` }} />
+                            )}
+                            {inProgressCount > 0 && (
+                              <div className="bg-blue-500 h-full" style={{ width: `${(inProgressCount / total) * 100}%` }} />
+                            )}
+                          </div>
                         )}
-                        {task.status === 'rejected' && task.rejection_note && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md border bg-zinc-50 border-zinc-200 text-zinc-500 truncate max-w-[180px]" title={task.rejection_note}>
-                            💬 {task.rejection_note.slice(0, 30)}{task.rejection_note.length > 30 ? '…' : ''}
-                          </span>
-                        )}
-                        {diffCfg && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${diffCfg.cls}`}>{diffCfg.label}</span>
-                        )}
-                        {task.estimated_minutes != null && task.estimated_minutes > 0 && (
-                          <span className="text-[10px] text-zinc-400">⏱ {task.estimated_minutes}분</span>
-                        )}
-                        {impactAreas.map(area => {
-                          const ac = IMPACT_AREA_CONFIG[area];
-                          return (
-                            <span key={area} className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200">
-                              {ac ? `${ac.emoji} ${ac.label}` : area}
-                            </span>
-                          );
-                        })}
                       </div>
+                      <span className="text-[10px] text-slate-400 tabular-nums shrink-0">
+                        {doneCount}/{total}
+                      </span>
                     </div>
-                    <svg
-                      className="w-4 h-4 text-zinc-300 group-hover:text-indigo-400 transition-colors shrink-0 mt-0.5"
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
                   </div>
-
-                  {/* Detail — 있으면 표시, 없으면 "쉬운 설명" 버튼 */}
-                  <TaskDetail task={task} isWaiting={isWaiting} onDetailUpdate={(id, detail) => {
-                    setTasks(prev => prev.map(t => t.id === id ? { ...t, detail } : t));
-                  }} />
-
-                  {/* Impact lines */}
-                  {task.expected_impact && task.status !== 'done' && (
-                    <p className="text-[11px] text-zinc-500 italic mb-1.5">
-                      💡 {task.expected_impact.length > 80 ? task.expected_impact.slice(0, 80) + '…' : task.expected_impact}
-                    </p>
-                  )}
-                  {task.actual_impact && task.status === 'done' && (
-                    <p className="text-[11px] text-emerald-600 italic mb-1.5">
-                      ✨ {task.actual_impact.length > 80 ? task.actual_impact.slice(0, 80) + '…' : task.actual_impact}
-                    </p>
-                  )}
-
-                  {/* Timestamps */}
-                  {task.approved_at && (
-                    <p className="text-[10px] text-emerald-500 mt-1">✓ {new Date(task.approved_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 승인됨</p>
-                  )}
-                  {task.started_at && (
-                    <p className="text-[10px] text-indigo-500 mt-0.5">▶ {new Date(task.started_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 시작됨</p>
-                  )}
-                  {task.completed_at && (
-                    <p className="text-[10px] text-emerald-600 mt-0.5">✓ {new Date(task.completed_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 완료됨</p>
-                  )}
-                  {task.rejected_at && (
-                    <p className="text-[10px] text-zinc-400 mt-0.5">✕ {new Date(task.rejected_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 반려됨</p>
-                  )}
-                </Link>
-                </div>{/* end flex wrapper (checkbox + link) */}
-
-                {/* Delete — awaiting_approval 태스크 */}
-                {task.status === 'awaiting_approval' && (
-                  <div className="flex justify-end items-center gap-1 px-4 pb-3 pt-2 border-t border-zinc-100">
-                    <button
-                      onClick={() => handleDelete(task.id)}
-                      disabled={isLoading}
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
-                    >
-                      🗑 삭제
-                    </button>
+                  {/* Status badges */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {awaitingCount > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-medium">
+                        🔍 {awaitingCount}
+                      </span>
+                    )}
+                    {inProgressCount > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-400 font-medium">
+                        ⚙ {inProgressCount}
+                      </span>
+                    )}
+                    {allDone && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-medium">
+                        🎉 완료
+                      </span>
+                    )}
                   </div>
-                )}
+                </button>
 
-                {/* Delete — rejected / failed 태스크 */}
-                {(task.status === 'rejected' || task.status === 'failed') && (
-                  <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-zinc-100">
-                    <button
-                      onClick={() => handleDelete(task.id)}
-                      disabled={isLoading}
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
-                    >
-                      {isLoading ? <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin inline-block" /> : '🗑 삭제'}
-                    </button>
-                  </div>
-                )}
+                {/* Expanded child tasks */}
+                {isExpanded && (
+                  <div className="ml-6 border-l-2 border-slate-700 pl-4 pb-3 pr-3 space-y-2">
+                    {group.tasks.map(task => {
+                      const deps = parseDependsOn(task.depends_on);
+                      const depsInGroup = deps.filter(d => groupTaskIds.has(d));
+                      const allDepsDone = depsInGroup.length === 0 || depsInGroup.every(depId => {
+                        const depTask = group.tasks.find(t => t.id === depId);
+                        return depTask?.status === 'done';
+                      });
 
-                {/* Approve/Reject — 우측 정렬, 버튼 크기 확대 */}
-                {isWaiting && (
-                  <div className="flex justify-end items-center gap-2 px-4 pb-3 pt-2 border-t border-amber-100 bg-amber-50/40">
-                    <button
-                      onClick={() => handleAction(task.id, 'rejected')}
-                      disabled={isLoading}
-                      className="px-4 py-2 text-sm font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
-                    >
-                      ✕ 반려
-                    </button>
-                    <button
-                      onClick={() => handleAction(task.id, 'approved')}
-                      disabled={isLoading}
-                      className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
-                    >
-                      {isLoading ? (
-                        <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중</>
-                      ) : '✓ 승인하고 작업 시작'}
-                    </button>
+                      return (
+                        <div key={task.id}>
+                          {/* Dependency indicator */}
+                          {depsInGroup.length > 0 && (
+                            <div className="flex items-center gap-1 mb-1 ml-1">
+                              <span className={`w-3 h-3 flex items-center justify-center rounded-full ${allDepsDone ? 'bg-emerald-500/20' : 'bg-slate-600'}`}>
+                                {allDepsDone && <Check className="w-2 h-2 text-emerald-400" />}
+                              </span>
+                              <span className="text-[9px] text-slate-500">
+                                {allDepsDone ? '선행 완료' : `선행 ${depsInGroup.length}개 대기`}
+                              </span>
+                            </div>
+                          )}
+                          {renderTaskCard(task)}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             );
           })}
+
+          {/* Ungrouped tasks (no group_id) */}
+          {ungroupedTasks.map(task => renderTaskCard(task))}
         </div>
       )}
     </div>

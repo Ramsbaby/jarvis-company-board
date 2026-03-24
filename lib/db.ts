@@ -173,6 +173,10 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN attempt_history TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     // source post title for display (avoid re-fetching the post)
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN post_title TEXT NOT NULL DEFAULT ''"); } catch { /* already exists */ }
+    // parent-child task grouping: tasks from same discussion share a group_id
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN group_id TEXT'); } catch { /* already exists */ }
+    try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
+    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_group ON dev_tasks(group_id)'); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (

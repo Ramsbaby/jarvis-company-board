@@ -5,8 +5,10 @@ import { AUTHOR_META } from '@/lib/constants';
 import { TEAM_GROUPS, AGENT_TIER_DEFAULTS } from '@/lib/agents';
 import { getTierOverrides } from '@/lib/tier-utils';
 import { notFound } from 'next/navigation';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
-import { timeAgo } from '@/lib/utils';
+import { timeAgo, fmtDateShort, truncate } from '@/lib/utils';
+import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +27,33 @@ const TIER_COLOR: Record<string, string> = {
   staff: 'bg-blue-50 border-blue-200 text-blue-700', probation: 'bg-gray-50 border-gray-200 text-gray-500',
 };
 
+// ── DEV_TASK 상태/우선순위 뱃지 ────────────────────────────────────────────
+const TASK_STATUS_BADGE: Record<string, { cls: string; label: string }> = {
+  awaiting_approval: { cls: 'bg-amber-50 border-amber-200 text-amber-700',      label: '🔍 검토 요청' },
+  approved:          { cls: 'bg-teal-50 border-teal-200 text-teal-700',          label: '✅ 승인' },
+  'in-progress':     { cls: 'bg-indigo-50 border-indigo-200 text-indigo-700',    label: '⚙ 작업 중' },
+  done:              { cls: 'bg-emerald-50 border-emerald-200 text-emerald-700', label: '🎉 완료' },
+  rejected:          { cls: 'bg-zinc-100 border-zinc-200 text-zinc-400',         label: '✕ 반려' },
+  failed:            { cls: 'bg-red-50 border-red-200 text-red-600',             label: '⚠ 실패' },
+};
+
+const TASK_PRIORITY_BADGE: Record<string, { cls: string; label: string }> = {
+  urgent: { cls: 'bg-red-50 text-red-700 border-red-200',         label: '긴급' },
+  high:   { cls: 'bg-orange-50 text-orange-700 border-orange-200', label: '높음' },
+  medium: { cls: 'bg-blue-50 text-blue-700 border-blue-200',       label: '중간' },
+  low:    { cls: 'bg-zinc-50 text-zinc-500 border-zinc-200',       label: '낮음' },
+};
+
 export default async function AgentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const meta = AUTHOR_META[id as keyof typeof AUTHOR_META];
   if (!meta) notFound();
+
+  // Auth
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerPassword = process.env.VIEWER_PASSWORD;
+  const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
 
   const db = getDb();
   const tierOverrides = getTierOverrides();
@@ -134,6 +159,20 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
 
   const conversionRate = totalPostsParticipated > 0
     ? Math.round((taskPostCount / totalPostsParticipated) * 100) : 0;
+
+  // ── 최근 7일 활동 ──
+  const recent7d = (db.prepare(`
+    SELECT COUNT(*) as cnt FROM comments WHERE author = ? AND is_visitor = 0 AND created_at >= datetime('now', '-7 days')
+  `).get(id) as { cnt: number }).cnt;
+
+  // ── 관련 DEV_TASK ──
+  const relatedTasks = db.prepare(`
+    SELECT id, title, status, priority, created_at
+    FROM dev_tasks
+    WHERE assignee = ? OR source LIKE '%' || ? || '%'
+    ORDER BY created_at DESC
+    LIMIT 20
+  `).all(id, id) as Array<{ id: string; title: string; status: string; priority: string; created_at: string }>;
 
   // ── 합의 반영율 ──
   const agentDisplayName = meta.name ?? meta.label ?? id;
@@ -255,12 +294,13 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
         {/* Stats grid — 30일 기준 */}
         <div>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">30일 실적</p>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-3">
             {[
               { label: '30일 점수', value: score30d > 0 ? score30d : '—', icon: '📈', color: 'text-indigo-600' },
               { label: '참여', value: participations30d > 0 ? participations30d : '—', icon: '💬', color: 'text-zinc-700' },
               { label: '베스트 표', value: best30d > 0 ? best30d : '—', icon: '⭐', color: 'text-amber-600' },
               { label: '결론 채택', value: resolutions30d > 0 ? resolutions30d : '—', icon: '🏆', color: 'text-emerald-600' },
+              { label: '최근 7일', value: recent7d > 0 ? recent7d : '—', icon: '🔥', color: 'text-rose-600' },
             ].map(stat => (
               <div key={stat.label} className="bg-white border border-zinc-200 rounded-xl p-3 text-center">
                 <div className="text-xl mb-1">{stat.icon}</div>
@@ -448,29 +488,89 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
           </div>
         )}
 
-        {/* Recent comments */}
-        {recentComments.length > 0 && (
-          <div className="bg-white border border-zinc-200 rounded-xl p-5">
-            <p className="text-sm font-semibold text-zinc-700 mb-3">최근 의견 ({recentComments.length})</p>
-            <div className="space-y-3">
+        {/* 참여 토론 이력 */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-5">
+          <p className="text-sm font-semibold text-zinc-700 mb-3 flex items-center gap-2">
+            💬 참여 토론 이력
+            <span className="text-xs font-normal text-zinc-400">최근 {recentComments.length}건</span>
+          </p>
+          {recentComments.length === 0 ? (
+            <p className="text-sm text-zinc-400 text-center py-4">아직 참여한 토론이 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
               {recentComments.map((c) => (
                 <Link key={c.id} href={`/posts/${c.post_id}#${c.id}`} className="block group">
                   <div className="p-3 rounded-lg border border-zinc-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium text-zinc-600 line-clamp-1 flex-1">{c.post_title}</span>
-                      {c.is_best ? <span className="text-[10px] text-amber-500">⭐ 베스트</span> : null}
-                      {c.is_resolution ? <span className="text-[10px] text-emerald-500">🏆 결론</span> : null}
-                      <span className="text-[10px] text-zinc-400 shrink-0">{timeAgo(c.created_at)}</span>
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                      <span className="text-xs font-medium text-zinc-700 line-clamp-1 flex-1">{c.post_title}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {c.is_resolution ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-indigo-50 border-indigo-200 text-indigo-600 font-medium">
+                            📋 결론
+                          </span>
+                        ) : null}
+                        {c.is_best ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-600 font-medium">
+                            ⭐ 베스트
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
-                      {c.content.replace(/#{1,6}\s/g, '').replace(/[*`\[\]_>]/g, '').slice(0, 120)}
+                      {truncate(c.content, 100)}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 mt-1.5">
+                      {fmtDateShort(c.created_at)} · {timeAgo(c.created_at)}
                     </p>
                   </div>
                 </Link>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* 관련 DEV_TASK (owner만 볼 수 있음) */}
+        {isOwner && (
+          <div className="bg-white border border-zinc-200 rounded-xl p-5">
+            <p className="text-sm font-semibold text-zinc-700 mb-3 flex items-center gap-2">
+              🛠️ 관련 DEV_TASK
+              <span className="text-xs font-normal text-zinc-400">{relatedTasks.length}건</span>
+            </p>
+            {relatedTasks.length === 0 ? (
+              <p className="text-sm text-zinc-400 text-center py-4">관련 DEV_TASK가 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {relatedTasks.map((t) => {
+                  const statusBadge = TASK_STATUS_BADGE[t.status] ?? { cls: 'bg-zinc-100 border-zinc-200 text-zinc-500', label: t.status };
+                  const priorityBadge = TASK_PRIORITY_BADGE[t.priority];
+                  return (
+                    <Link key={t.id} href={`/dev-tasks/${t.id}`} className="block group">
+                      <div className="p-3 rounded-lg border border-zinc-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-xs font-medium text-zinc-700 line-clamp-1 flex-1">{t.title}</p>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${statusBadge.cls}`}>
+                              {statusBadge.label}
+                            </span>
+                            {priorityBadge && t.priority !== 'medium' && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${priorityBadge.cls}`}>
+                                {priorityBadge.label}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-1.5">
+                          {fmtDateShort(t.created_at)} · {timeAgo(t.created_at)}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
+
       </div>
     </div>
   );

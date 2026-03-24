@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ExternalLink, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useEvent } from '@/contexts/EventContext';
 import MarkdownContent from '@/components/MarkdownContent';
 import type { DevTask } from '@/lib/types';
@@ -126,6 +127,32 @@ function secsToNextCron(): number {
   return period - (totalSec % period);
 }
 
+
+function toGitHubUrl(filePath: string): string | null {
+  // Normalize path: remove home-dir prefixes
+  let p = filePath
+    .replace(/^~\/\.jarvis\//, '')
+    .replace(/^\/Users\/ramsbaby\/\.jarvis\//, '');
+  if (p !== filePath) {
+    return `https://github.com/Ramsbaby/jarvis/blob/main/${p}`;
+  }
+  // jarvis-board paths
+  p = filePath
+    .replace(/^~\/jarvis-board\//, '')
+    .replace(/^\/Users\/ramsbaby\/jarvis-board\//, '');
+  if (p !== filePath) {
+    return `https://github.com/Ramsbaby/jarvis-board/blob/main/${p}`;
+  }
+  return null;
+}
+
+function parseDependsOn(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((v: unknown) => typeof v === 'string' && v.length > 0) : [];
+  } catch { return []; }
+}
 
 function detectPhase(logs: LogEntry[]): number {
   if (logs.length === 0) return 0;
@@ -344,6 +371,8 @@ export default function TaskDetailClient({
   });
   const [loadingImpact, setLoadingImpact] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [siblingTasks, setSiblingTasks] = useState<DevTask[]>([]);
+  const [siblingsExpanded, setSiblingsExpanded] = useState(true);
 
   // Inline editing state
   const [editingMinutes, setEditingMinutes] = useState(false);
@@ -411,6 +440,15 @@ export default function TaskDetailClient({
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [task.execution_log]);
+
+  // Fetch sibling tasks when group_id exists
+  useEffect(() => {
+    if (!task.group_id) return;
+    fetch(`/api/dev-tasks?group_id=${encodeURIComponent(task.group_id)}`)
+      .then(res => res.ok ? res.json() : [])
+      .then((tasks: DevTask[]) => setSiblingTasks(tasks))
+      .catch(() => setSiblingTasks([]));
+  }, [task.group_id]);
 
   // ── Action handlers ────────────────────────────────────────────────────────
 
@@ -654,6 +692,9 @@ export default function TaskDetailClient({
   const impactAreas: string[] = (() => { try { return JSON.parse(task.impact_areas || '[]'); } catch { return []; } })();
   const attemptHistory: AttemptEntry[] = (() => { try { return JSON.parse(task.attempt_history || '[]'); } catch { return []; } })();
 
+  const dependsOnIds = parseDependsOn(task.depends_on);
+  const isGhostTask = isDone && changedFiles.length === 0;
+
   const waitTime  = elapsed(task.created_at, (task.approved_at ?? task.rejected_at) ?? undefined);
   const workTime  = elapsed(task.started_at ?? undefined, task.completed_at ?? undefined);
   const totalTime = elapsed(task.created_at, (task.completed_at ?? task.rejected_at) ?? undefined);
@@ -890,6 +931,76 @@ export default function TaskDetailClient({
             </div>
           </div>
         </div>
+
+        {/* ── Ghost task warning ── */}
+        {isGhostTask && (
+          <div className="bg-amber-900/30 border border-amber-600/50 rounded-lg p-3 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-200 leading-relaxed">
+              <span className="font-semibold">유령 태스크:</span> 완료 처리되었으나 변경된 파일이 없습니다. 실제 작업이 수행되지 않았을 수 있습니다.
+            </p>
+          </div>
+        )}
+
+        {/* ── Depends on (선행 태스크) ── */}
+        {dependsOnIds.length > 0 && (
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+            <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">선행 태스크 ({dependsOnIds.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {dependsOnIds.map(depId => (
+                <Link
+                  key={depId}
+                  href={`/dev-tasks/${depId}`}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors font-medium"
+                >
+                  <span className="text-indigo-400">→</span>
+                  <span className="font-mono">{depId.length > 16 ? depId.slice(0, 16) + '…' : depId}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Sibling tasks (같은 그룹) ── */}
+        {task.group_id && siblingTasks.length > 1 && (
+          <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+            <button
+              onClick={() => setSiblingsExpanded(v => !v)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-zinc-50 transition-colors"
+            >
+              {siblingsExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">같은 그룹 태스크 ({siblingTasks.length})</span>
+            </button>
+            {siblingsExpanded && (
+              <div className="px-4 pb-3 space-y-1.5">
+                {siblingTasks.map(sibling => {
+                  const isCurrent = sibling.id === task.id;
+                  const pill = STATUS_PILL[sibling.status] ?? STATUS_PILL.awaiting_approval;
+                  return (
+                    <Link
+                      key={sibling.id}
+                      href={`/dev-tasks/${sibling.id}`}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
+                        isCurrent
+                          ? 'bg-blue-900/30 border border-blue-600/30'
+                          : 'hover:bg-zinc-50 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-medium leading-snug truncate ${isCurrent ? 'text-blue-300' : 'text-zinc-700'}`}>
+                          {isCurrent && '▸ '}{sibling.title}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${pill.className}`}>
+                        {pill.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Pending card (미제출) ── */}
         {isPending && isOwner && (
@@ -1579,11 +1690,26 @@ export default function TaskDetailClient({
                 <div>
                   <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">수정된 파일 ({changedFiles.length})</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {changedFiles.map((f, i) => (
-                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-600 font-mono">
-                        {f.split('/').pop() || f}
-                      </span>
-                    ))}
+                    {changedFiles.map((f, i) => {
+                      const ghUrl = toGitHubUrl(f);
+                      return (
+                        <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-600 font-mono">
+                          {f.split('/').pop() || f}
+                          {ghUrl && (
+                            <a
+                              href={ghUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-zinc-400 hover:text-indigo-500 transition-colors"
+                              title={`GitHub에서 보기: ${f}`}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -107,6 +107,10 @@ export interface DevTask {
   impact_analyzed_at: string | null;
   /** JSON-encoded array of attempt history objects */
   attempt_history: string;
+  /** Group ID for parent-child task grouping (tasks from same discussion share a group_id) */
+  group_id: string | null;
+  /** JSON-encoded string array of task IDs this task depends on */
+  depends_on: string;
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────

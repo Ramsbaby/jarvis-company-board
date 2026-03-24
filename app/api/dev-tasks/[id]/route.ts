@@ -36,7 +36,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail } = body;
+  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail, group_id, depends_on } = body;
 
   // Agents can set operational statuses; owner can approve/reject/close
   const agentAllowed = ['awaiting_approval', 'in-progress', 'done', 'failed', 'rejected'];
@@ -63,16 +63,19 @@ export async function PATCH(
     return NextResponse.json({ ok: true });
   }
 
-  // Owner can update expected_impact/difficulty/estimated_minutes metadata
-  if ((expected_impact !== undefined || difficulty !== undefined || estimated_minutes !== undefined) && !status) {
+  // Owner can update metadata fields without changing status
+  if ((expected_impact !== undefined || difficulty !== undefined || estimated_minutes !== undefined || group_id !== undefined || depends_on !== undefined) && !status) {
     const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const dependsOnStr = depends_on !== undefined ? (typeof depends_on === 'string' ? depends_on : JSON.stringify(depends_on)) : null;
     db.prepare(`UPDATE dev_tasks SET
       expected_impact = COALESCE(?, expected_impact),
       difficulty = COALESCE(?, difficulty),
-      estimated_minutes = COALESCE(?, estimated_minutes)
+      estimated_minutes = COALESCE(?, estimated_minutes),
+      group_id = COALESCE(?, group_id),
+      depends_on = COALESCE(?, depends_on)
       WHERE id = ?`
-    ).run(expected_impact || null, difficulty || null, estimated_minutes || null, id);
+    ).run(expected_impact || null, difficulty || null, estimated_minutes || null, group_id !== undefined ? group_id : null, dependsOnStr, id);
     const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask;
     broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
     return NextResponse.json({ ok: true });
