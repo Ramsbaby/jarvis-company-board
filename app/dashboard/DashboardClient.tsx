@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useEvent } from '@/contexts/EventContext';
 import { RefreshCw } from 'lucide-react';
+import { Drawer, type DrawerSpec } from './Drawer';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -646,9 +647,10 @@ function TeamOverviewSection({ data }: { data: DashboardData['teamOverview'] }) 
 
 // ── 섹션 6: 엔지니어링 상세 (접기, 기본 열림) ─────────────────────────────────
 
-function CronTaskTable({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function CronTaskTable({ sm, onRowClick }: { sm?: DashboardData['sysMetrics']; onRowClick?: (spec: DrawerSpec) => void }) {
   const taskStatus = sm?.cron_stats?.taskStatus ?? {};
   const entries = Object.entries(taskStatus);
+  const circuitBreakers = sm?.circuit_breakers ?? [];
 
   if (entries.length === 0) return null;
 
@@ -668,8 +670,26 @@ function CronTaskTable({ sm }: { sm?: DashboardData['sysMetrics'] }) {
       <div className="space-y-1">
         {sorted.map(([name, info]) => {
           const ok = info.lastStatus === 'OK';
+          const cbMatch = circuitBreakers.find(cb => cb.name === name);
+          const circuitOpen = cbMatch?.state === 'open';
           return (
-            <div key={name} className="flex items-center gap-2 py-0.5">
+            <div
+              key={name}
+              className="flex items-center gap-2 py-0.5 cursor-pointer hover:bg-zinc-50 rounded px-1 -mx-1 transition-colors"
+              onClick={() => onRowClick?.({
+                type: 'cron',
+                title: name,
+                subtitle: `크론 작업 상세 · ${info.lastStatus === 'FAILED' ? '실패' : info.lastStatus === 'OK' ? '정상' : '미실행'}`,
+                data: {
+                  task: name,
+                  status: info.lastStatus ?? 'unknown',
+                  failCount: info.failCount ?? 0,
+                  lastRun: info.lastRun,
+                  circuitOpen,
+                  cbName: name,
+                },
+              })}
+            >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ok ? 'bg-emerald-400' : 'bg-red-500'}`} />
               <span className={`text-[11px] flex-1 truncate ${ok ? 'text-zinc-600' : 'text-red-700 font-medium'}`}>
                 {name.replace(/-/g, ' ')}
@@ -727,7 +747,7 @@ function DiscordChannelCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   );
 }
 
-function RagCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function RagCard({ sm, onOpen }: { sm?: DashboardData['sysMetrics']; onOpen?: (spec: DrawerSpec) => void }) {
   const rag = sm?.rag_stats;
   if (!rag) return null;
 
@@ -735,34 +755,50 @@ function RagCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-2">
-        <span>📚</span>
-        <Label>RAG 상태</Label>
-        {rag.stuck && <span className="ml-auto text-[10px] text-red-500 font-semibold">⚠ 중단됨</span>}
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <div className="text-lg font-black text-zinc-900">{rag.dbSize ?? '-'}</div>
-          <div className="text-[10px] text-zinc-400">DB 크기</div>
+      <div
+        className="cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={() => onOpen?.({
+          type: 'rag',
+          title: 'RAG 상세',
+          subtitle: '자비스 장기 기억 시스템',
+          data: {
+            dbSize: rag.dbSize ?? '?',
+            inboxCount: rag.inboxCount ?? 0,
+            chunks: rag.chunks ?? 0,
+            rebuilding: !!(rag as { rebuilding?: boolean }).rebuilding,
+            stuck: !!(rag.stuck),
+          },
+        })}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <span>📚</span>
+          <Label>RAG 상태</Label>
+          {rag.stuck && <span className="ml-auto text-[10px] text-red-500 font-semibold">⚠ 중단됨</span>}
         </div>
-        <div>
-          <div className="text-lg font-black text-zinc-900">{rag.chunks?.toLocaleString() ?? '-'}</div>
-          <div className="text-[10px] text-zinc-400">청크 수</div>
-        </div>
-        <div>
-          <div className={`text-lg font-black ${inboxHigh ? 'text-amber-600' : 'text-zinc-900'}`}>
-            {rag.inboxCount?.toLocaleString() ?? '-'}
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <div className="text-lg font-black text-zinc-900">{rag.dbSize ?? '-'}</div>
+            <div className="text-[10px] text-zinc-400">DB 크기</div>
           </div>
-          <div className={`text-[10px] ${inboxHigh ? 'text-amber-600' : 'text-zinc-400'}`}>
-            {inboxHigh ? '⚠ 인박스 대기' : '인박스'}
+          <div>
+            <div className="text-lg font-black text-zinc-900">{rag.chunks?.toLocaleString() ?? '-'}</div>
+            <div className="text-[10px] text-zinc-400">청크 수</div>
+          </div>
+          <div>
+            <div className={`text-lg font-black ${inboxHigh ? 'text-amber-600' : 'text-zinc-900'}`}>
+              {rag.inboxCount?.toLocaleString() ?? '-'}
+            </div>
+            <div className={`text-[10px] ${inboxHigh ? 'text-amber-600' : 'text-zinc-400'}`}>
+              {inboxHigh ? '⚠ 인박스 대기' : '인박스'}
+            </div>
           </div>
         </div>
+        {inboxHigh && (
+          <div className="mt-2 text-[11px] text-amber-600 font-medium">
+            인박스 처리 대기 {rag.inboxCount?.toLocaleString()}건 — 적극 처리 권장
+          </div>
+        )}
       </div>
-      {inboxHigh && (
-        <div className="mt-2 text-[11px] text-amber-600 font-medium">
-          인박스 처리 대기 {rag.inboxCount?.toLocaleString()}건 — 적극 처리 권장
-        </div>
-      )}
     </Card>
   );
 }
@@ -794,7 +830,7 @@ function DevQueueCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   );
 }
 
-function CircuitBreakerCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function CircuitBreakerCard({ sm, onRowClick, nowSec }: { sm?: DashboardData['sysMetrics']; onRowClick?: (spec: DrawerSpec) => void; nowSec: number }) {
   const cbs = (sm?.circuit_breakers ?? []).filter(cb => (cb.failCount ?? 0) > 0);
   if (cbs.length === 0) return null;
 
@@ -808,11 +844,29 @@ function CircuitBreakerCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
       <div className="space-y-1">
         {cbs.map((cb, i) => {
           const stateOpen = cb.state === 'open';
+          const cbName = cb.name ?? '(unnamed)';
+          const lastFailTs = cb.last_fail_ts;
+          const lastFailAgo = lastFailTs ? nowSec - lastFailTs : 0;
+          const cooldownRemaining = Math.max(0, 3600 - lastFailAgo);
           return (
-            <div key={i} className="flex items-center gap-2">
+            <div
+              key={i}
+              className="flex items-center gap-2 cursor-pointer hover:bg-zinc-50 rounded px-1 -mx-1 transition-colors py-0.5"
+              onClick={() => onRowClick?.({
+                type: 'cb',
+                title: `회로차단: ${cbName}`,
+                subtitle: `연속 ${cb.failCount}회 실패`,
+                data: {
+                  name: cbName,
+                  failCount: cb.failCount ?? 0,
+                  lastFailAgo,
+                  cooldownRemaining,
+                },
+              })}
+            >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateOpen ? 'bg-red-500' : 'bg-amber-400'}`} />
               <span className={`text-[11px] flex-1 ${stateOpen ? 'text-red-700 font-medium' : 'text-zinc-600'}`}>
-                {cb.name ?? '(unnamed)'}
+                {cbName}
               </span>
               <span className="text-[10px] text-zinc-400">{cb.failCount}회 실패</span>
               <span className={`text-[10px] font-medium ${stateOpen ? 'text-red-600' : 'text-amber-600'}`}>
@@ -826,7 +880,7 @@ function CircuitBreakerCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   );
 }
 
-function LaunchAgentsDetail({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function LaunchAgentsDetail({ sm, onRowClick }: { sm?: DashboardData['sysMetrics']; onRowClick?: (spec: DrawerSpec) => void }) {
   const agents = sm?.launch_agents ?? [];
   if (agents.length === 0) return null;
 
@@ -845,7 +899,22 @@ function LaunchAgentsDetail({ sm }: { sm?: DashboardData['sysMetrics'] }) {
           const broken = a.exitCode === 127;
           const name = LA_SHORT[a.name] ?? a.name.replace('ai.jarvis.', '');
           return (
-            <div key={a.name} className="flex items-center gap-2">
+            <div
+              key={a.name}
+              className="flex items-center gap-2 cursor-pointer hover:bg-zinc-50 rounded px-1 -mx-1 transition-colors py-0.5"
+              onClick={() => onRowClick?.({
+                type: 'service',
+                title: a.name,
+                subtitle: a.pid ? `PID ${a.pid}` : '미실행',
+                data: {
+                  name: a.name,
+                  pid: a.pid,
+                  exitCode: a.exitCode,
+                  loaded: a.loaded,
+                  label: a.name.replace('ai.jarvis.', ''),
+                },
+              })}
+            >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${broken ? 'bg-red-500' : ok ? 'bg-emerald-400' : 'bg-amber-400'}`} />
               <span className={`text-[11px] flex-1 ${broken ? 'text-red-700 font-medium' : ok ? 'text-zinc-600' : 'text-amber-700'}`}>{name}</span>
               <span className="text-[10px] text-zinc-400">
@@ -862,7 +931,7 @@ function LaunchAgentsDetail({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   );
 }
 
-function EngineeringSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+function EngineeringSection({ sm, onOpen, nowSec }: { sm?: DashboardData['sysMetrics']; onOpen?: (spec: DrawerSpec) => void; nowSec: number }) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -877,12 +946,12 @@ function EngineeringSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
 
       {open && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <CronTaskTable sm={sm} />
-          <LaunchAgentsDetail sm={sm} />
+          <CronTaskTable sm={sm} onRowClick={onOpen} />
+          <LaunchAgentsDetail sm={sm} onRowClick={onOpen} />
           <DiscordChannelCard sm={sm} />
-          <RagCard sm={sm} />
+          <RagCard sm={sm} onOpen={onOpen} />
           <DevQueueCard sm={sm} />
-          <CircuitBreakerCard sm={sm} />
+          <CircuitBreakerCard sm={sm} onRowClick={onOpen} nowSec={nowSec} />
         </div>
       )}
     </div>
@@ -924,6 +993,9 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const [data, setData] = useState<DashboardData>(initialData ?? EMPTY_DATA);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [drawer, setDrawer] = useState<DrawerSpec | null>(null);
+  const openDrawer = useCallback((spec: DrawerSpec) => setDrawer(spec), []);
+  const closeDrawer = useCallback(() => setDrawer(null), []);
   const { subscribe } = useEvent();
 
   const fetchData = useCallback(async () => {
@@ -959,9 +1031,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const today = d.todaySummary ?? EMPTY_TODAY;
   const team = d.teamOverview ?? EMPTY_TEAM;
   const sm = d.sysMetrics;
-
-  // 실제 awaiting 카운트: tasks.awaiting (DB 원본) 우선
-  const awaitingCount = d.tasks?.awaiting ?? attention.awaitingApproval.length;
+  const nowSec = Math.floor(new Date().getTime() / 1000);
 
   return (
     <>
@@ -989,15 +1059,85 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         {/* 섹션 1: 전체 상태 */}
         <HealthPanel data={health} sm={sm} />
 
-        {/* 섹션 2: 내 할 일 */}
-        <div className="mb-4">
-          <SectionHeader>내 할 일</SectionHeader>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <ApprovalCard items={attention.awaitingApproval} taskCount={awaitingCount} />
-            <OwnerInputCard items={attention.needsOwnerInput} />
-            <ClosingSoonCard items={attention.closingSoon} />
+        {/* Health Prediction — "자비스 안정성" */}
+        <section className="mb-6">
+          <div
+            className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-5 cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => openDrawer({
+              type: 'health',
+              title: '자비스 안정성 상세',
+              subtitle: '현재 리스크 요인 및 예측',
+              data: {
+                overall: data.healthSummary?.overall,
+                issues: data.healthSummary?.issues ?? [],
+                bot: sm?.health?.discord_bot ?? 'unknown',
+                cronRate: sm?.cron_stats?.rate ?? data.cron?.successRate ?? 100,
+                disk: sm?.disk,
+                memory_mb: sm?.health?.memory_mb,
+              }
+            })}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-zinc-700 uppercase tracking-wide">⚡ 자비스 안정성</h2>
+              <span className="text-xs text-zinc-400">클릭하여 상세 보기</span>
+            </div>
+            {/* 4-pill row */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                {
+                  label: 'Discord 봇',
+                  level: sm?.health?.discord_bot === 'healthy' ? 'green' : 'red',
+                  detail: sm?.health?.discord_bot === 'healthy' ? '정상' : '이상',
+                },
+                {
+                  label: '크론',
+                  level: (sm?.cron_stats?.rate ?? 100) >= 90 ? 'green' : (sm?.cron_stats?.rate ?? 100) >= 70 ? 'yellow' : 'red',
+                  detail: `${sm?.cron_stats?.rate ?? data.cron?.successRate ?? 100}%`,
+                },
+                {
+                  label: 'RAG 인박스',
+                  level: (sm?.rag_stats?.inboxCount ?? 0) > 15000 ? 'red' : (sm?.rag_stats?.inboxCount ?? 0) > 5000 ? 'yellow' : 'green',
+                  detail: `${(sm?.rag_stats?.inboxCount ?? 0).toLocaleString()}건`,
+                },
+                {
+                  label: '디스크',
+                  level: (sm?.disk?.used_pct ?? 0) > 90 ? 'red' : (sm?.disk?.used_pct ?? 0) > 75 ? 'yellow' : 'green',
+                  detail: `${sm?.disk?.used_pct ?? '?'}%`,
+                },
+              ].map(({ label, level, detail }) => (
+                <span key={label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                  level === 'green' ? 'bg-emerald-100 text-emerald-700' :
+                  level === 'yellow' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${level === 'green' ? 'bg-emerald-500' : level === 'yellow' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                  {label}: {detail}
+                </span>
+              ))}
+            </div>
+            {/* Crash prediction text */}
+            {(() => {
+              const inboxCount = sm?.rag_stats?.inboxCount ?? 0;
+              const cronRate = sm?.cron_stats?.rate ?? 100;
+              const diskPct = sm?.disk?.used_pct ?? 0;
+              const botOk = sm?.health?.discord_bot === 'healthy';
+
+              const risks: string[] = [];
+              if (inboxCount > 15000) risks.push('RAG compact 위험 (자비스 일시 중단 가능)');
+              if (cronRate < 70) risks.push('크론 다수 실패 (기능 저하)');
+              if (diskPct > 90) risks.push('디스크 부족 (장애 임박)');
+              if (!botOk) risks.push('Discord 봇 이상');
+
+              if (risks.length === 0) return (
+                <p className="mt-3 text-xs text-emerald-600 font-medium">✓ 현재 장애 위험 요소 없음</p>
+              );
+              return (
+                <p className="mt-3 text-xs text-rose-600">
+                  ⚠️ 장애 위험: {risks.join(' · ')}
+                </p>
+              );
+            })()}
           </div>
-        </div>
+        </section>
 
         {/* 섹션 3: 오늘 활동 */}
         <TodayActivityCard sm={sm} today={today} />
@@ -1009,9 +1149,11 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         <TeamOverviewSection data={team} />
 
         {/* 섹션 6: 엔지니어링 상세 */}
-        <EngineeringSection sm={sm} />
+        <EngineeringSection sm={sm} onOpen={openDrawer} nowSec={nowSec} />
 
       </main>
+
+      <Drawer spec={drawer} onClose={closeDrawer} />
     </>
   );
 }
