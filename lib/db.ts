@@ -177,6 +177,10 @@ export function getDb(): Database.Database {
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN group_id TEXT'); } catch { /* already exists */ }
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_group ON dev_tasks(group_id)'); } catch { /* already exists */ }
+    // parent-child task hierarchy
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN parent_id TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN task_type TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_parent ON dev_tasks(parent_id)'); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (

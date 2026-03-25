@@ -27,7 +27,21 @@ export async function GET(req: NextRequest) {
   } else {
     tasks = db.prepare(`SELECT * FROM dev_tasks ${orderBy}`).all() as DevTask[];
   }
-  return NextResponse.json(tasks);
+  // Attach children to group_parent tasks (in-memory, no extra DB queries)
+  const parentMap = new Map<string, DevTask[]>();
+  for (const task of tasks) {
+    if (task.parent_id) {
+      const siblings = parentMap.get(task.parent_id) || [];
+      siblings.push(task);
+      parentMap.set(task.parent_id, siblings);
+    }
+  }
+  const result = tasks.map(task =>
+    task.task_type === 'group_parent'
+      ? { ...task, children: parentMap.get(task.id) || [] }
+      : task
+  );
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
@@ -39,7 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval', post_title = '', group_id = null, depends_on = '[]' } = body;
+  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval', post_title = '', group_id = null, depends_on = '[]', parent_id = null, task_type = null } = body;
   if (!id || !title) return NextResponse.json({ error: 'id and title required' }, { status: 400 });
 
   const validStatuses = ['awaiting_approval', 'approved', 'in-progress', 'done', 'rejected'];
@@ -82,9 +96,9 @@ export async function POST(req: NextRequest) {
   // INSERT OR IGNORE: duplicate id는 기존 태스크(진행 중 상태/로그 포함) 보존
   const dependsOnStr = typeof depends_on === 'string' ? depends_on : JSON.stringify(depends_on || []);
   const info = db.prepare(
-    `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, approved_at, post_title, group_id, depends_on)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, title, detail, priority, source, assignee, insertStatus, approvedAtValue, post_title, group_id || null, dependsOnStr);
+    `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, approved_at, post_title, group_id, depends_on, parent_id, task_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, title, detail, priority, source, assignee, insertStatus, approvedAtValue, post_title, group_id || null, dependsOnStr, parent_id || null, task_type || null);
 
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id);
   // 신규 삽입된 경우에만 SSE 브로드캐스트

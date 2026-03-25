@@ -240,6 +240,9 @@ function sortByDependency(tasks: DevTask[]): DevTask[] {
 interface TaskGroup {
   groupId: string;
   label: string;
+  /** group_parent task if exists, null for legacy flat groups */
+  parentTask: DevTask | null;
+  /** child tasks only (excludes the group_parent task itself) */
   tasks: DevTask[];
 }
 
@@ -253,26 +256,40 @@ function groupTasks(tasks: DevTask[]): { groups: TaskGroup[]; ungrouped: DevTask
       const list = groupMap.get(task.group_id) || [];
       list.push(task);
       groupMap.set(task.group_id, list);
-    } else {
+    } else if (!task.parent_id) {
+      // tasks with parent_id but no group_id shouldn't appear as ungrouped
       ungrouped.push(task);
     }
   }
 
   const groups: TaskGroup[] = [];
-  for (const [groupId, groupTasks] of groupMap) {
-    const sorted = sortByDependency(groupTasks);
-    const label = sorted[0]?.post_title || sorted[0]?.title || groupId;
-    groups.push({ groupId, label, tasks: sorted });
+  for (const [groupId, allGroupTasks] of groupMap) {
+    // Identify parent task (task_type === 'group_parent')
+    const parentTask = allGroupTasks.find(t => t.task_type === 'group_parent') ?? null;
+    // Children: exclude the parent task itself
+    const childTasks = parentTask
+      ? allGroupTasks.filter(t => t.id !== parentTask.id)
+      : allGroupTasks;
+    const sorted = sortByDependency(childTasks);
+    // Label: from parent task title, post_title, or first child
+    const label = parentTask?.post_title
+      || sorted[0]?.post_title
+      || parentTask?.title
+      || sorted[0]?.title
+      || groupId;
+    groups.push({ groupId, label, parentTask, tasks: sorted });
   }
 
   // Sort groups: groups with in-progress tasks first, then by earliest created_at
   groups.sort((a, b) => {
-    const aActive = a.tasks.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
-    const bActive = b.tasks.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
+    const aTasksForSort = a.parentTask ? [a.parentTask, ...a.tasks] : a.tasks;
+    const bTasksForSort = b.parentTask ? [b.parentTask, ...b.tasks] : b.tasks;
+    const aActive = aTasksForSort.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
+    const bActive = bTasksForSort.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
     if (aActive && !bActive) return -1;
     if (!aActive && bActive) return 1;
-    const aTime = Math.min(...a.tasks.map(t => new Date(t.created_at).getTime()));
-    const bTime = Math.min(...b.tasks.map(t => new Date(t.created_at).getTime()));
+    const aTime = Math.min(...aTasksForSort.map(t => new Date(t.created_at).getTime()));
+    const bTime = Math.min(...bTasksForSort.map(t => new Date(t.created_at).getTime()));
     return bTime - aTime;
   });
 
@@ -815,66 +832,97 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
             const isExpanded = expandedGroups.has(group.groupId);
             const doneCount = group.tasks.filter(t => t.status === 'done').length;
             const total = group.tasks.length;
-            const allDone = doneCount === total;
+            const allDone = total > 0 && doneCount === total;
             const inProgressCount = group.tasks.filter(t => t.status === 'in-progress').length;
             const awaitingCount = group.tasks.filter(t => t.status === 'awaiting_approval').length;
+            const pt = group.parentTask; // shorthand for parent task
 
             // Build a set of all task IDs in this group for dependency checking
             const groupTaskIds = new Set(group.tasks.map(t => t.id));
 
+            // Parent task status style
+            const ptSt = pt ? (STATUS_STYLE[pt.status] ?? STATUS_STYLE.awaiting_approval) : null;
+
             return (
               <div key={group.groupId} className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
                 {/* Group header */}
-                <button
-                  onClick={() => toggleGroup(group.groupId)}
-                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-indigo-50/60 transition-colors"
-                >
-                  {isExpanded
-                    ? <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" />
-                    : <ChevronRight className="w-4 h-4 text-indigo-400 shrink-0" />
-                  }
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-zinc-800 truncate">
-                      📦 {group.label}
-                    </h3>
-                    {/* Progress bar */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="flex-1 h-1 rounded-full bg-zinc-200 overflow-hidden">
-                        {total > 0 && (
-                          <div className="h-full flex">
-                            {doneCount > 0 && (
-                              <div className="bg-emerald-500 h-full" style={{ width: `${(doneCount / total) * 100}%` }} />
-                            )}
-                            {inProgressCount > 0 && (
-                              <div className="bg-indigo-500 h-full" style={{ width: `${(inProgressCount / total) * 100}%` }} />
-                            )}
-                          </div>
-                        )}
+                <div className="w-full">
+                  {/* Status stripe from parent task */}
+                  {pt && ptSt?.stripe && <div className={`h-1 w-full ${ptSt.stripe}`} />}
+
+                  <div className="flex items-center gap-3 p-4">
+                    <button
+                      onClick={() => toggleGroup(group.groupId)}
+                      className="shrink-0 p-0.5 rounded hover:bg-indigo-100 transition-colors"
+                    >
+                      {isExpanded
+                        ? <ChevronDown className="w-4 h-4 text-indigo-400" />
+                        : <ChevronRight className="w-4 h-4 text-indigo-400" />
+                      }
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      {/* Title: link to parent task if exists */}
+                      {pt ? (
+                        <Link href={`/dev-tasks/${pt.id}`} className="block group/ptitle hover:opacity-80 transition-opacity">
+                          <h3 className="text-sm font-semibold text-zinc-800 truncate group-hover/ptitle:text-indigo-700">
+                            🏛️ {group.label}
+                          </h3>
+                        </Link>
+                      ) : (
+                        <h3 className="text-sm font-semibold text-zinc-800 truncate">
+                          📦 {group.label}
+                        </h3>
+                      )}
+                      {/* Progress bar */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
+                          {total > 0 && (
+                            <div className="h-full flex">
+                              {doneCount > 0 && (
+                                <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
+                              )}
+                              {inProgressCount > 0 && (
+                                <div className="bg-indigo-500 h-full transition-all" style={{ width: `${(inProgressCount / total) * 100}%` }} />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">
+                          {doneCount}/{total} 완료
+                        </span>
                       </div>
-                      <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">
-                        {doneCount}/{total}
-                      </span>
+                    </div>
+                    {/* Status badges */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {pt && ptSt && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ptSt.badgeCls}`}>
+                          {ptSt.badgeLabel}
+                        </span>
+                      )}
+                      {awaitingCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 font-medium">
+                          🔍 {awaitingCount}
+                        </span>
+                      )}
+                      {inProgressCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
+                          ⚙ {inProgressCount}
+                        </span>
+                      )}
+                      {allDone && !pt && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
+                          🎉 완료
+                        </span>
+                      )}
+                      <button
+                        onClick={() => toggleGroup(group.groupId)}
+                        className="text-[10px] px-1.5 py-0.5 rounded text-zinc-400 hover:text-zinc-600 transition-colors"
+                      >
+                        {isExpanded ? '접기' : `${group.tasks.length}개`}
+                      </button>
                     </div>
                   </div>
-                  {/* Status badges */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {awaitingCount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 font-medium">
-                        🔍 {awaitingCount}
-                      </span>
-                    )}
-                    {inProgressCount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
-                        ⚙ {inProgressCount}
-                      </span>
-                    )}
-                    {allDone && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
-                        🎉 완료
-                      </span>
-                    )}
-                  </div>
-                </button>
+                </div>
 
                 {/* Expanded child tasks */}
                 {isExpanded && (

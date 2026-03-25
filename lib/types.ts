@@ -111,6 +111,12 @@ export interface DevTask {
   group_id: string | null;
   /** JSON-encoded string array of task IDs this task depends on */
   depends_on: string;
+  /** Parent task ID — set on child tasks, null on standalone/parent tasks */
+  parent_id: string | null;
+  /** Task type: 'group_parent' for parent tasks, 'child' for child tasks, null for standalone */
+  task_type: string | null;
+  /** Children tasks — populated for group_parent tasks in API responses */
+  children?: DevTask[];
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────

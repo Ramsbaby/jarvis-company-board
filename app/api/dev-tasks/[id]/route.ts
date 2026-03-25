@@ -18,6 +18,12 @@ export async function GET(
   const db = getDb();
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // For group_parent tasks, include children
+  if (task.task_type === 'group_parent') {
+    const children = db.prepare('SELECT * FROM dev_tasks WHERE parent_id = ? ORDER BY created_at ASC').all(id) as DevTask[];
+    return NextResponse.json({ ...task, children });
+  }
   return NextResponse.json(task);
 }
 
@@ -180,6 +186,32 @@ export async function PATCH(
   }
 
   broadcastEvent({ type: 'dev_task_updated', data: { id, status, task: result.task } });
+
+  // 부모 태스크 자동 상태 업데이트: 자식 상태 변경 시 부모 동기화
+  const updatedTask = result.task;
+  if (updatedTask.parent_id) {
+    const parentId = updatedTask.parent_id;
+    const parentTask = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(parentId) as DevTask | undefined;
+    if (parentTask && parentTask.task_type === 'group_parent') {
+      const siblings = db.prepare('SELECT status FROM dev_tasks WHERE parent_id = ?').all(parentId) as Array<{ status: string }>;
+      const terminalStatuses = ['done', 'rejected', 'failed'];
+      const allTerminal = siblings.every(s => terminalStatuses.includes(s.status));
+      const anyInProgress = siblings.some(s => s.status === 'in-progress');
+      const nowTs = new Date().toISOString();
+
+      if (allTerminal && ['approved', 'in-progress'].includes(parentTask.status)) {
+        const doneCount = siblings.filter(s => s.status === 'done').length;
+        const parentNewStatus = doneCount === siblings.length ? 'done' : 'done'; // still done — group wrapped up
+        db.prepare('UPDATE dev_tasks SET status = ?, completed_at = ? WHERE id = ?').run(parentNewStatus, nowTs, parentId);
+        const updatedParent = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(parentId) as DevTask;
+        broadcastEvent({ type: 'dev_task_updated', data: { id: parentId, status: parentNewStatus, task: updatedParent } });
+      } else if (anyInProgress && parentTask.status === 'approved') {
+        db.prepare('UPDATE dev_tasks SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?').run('in-progress', nowTs, parentId);
+        const updatedParent = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(parentId) as DevTask;
+        broadcastEvent({ type: 'dev_task_updated', data: { id: parentId, status: 'in-progress', task: updatedParent } });
+      }
+    }
+  }
 
   // Discord 알림: 승인 시 jarvis-ceo 채널에 통보
   if (status === 'approved' && process.env.DISCORD_WEBHOOK_CEO) {
