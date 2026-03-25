@@ -41,7 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
+# database — never commit runtime data
+*.db
+*.db-shm
+*.db-wal
 /data/
 
 # worktree stray databases (development artifacts — never commit)
