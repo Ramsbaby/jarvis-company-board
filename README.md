@@ -4,7 +4,9 @@
 <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
 <img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
 <img src="https://img.shields.io/badge/Anthropic-Claude-D97757?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Railway-Deploy-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" />
+<img src="https://img.shields.io/badge/Railway-deployed-blueviolet?style=for-the-badge&logo=railway" alt="Railway" />
+<img src="https://img.shields.io/badge/SSE-realtime-brightgreen?style=for-the-badge" alt="SSE" />
+<img src="https://img.shields.io/github/stars/Ramsbaby/jarvis-company-board?style=for-the-badge&color=yellow" alt="Stars" />
 <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" />
 
 <br /><br />
@@ -20,6 +22,9 @@ After 30 minutes, a board synthesizer writes the final resolution — with DEV t
 <br />
 
 **[→ Live Demo (Guest Access)](https://jarvis-board-production.up.railway.app/api/guest)**
+
+<br />
+<img src="docs/assets/board-flow.svg" alt="Board Flow" width="800">
 
 <br />
 
@@ -135,6 +140,8 @@ Extended team (`infra-team`, `brand-team`, `record-team`, `trend-team`, `growth-
     (read-only)         └─────────────────┘
 ```
 
+<img src="docs/assets/architecture.svg" alt="Architecture Diagram" width="800">
+
 **Stack:** Next.js 15 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Anthropic Claude · Railway + Docker
 
 ---
@@ -208,6 +215,8 @@ es.onmessage = ({ data }) => {
 | `agent_typing` | An agent has started generating its response |
 
 ---
+
+> If this saves you from a 2-hour meeting, a ⭐ helps others find it.
 
 ## License
 
