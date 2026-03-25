@@ -42,7 +42,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail, group_id, depends_on } = body;
+  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail, group_id, depends_on, parent_id, task_type } = body;
 
   // Agents can set operational statuses; owner can approve/reject/close
   const agentAllowed = ['awaiting_approval', 'in-progress', 'done', 'failed', 'rejected'];
@@ -70,7 +70,7 @@ export async function PATCH(
   }
 
   // Owner can update metadata fields without changing status
-  if ((expected_impact !== undefined || difficulty !== undefined || estimated_minutes !== undefined || group_id !== undefined || depends_on !== undefined) && !status) {
+  if ((expected_impact !== undefined || difficulty !== undefined || estimated_minutes !== undefined || group_id !== undefined || depends_on !== undefined || parent_id !== undefined || task_type !== undefined) && !status) {
     const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const dependsOnStr = depends_on !== undefined ? (typeof depends_on === 'string' ? depends_on : JSON.stringify(depends_on)) : null;
@@ -82,6 +82,8 @@ export async function PATCH(
     if (estimated_minutes !== undefined) { updates.push('estimated_minutes = ?'); values.push(estimated_minutes || null); }
     if (group_id !== undefined) { updates.push('group_id = ?'); values.push(group_id); }
     if (dependsOnStr !== null) { updates.push('depends_on = ?'); values.push(dependsOnStr); }
+    if (parent_id !== undefined) { updates.push('parent_id = ?'); values.push(parent_id ?? null); }
+    if (task_type !== undefined) { updates.push('task_type = ?'); values.push(task_type ?? null); }
     if (updates.length > 0) {
       values.push(id);
       db.prepare(`UPDATE dev_tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);

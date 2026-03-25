@@ -246,32 +246,37 @@ interface TaskGroup {
   tasks: DevTask[];
 }
 
-/** Group tasks: returns { groups: TaskGroup[], ungrouped: DevTask[] } */
-function groupTasks(tasks: DevTask[]): { groups: TaskGroup[]; ungrouped: DevTask[] } {
+/**
+ * Group tasks: filteredChildren = tab-filtered non-parent tasks, allTasks = full list for parent lookup.
+ * Parent tasks are always sourced from allTasks regardless of current tab filter.
+ */
+function groupTasks(filteredChildren: DevTask[], allTasks: DevTask[]): { groups: TaskGroup[]; ungrouped: DevTask[] } {
+  // Build parent lookup: group_id → group_parent task (from full task list, not filtered)
+  const parentByGroupId = new Map<string, DevTask>();
+  for (const task of allTasks) {
+    if (task.task_type === 'group_parent' && task.group_id) {
+      parentByGroupId.set(task.group_id, task);
+    }
+  }
+
   const groupMap = new Map<string, DevTask[]>();
   const ungrouped: DevTask[] = [];
 
-  for (const task of tasks) {
+  for (const task of filteredChildren) {
     if (task.group_id) {
       const list = groupMap.get(task.group_id) || [];
       list.push(task);
       groupMap.set(task.group_id, list);
-    } else if (!task.parent_id) {
-      // tasks with parent_id but no group_id shouldn't appear as ungrouped
+    } else {
       ungrouped.push(task);
     }
   }
 
   const groups: TaskGroup[] = [];
-  for (const [groupId, allGroupTasks] of groupMap) {
-    // Identify parent task (task_type === 'group_parent')
-    const parentTask = allGroupTasks.find(t => t.task_type === 'group_parent') ?? null;
-    // Children: exclude the parent task itself
-    const childTasks = parentTask
-      ? allGroupTasks.filter(t => t.id !== parentTask.id)
-      : allGroupTasks;
+  for (const [groupId, childTasks] of groupMap) {
     const sorted = sortByDependency(childTasks);
-    // Label: from parent task title, post_title, or first child
+    // Look up parent from ALL tasks (not filtered) — parent may be in different status tab
+    const parentTask = parentByGroupId.get(groupId) ?? null;
     const label = parentTask?.post_title
       || sorted[0]?.post_title
       || parentTask?.title
@@ -280,16 +285,16 @@ function groupTasks(tasks: DevTask[]): { groups: TaskGroup[]; ungrouped: DevTask
     groups.push({ groupId, label, parentTask, tasks: sorted });
   }
 
-  // Sort groups: groups with in-progress tasks first, then by earliest created_at
+  // Sort: active groups first, then newest
   groups.sort((a, b) => {
-    const aTasksForSort = a.parentTask ? [a.parentTask, ...a.tasks] : a.tasks;
-    const bTasksForSort = b.parentTask ? [b.parentTask, ...b.tasks] : b.tasks;
-    const aActive = aTasksForSort.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
-    const bActive = bTasksForSort.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
+    const aRef = a.parentTask ? [a.parentTask, ...a.tasks] : a.tasks;
+    const bRef = b.parentTask ? [b.parentTask, ...b.tasks] : b.tasks;
+    const aActive = aRef.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
+    const bActive = bRef.some(t => ['in-progress', 'awaiting_approval', 'approved'].includes(t.status));
     if (aActive && !bActive) return -1;
     if (!aActive && bActive) return 1;
-    const aTime = Math.min(...aTasksForSort.map(t => new Date(t.created_at).getTime()));
-    const bTime = Math.min(...bTasksForSort.map(t => new Date(t.created_at).getTime()));
+    const aTime = Math.min(...aRef.map(t => new Date(t.created_at).getTime()));
+    const bTime = Math.min(...bRef.map(t => new Date(t.created_at).getTime()));
     return bTime - aTime;
   });
 
@@ -462,37 +467,72 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     });
   }
 
+  // 그룹 내 awaiting_approval 자식 전체 승인 (부모 포함)
+  async function handleGroupApproveAll(group: TaskGroup) {
+    const awaitingChildren = group.tasks.filter(t => t.status === 'awaiting_approval');
+    const awaitingParent = group.parentTask?.status === 'awaiting_approval' ? [group.parentTask] : [];
+    const toApprove = [...awaitingChildren, ...awaitingParent];
+    if (toApprove.length === 0) return;
+    if (!confirm(`이 그룹의 태스크 ${toApprove.length}개를 승인할까요?`)) return;
+    setBulkLoading(true);
+    setActionError(null);
+    for (const t of toApprove) {
+      try {
+        const res = await fetch(`/api/dev-tasks/${t.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'approved' }),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setTasks(prev => prev.map(p => p.id === t.id ? { ...p, ...updated } : p));
+        }
+      } catch { /* continue */ }
+    }
+    setBulkLoading(false);
+    router.refresh();
+  }
+
+  // 부모 태스크는 탭 카운트/필터에서 제외 (그룹 헤더 전용)
+  const nonParentTasks = useMemo(() => tasks.filter(t => t.task_type !== 'group_parent'), [tasks]);
+
   const grouped = {
-    all:               tasks,
-    awaiting_approval: tasks.filter(t => t.status === 'awaiting_approval'),
-    approved:          tasks.filter(t => t.status === 'approved'),
-    'in-progress':     tasks.filter(t => t.status === 'in-progress'),
-    done:              tasks.filter(t => t.status === 'done'),
-    rejected:          tasks.filter(t => t.status === 'rejected'),
-    failed:            tasks.filter(t => t.status === 'failed'),
+    all:               nonParentTasks,
+    awaiting_approval: nonParentTasks.filter(t => t.status === 'awaiting_approval'),
+    approved:          nonParentTasks.filter(t => t.status === 'approved'),
+    'in-progress':     nonParentTasks.filter(t => t.status === 'in-progress'),
+    done:              nonParentTasks.filter(t => t.status === 'done'),
+    rejected:          nonParentTasks.filter(t => t.status === 'rejected'),
+    failed:            nonParentTasks.filter(t => t.status === 'failed'),
   } as Record<string, DevTask[]>;
 
-  const tabFiltered = grouped[tab] ?? tasks;
+  const tabFiltered = grouped[tab] ?? nonParentTasks;
   const filtered = searchQuery.trim()
     ? tabFiltered.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()) || (t.detail ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
     : tabFiltered;
 
-  // Group filtered tasks for rendering
-  const { groups: taskGroups, ungrouped: ungroupedTasks } = useMemo(() => groupTasks(filtered), [filtered]);
+  // Group filtered children — pass full tasks for parent lookup (parent may be in different tab)
+  const { groups: taskGroups, ungrouped: ungroupedTasks } = useMemo(
+    () => groupTasks(filtered, tasks),
+     
+    [filtered, tasks],
+  );
 
-  // Auto-expand groups that have active tasks, collapse completed groups
+  // Auto-expand groups with active tasks; use parent task status when available
   useEffect(() => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
       for (const g of taskGroups) {
-        const allDone = g.tasks.every(t => t.status === 'done' || t.status === 'rejected');
-        if (!allDone && !next.has(g.groupId)) {
+        const parentDone = g.parentTask ? ['done', 'rejected', 'failed'].includes(g.parentTask.status) : false;
+        const childrenAllDone = g.tasks.every(t => ['done', 'rejected', 'failed'].includes(t.status));
+        const isComplete = parentDone && childrenAllDone;
+        if (!isComplete && !next.has(g.groupId)) {
           next.add(g.groupId);
         }
       }
       return next;
     });
-  // Only run on initial mount and when groups change structurally
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskGroups.map(g => g.groupId).join(',')]);
 
@@ -913,6 +953,16 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                         <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
                           🎉 완료
                         </span>
+                      )}
+                      {/* 그룹 내 awaiting 태스크가 있을 때 그룹 승인 버튼 */}
+                      {group.tasks.some(t => t.status === 'awaiting_approval') && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleGroupApproveAll(group); }}
+                          disabled={bulkLoading}
+                          className="text-[10px] px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap font-medium shadow-sm"
+                        >
+                          ✓ 그룹 승인
+                        </button>
                       )}
                       <button
                         onClick={() => toggleGroup(group.groupId)}
