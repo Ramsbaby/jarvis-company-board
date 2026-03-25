@@ -722,7 +722,7 @@ export default function TaskDetailClient({
   // Last activity time from logs
   const lastLogTime = logs.length > 0 ? new Date(logs[logs.length - 1].time) : null;
   const lastActivitySecs = lastLogTime ? Math.floor((Date.now() - lastLogTime.getTime()) / 1000) : null;
-  const isStale = lastActivitySecs !== null && lastActivitySecs > 120 && isLive;
+  const isStale = lastActivitySecs !== null && lastActivitySecs > 60 && isLive;
 
   // Completion durations
   const completionDuration = task.started_at && task.completed_at
@@ -1620,23 +1620,31 @@ export default function TaskDetailClient({
               </div>
             </div>
 
-            {/* Log entries */}
-            <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto space-y-1.5">
+            {/* Log entries — tail -f style */}
+            <div className="p-4 font-mono text-xs max-h-[480px] overflow-y-auto space-y-1">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
               ) : (
-                (logExpanded ? logs : logs.slice(-5)).map((entry, i) => {
+                (logExpanded ? logs : logs.slice(-8)).map((entry, i) => {
                   const msg = entry.message;
                   const isErr     = /error|fail|failed/i.test(msg);
                   const isWarn    = /warn|warning/i.test(msg);
-                  const isDoneLog = /done|complete|success|완료/i.test(msg);
-                  const color = isErr ? 'text-red-400' : isWarn ? 'text-amber-400' : isDoneLog ? 'text-emerald-400' : 'text-zinc-200';
+                  const isDoneLog = /done|complete|success|완료|✅/i.test(msg);
+                  // 도구 호출 감지 (stream-to-board.sh가 보내는 이모지 패턴)
+                  const isToolCall = /^(📖|📝|✏️|💻|🔍|📁|🤖|🔗|🌐|🔧)\s/.test(msg);
+                  const isText     = /^💬/.test(msg);
+                  const color = isErr ? 'text-red-400' :
+                                isWarn ? 'text-amber-400' :
+                                isDoneLog ? 'text-emerald-400' :
+                                isToolCall ? 'text-cyan-300' :
+                                isText ? 'text-violet-300' :
+                                'text-zinc-300';
                   return (
-                    <div key={i} className="flex gap-3 leading-relaxed">
-                      <span className="text-zinc-600 shrink-0 tabular-nums">
+                    <div key={i} className={`flex gap-3 leading-relaxed ${isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : ''}`}>
+                      <span className="text-zinc-600 shrink-0 tabular-nums w-[68px]">
                         {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
-                      <span className={color}>{msg}</span>
+                      <span className={`${color} break-all`}>{msg}</span>
                     </div>
                   );
                 })
