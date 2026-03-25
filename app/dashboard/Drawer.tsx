@@ -35,7 +35,7 @@ function useAction() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  const run = useCallback(async (type: string, params: Record<string, unknown> = {}) => {
+  const run = useCallback(async (type: string, params: Record<string, unknown> = {}, onSuccess?: () => void) => {
     setLoading(true);
     setResult(null);
     try {
@@ -45,7 +45,9 @@ function useAction() {
         body: JSON.stringify({ type, params }),
       });
       const d = await r.json();
-      setResult({ ok: d.ok !== false, message: d.message || d.error || (r.ok ? '완료' : '실패') });
+      const ok = d.ok !== false && r.ok;
+      setResult({ ok, message: d.message || d.error || (r.ok ? '완료' : '실패') });
+      if (ok) onSuccess?.();
     } catch {
       setResult({ ok: false, message: '네트워크 오류' });
     } finally {
@@ -53,7 +55,28 @@ function useAction() {
     }
   }, []);
 
-  return { loading, result, run, clearResult: () => setResult(null) };
+  const createTask = useCallback(async (title: string, detail: string, priority = 'high') => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const id = 'fix-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      const r = await fetch('/api/dev-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id, title: `🔧 ${title}`, detail, priority, source: 'dashboard:fix', assignee: 'jarvis-coder', status: 'awaiting_approval' }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || '태스크 생성 실패');
+      setResult({ ok: true, message: 'Dev 큐에 등록됨 → Dev 태스크에서 승인하면 Jarvis Coder가 처리합니다' });
+    } catch (e) {
+      setResult({ ok: false, message: (e as Error).message });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { loading, result, run, createTask, clearResult: () => setResult(null) };
 }
 
 // ── useServiceLogs hook ────────────────────────────────────────────────────────
@@ -95,8 +118,13 @@ function colorLine(line: string): string {
   return 'text-zinc-400';
 }
 
-function LogViewer({ service, title = '최근 로그' }: { service: string; title?: string }) {
+function LogViewer({ service, title = '최근 로그', forceRefresh = 0 }: { service: string; title?: string; forceRefresh?: number }) {
   const { lines, fetching, refresh, logRef } = useServiceLogs(service);
+
+  useEffect(() => {
+    if (forceRefresh > 0) refresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceRefresh]);
 
   return (
     <div className="mt-4">
@@ -140,7 +168,8 @@ function ActionResult({ result, onClose }: { result: { ok: boolean; message: str
 // ── CronContent ───────────────────────────────────────────────────────────────
 
 function CronContent({ data }: { data: { task: string; status: string; failCount?: number; lastRun?: string; circuitOpen?: boolean; cbName?: string } }) {
-  const { loading, result, run, clearResult } = useAction();
+  const { loading, result, run, createTask, clearResult } = useAction();
+  const [logTick, setLogTick] = useState(0);
 
   const claudeContext = `Jarvis 크론 작업 '${data.task}'이 실패했습니다. 최근 ${data.failCount || 1}회 연속 실패. 로그 파일: ~/.jarvis/logs/cron.log. 원인을 분석하고 수정해주세요.`;
 
@@ -160,14 +189,16 @@ function CronContent({ data }: { data: { task: string; status: string; failCount
         )}
       </div>
 
-      <LogViewer service={data.task} />
+      <LogViewer service={data.task} forceRefresh={logTick} />
 
       <ActionResult result={result} onClose={clearResult} />
 
       {/* Action buttons */}
       <div className="mt-4 flex flex-wrap gap-2">
         <button
-          onClick={() => run('run_cron', { task: data.task })}
+          onClick={() => run('run_cron', { task: data.task }, () => {
+            setTimeout(() => setLogTick(t => t + 1), 10000);
+          })}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
@@ -183,11 +214,11 @@ function CronContent({ data }: { data: { task: string; status: string; failCount
           </button>
         )}
         <button
-          onClick={() => run('claude_fix', { context: claudeContext, title: data.task })}
+          onClick={() => createTask(`${data.task} 오류 수정`, claudeContext)}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
-          <Bot size={14} /> Claude로 수정
+          <Bot size={14} /> 수정 요청
         </button>
       </div>
     </div>
@@ -197,15 +228,48 @@ function CronContent({ data }: { data: { task: string; status: string; failCount
 // ── ServiceContent ─────────────────────────────────────────────────────────────
 
 function ServiceContent({ data }: { data: { name: string; pid: string | null; exitCode: number | null; loaded: boolean; label: string } }) {
-  const { loading, result, run, clearResult } = useAction();
+  const { loading, result, run, createTask, clearResult } = useAction();
+  const [logTick, setLogTick] = useState(0);
+  const [postCheck, setPostCheck] = useState<{ status: 'checking' | 'ok' | 'fail'; message: string } | null>(null);
 
   // exitCode -15 = SIGTERM (normal restart), 0 = clean, 127 = broken
   const isBroken = data.exitCode === 127;
+  const serviceName = data.name.replace('ai.jarvis.', '');
 
   const statusText = !data.loaded ? '미로드' : data.pid ? `실행 중 (PID: ${data.pid})` : `종료됨 (exitCode: ${data.exitCode})`;
   const statusColor = !data.loaded ? 'bg-zinc-100 text-zinc-500' : data.pid ? 'bg-emerald-100 text-emerald-700' : isBroken ? 'bg-rose-100 text-rose-700' : 'bg-zinc-100 text-zinc-500';
 
   const claudeContext = `LaunchAgent '${data.name}'이 문제 상태입니다. exitCode: ${data.exitCode}. ${isBroken ? '127은 명령어를 찾을 수 없음을 의미합니다.' : ''} ~/.jarvis/logs/ 에서 관련 로그를 확인하고 수정해주세요.`;
+
+  function pollServiceStatus() {
+    setPostCheck({ status: 'checking', message: '서비스 상태 확인 중...' });
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch('/api/admin/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'get_metrics' }),
+        });
+        const d = await r.json();
+        if (d.ok && d.data) {
+          const agent = (d.data.launch_agents ?? []).find(
+            (a: { name: string; pid: string | null }) => a.name === data.name
+          );
+          if (agent?.pid) {
+            setPostCheck({ status: 'ok', message: `✓ 서비스 정상 실행 중 (PID: ${agent.pid})` });
+            clearInterval(interval);
+            return;
+          }
+        }
+      } catch { /* continue */ }
+      if (attempts >= 5) {
+        setPostCheck({ status: 'fail', message: '⚠️ 15초 후에도 PID 미확인 — 로그를 확인해주세요' });
+        clearInterval(interval);
+      }
+    }, 3000);
+  }
 
   return (
     <div className="p-6 flex flex-col h-full">
@@ -226,24 +290,38 @@ function ServiceContent({ data }: { data: { name: string; pid: string | null; ex
         )}
       </div>
 
-      <LogViewer service={data.name} />
+      <LogViewer service={data.name} forceRefresh={logTick} />
+
+      {postCheck && (
+        <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 text-xs ${
+          postCheck.status === 'checking' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+          postCheck.status === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+          'bg-amber-50 text-amber-700 border border-amber-200'
+        }`}>
+          {postCheck.status === 'checking' && <span className="w-3 h-3 border-2 border-blue-400 border-t-blue-700 rounded-full animate-spin shrink-0" />}
+          {postCheck.message}
+        </div>
+      )}
 
       <ActionResult result={result} onClose={clearResult} />
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
-          onClick={() => run('restart_service', { name: data.name.replace('ai.jarvis.', '') })}
+          onClick={() => run('restart_service', { name: serviceName }, () => {
+            setPostCheck(null);
+            setTimeout(() => { setLogTick(t => t + 1); pollServiceStatus(); }, 5000);
+          })}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           <RotateCcw size={14} /> 재시작
         </button>
         <button
-          onClick={() => run('claude_fix', { context: claudeContext, title: data.name })}
+          onClick={() => createTask(`${data.name} 오류 수정`, claudeContext)}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
-          <Bot size={14} /> Claude로 수정
+          <Bot size={14} /> 수정 요청
         </button>
       </div>
     </div>
@@ -253,7 +331,7 @@ function ServiceContent({ data }: { data: { name: string; pid: string | null; ex
 // ── RagContent ─────────────────────────────────────────────────────────────────
 
 function RagContent({ data }: { data: { dbSize: string; inboxCount: number; chunks: number; rebuilding: boolean; stuck: boolean } }) {
-  const { loading, result, run, clearResult } = useAction();
+  const { loading, result, run, createTask, clearResult } = useAction();
 
   const riskLevel = data.inboxCount > 15000 ? 'critical' : data.inboxCount > 5000 ? 'warning' : 'ok';
 
@@ -318,11 +396,11 @@ function RagContent({ data }: { data: { dbSize: string; inboxCount: number; chun
           <Play size={14} /> 인박스 지금 처리
         </button>
         <button
-          onClick={() => run('claude_fix', { context: `RAG 인박스가 ${data.inboxCount}건 쌓여있습니다. ~/.jarvis/rag/ 디렉토리와 rag-index 크론을 확인하고 최적화 방안을 제시해주세요.`, title: 'RAG 인박스 분석' })}
+          onClick={() => createTask('RAG 인박스 분석', `RAG 인박스가 ${data.inboxCount}건 쌓여있습니다. ~/.jarvis/rag/ 디렉토리와 rag-index 크론을 확인하고 최적화 방안을 제시해주세요.`)}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
-          <Bot size={14} /> Claude로 분석
+          <Bot size={14} /> 분석 요청
         </button>
       </div>
     </div>
@@ -332,7 +410,7 @@ function RagContent({ data }: { data: { dbSize: string; inboxCount: number; chun
 // ── CircuitBreakerContent ──────────────────────────────────────────────────────
 
 function CircuitBreakerContent({ data }: { data: { name: string; failCount: number; lastFailAgo: number; cooldownRemaining: number } }) {
-  const { loading, result, run, clearResult } = useAction();
+  const { loading, result, run, createTask, clearResult } = useAction();
   const minutes = Math.floor(data.cooldownRemaining / 60);
 
   return (
@@ -368,11 +446,11 @@ function CircuitBreakerContent({ data }: { data: { name: string; failCount: numb
           <RotateCcw size={14} /> 차단 해제 후 재시도
         </button>
         <button
-          onClick={() => run('claude_fix', { context: `크론 작업 '${data.name}'이 연속 ${data.failCount}회 실패해서 회로차단 상태입니다. ~/.jarvis/logs/cron.log에서 원인을 분석하고 수정해주세요.`, title: `${data.name} 회로차단 수정` })}
+          onClick={() => createTask(`${data.name} 회로차단 수정`, `크론 작업 '${data.name}'이 연속 ${data.failCount}회 실패해서 회로차단 상태입니다. ~/.jarvis/logs/cron.log에서 원인을 분석하고 수정해주세요.`)}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
-          <Bot size={14} /> Claude로 수정
+          <Bot size={14} /> 수정 요청
         </button>
       </div>
     </div>

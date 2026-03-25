@@ -33,6 +33,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // get_metrics: proxy Mac Mini /api/metrics for live status checks
+    if (body.type === 'get_metrics') {
+      const resp = await fetch(`${baseUrl}/api/metrics`, {
+        headers: { 'x-agent-key': process.env.AGENT_API_KEY || '' },
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await resp.json().catch(() => null);
+      return NextResponse.json({ ok: !!data, data });
+    }
+
     const resp = await fetch(`${baseUrl}/api/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-agent-key': process.env.AGENT_API_KEY || '' },

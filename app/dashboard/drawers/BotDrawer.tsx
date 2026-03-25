@@ -7,7 +7,7 @@ import { Bot, Play, RotateCcw, AlertTriangle, CheckCircle2, X } from 'lucide-rea
 function useAction() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const run = useCallback(async (type: string, params: Record<string, unknown> = {}) => {
+  const run = useCallback(async (type: string, params: Record<string, unknown> = {}, onSuccess?: () => void) => {
     setLoading(true);
     setResult(null);
     try {
@@ -17,14 +17,36 @@ function useAction() {
         body: JSON.stringify({ type, params }),
       });
       const d = await r.json();
-      setResult({ ok: d.ok !== false, message: d.message || d.error || (r.ok ? '완료' : '실패') });
+      const ok = d.ok !== false && r.ok;
+      setResult({ ok, message: d.message || d.error || (r.ok ? '완료' : '실패') });
+      if (ok) onSuccess?.();
     } catch {
       setResult({ ok: false, message: '네트워크 오류' });
     } finally {
       setLoading(false);
     }
   }, []);
-  return { loading, result, run, clearResult: () => setResult(null) };
+  const createTask = useCallback(async (title: string, detail: string) => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const id = 'fix-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      const r = await fetch('/api/dev-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id, title: `🔧 ${title}`, detail, priority: 'high', source: 'dashboard:fix', assignee: 'jarvis-coder', status: 'awaiting_approval' }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || '태스크 생성 실패');
+      setResult({ ok: true, message: 'Dev 큐에 등록됨 → Dev 태스크에서 승인하면 Jarvis Coder가 처리합니다' });
+    } catch (e) {
+      setResult({ ok: false, message: (e as Error).message });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  return { loading, result, run, createTask, clearResult: () => setResult(null) };
 }
 
 // ── Types ───────────────────────────────────────────────────────────────────────
@@ -79,8 +101,40 @@ function elapsedColor(ms?: number): string {
 // ── BotContent ──────────────────────────────────────────────────────────────────
 
 export function BotContent({ data }: { data: BotDrawerData }) {
-  const { loading, result, run, clearResult } = useAction();
+  const { loading, result, run, createTask, clearResult } = useAction();
+  const [postCheck, setPostCheck] = useState<{ status: 'checking' | 'ok' | 'fail'; message: string } | null>(null);
   const stats = data.discord_stats;
+
+  function pollBotStatus() {
+    setPostCheck({ status: 'checking', message: '봇 상태 확인 중...' });
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch('/api/admin/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'get_metrics' }),
+        });
+        const d = await r.json();
+        if (d.ok && d.data) {
+          const agent = (d.data.launch_agents ?? []).find(
+            (a: { name: string; pid: string | null }) => a.name === 'ai.jarvis.discord-bot'
+          );
+          if (agent?.pid) {
+            const health = d.data.health?.discord_bot;
+            setPostCheck({ status: 'ok', message: `봇 재시작 완료 · PID ${agent.pid} · ${health === 'healthy' ? '정상 응답 중' : '초기화 중 (조금 기다려주세요)'}` });
+            clearInterval(interval);
+            return;
+          }
+        }
+      } catch { /* continue */ }
+      if (attempts >= 5) {
+        setPostCheck({ status: 'fail', message: '⚠️ 15초 후에도 봇 PID 미확인 — 로그를 확인해주세요' });
+        clearInterval(interval);
+      }
+    }, 3000);
+  }
 
   if (!stats) {
     return (
@@ -246,6 +300,20 @@ export function BotContent({ data }: { data: BotDrawerData }) {
         </div>
       )}
 
+      {/* postCheck 상태 */}
+      {postCheck && (
+        <div className={`p-3 rounded-lg flex items-center gap-2 text-xs ${
+          postCheck.status === 'checking' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+          postCheck.status === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+          'bg-amber-50 text-amber-700 border border-amber-200'
+        }`}>
+          {postCheck.status === 'checking' && <span className="w-3 h-3 border-2 border-blue-400 border-t-blue-700 rounded-full animate-spin shrink-0" />}
+          {postCheck.status === 'ok' && <CheckCircle2 size={14} className="shrink-0" />}
+          {postCheck.status === 'fail' && <AlertTriangle size={14} className="shrink-0" />}
+          <span>{postCheck.message}</span>
+        </div>
+      )}
+
       {/* Action result */}
       {result && (
         <div
@@ -270,23 +338,21 @@ export function BotContent({ data }: { data: BotDrawerData }) {
       {/* 5. 액션 버튼 */}
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => run('restart_service', { name: 'discord-bot' })}
+          onClick={() => run('restart_service', { name: 'discord-bot' }, () => {
+            setPostCheck(null);
+            pollBotStatus();
+          })}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           <RotateCcw size={14} /> 봇 재시작
         </button>
         <button
-          onClick={() =>
-            run('claude_fix', {
-              context: 'Discord 봇 로그 최근 50줄 분석해주세요.',
-              title: '봇 로그 분석',
-            })
-          }
+          onClick={() => createTask('Discord 봇 로그 분석', 'Discord 봇 로그 최근 50줄을 분석하고 이상 여부를 진단해주세요. 로그 경로: ~/.jarvis/logs/discord-bot.log')}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 border border-blue-300 text-blue-700 hover:bg-blue-50 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
-          <Bot size={14} /> 로그 보기
+          <Bot size={14} /> 로그 분석 요청
         </button>
         {loading && (
           <span className="flex items-center gap-1.5 text-xs text-zinc-400 self-center">
