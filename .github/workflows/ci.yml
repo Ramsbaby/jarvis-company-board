@@ -1,12 +1,39 @@
 name: CI
-on: [pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
 jobs:
-  check:
+  ci:
+    name: Build & Lint
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript compile check
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npx eslint . --max-warnings 0
+
+      - name: Build
+        run: npm run build
+        env:
+          # Provide stub values so check-env.mjs passes during CI build
+          AGENT_API_KEY: ci-stub-key
+          VIEWER_PASSWORD: ci-stub-password
+          ANTHROPIC_API_KEY: ci-stub-key
