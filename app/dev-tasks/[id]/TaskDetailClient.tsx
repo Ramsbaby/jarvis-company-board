@@ -1621,28 +1621,42 @@ export default function TaskDetailClient({
             </div>
 
             {/* Log entries — tail -f style */}
-            <div className="p-4 font-mono text-xs max-h-[480px] overflow-y-auto space-y-1">
+            <div className="p-4 font-mono text-xs max-h-[480px] overflow-y-auto space-y-0.5">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
               ) : (
                 (logExpanded ? logs : logs.slice(-8)).map((entry, i) => {
-                  const msg = entry.message;
-                  const isErr     = /error|fail|failed/i.test(msg);
-                  const isWarn    = /warn|warning/i.test(msg);
-                  const isDoneLog = /done|complete|success|완료|✅/i.test(msg);
+                  // 메시지에 박힌 중복 시각 제거 — UI 왼쪽 타임스탬프로 이미 표시됨
+                  const msg = entry.message.replace(/\s*\(\d{2}:\d{2}:\d{2}\)\s*$/, '').trim();
+                  const isErr      = /error|fail|failed/i.test(msg);
+                  const isWarn     = /warn|warning/i.test(msg);
+                  const isStart    = /^⚙️/.test(msg);
+                  const isDone     = /^✅/.test(msg);
+                  const isProgress = /^⏳/.test(msg);
                   // 도구 호출 감지 (stream-to-board.sh가 보내는 이모지 패턴)
                   const isToolCall = /^(📖|📝|✏️|💻|🔍|📁|🤖|🔗|🌐|🔧)\s/.test(msg);
                   const isText     = /^💬/.test(msg);
-                  const color = isErr ? 'text-red-400' :
-                                isWarn ? 'text-amber-400' :
-                                isDoneLog ? 'text-emerald-400' :
+
+                  const color = isErr      ? 'text-red-400' :
+                                isWarn     ? 'text-amber-400' :
+                                isDone     ? 'text-emerald-400' :
+                                isStart    ? 'text-sky-400' :
+                                isProgress ? 'text-zinc-500' :
                                 isToolCall ? 'text-cyan-300' :
-                                isText ? 'text-violet-300' :
-                                'text-zinc-300';
+                                isText     ? 'text-violet-300' :
+                                             'text-zinc-300';
+
+                  // 시작/완료 이벤트는 구분선으로 강조
+                  const isEvent = isStart || isDone;
+
                   return (
-                    <div key={i} className={`flex gap-3 leading-relaxed ${isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : ''}`}>
-                      <span className="text-zinc-600 shrink-0 tabular-nums w-[68px]">
-                        {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    <div key={i} className={`flex gap-3 leading-relaxed
+                      ${isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : ''}
+                      ${isEvent ? 'border-t border-zinc-800 pt-1.5 mt-1' : ''}
+                      ${isProgress ? 'opacity-50' : ''}
+                    `}>
+                      <span className="text-zinc-600 shrink-0 tabular-nums w-[52px]">
+                        {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                       </span>
                       <span className={`${color} break-all`}>{msg}</span>
                     </div>
@@ -1650,9 +1664,9 @@ export default function TaskDetailClient({
                 })
               )}
               {isLive && (
-                <div className="flex gap-3 mt-1">
-                  <span className="text-zinc-700">···</span>
-                  <span className="text-indigo-400 animate-pulse">작업 실행 중</span>
+                <div className="flex gap-3 mt-2 border-t border-zinc-800 pt-2">
+                  <span className="text-zinc-700 w-[52px] shrink-0">···</span>
+                  <span className="text-indigo-400 animate-pulse">실행 중</span>
                 </div>
               )}
               <div ref={logEndRef} />
