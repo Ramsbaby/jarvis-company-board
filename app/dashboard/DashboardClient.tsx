@@ -45,7 +45,6 @@ interface DashboardData {
   teams: Array<{ name: string; merit: number; penalty: number; status: string }>;
   autonomy: { autonomy_rate?: string; total_decisions?: number; executed?: number; by_team?: Record<string, { total?: number; executed?: number }> };
   errors: { total24h: number; totalAll: number; topErrors: Array<{ msg: string; count: number }> };
-  // CEO-oriented fields
   healthSummary: {
     overall: 'green' | 'yellow' | 'red';
     botLevel: 'green' | 'yellow' | 'red';
@@ -55,8 +54,8 @@ interface DashboardData {
     issues: Array<{ severity: 'warning' | 'critical'; message: string }>;
   };
   attention: {
-    awaitingApproval: Array<{ id: string; title: string; priority: string; created_at: string; expected_impact: string | null }>;
-    needsOwnerInput: Array<{ id: string; title: string; type: string; created_at: string; comment_count: number }>;
+    awaitingApproval: Array<{ id: string; title: string; priority: string; created_at?: string; expected_impact?: string | null }>;
+    needsOwnerInput: Array<{ id: string; title: string; type: string; created_at?: string; comment_count?: number }>;
     closingSoon: Array<{ id: string; title: string; type: string; remaining_minutes: number }>;
   };
   todaySummary: {
@@ -65,34 +64,34 @@ interface DashboardData {
   };
   teamOverview: {
     mvp: { agent_id: string; score: number; events: number } | null;
-    autonomyRate: number;
-    totalDecisions: number;
-    executed: number;
+    autonomyRate?: number;
+    totalDecisions?: number;
+    executed?: number;
     teams: Array<{ name: string; merit: number; penalty: number; status: string }>;
   };
   sysMetrics?: {
     synced_at?: string;
     disk?: { used_pct: number; free_gb: number; total_gb: number };
-    health?: { discord_bot?: string; memory_mb?: number };
+    health?: { discord_bot?: string; memory_mb?: number; crash_count?: number; last_check?: string };
     discord_stats?: {
       claudeCount?: number;
       totalHuman?: number;
       avgElapsed?: number;
       restartCount?: number;
       botErrors?: number;
-      lastHealth?: { silenceSec?: number; memMB?: number; wsPing?: number };
-      channelActivity?: Array<{ id: string; name: string; human: number; claudes: number }>;
+      lastHealth?: { silenceSec?: number; memMB?: number; wsPing?: number; uptimeSec?: number };
+      channelActivity?: Array<{ id: string; name: string; human: number; bot?: number; claudes: number }>;
     };
     rag_stats?: { dbSize?: string; stuck?: boolean; inboxCount?: number; chunks?: number };
     launch_agents?: Array<{ name: string; pid: string | null; exitCode: number | null; loaded: boolean }>;
     circuit_breakers?: Array<{ name?: string; state?: string; last_fail_ts?: number; failCount?: number }>;
     cron_stats?: {
       rate?: number;
-      recentFailed?: Array<{ task: string; lastRun: string; failCount: number; lastStatus: string }>;
+      recentFailed?: Array<{ task: string; lastRun: string; failCount: number; lastStatus?: string }>;
       taskStatus?: Record<string, { lastRun: string; lastStatus: string; failCount: number }>;
     };
     decisions_today?: Array<{ ts?: string; decision?: string; team?: string; action?: string; status?: string; result?: string }>;
-    dev_queue?: Array<{ id: string; name: string; priority?: number; status: string; assignee?: string; createdAt?: string }>;
+    dev_queue?: Array<{ id?: string; name: string; priority?: number; status: string; assignee?: string; createdAt?: string }>;
     scorecard?: { teams?: Record<string, { merit: number; penalty: number; status: string }> };
   } | null;
 }
@@ -126,20 +125,31 @@ const LA_SHORT: Record<string, string> = {
   'ai.jarvis.orchestrator': '오케스트라',
 };
 
+const TEAM_LABEL: Record<string, string> = {
+  infra: '인프라', council: '이사회', record: '기록', career: '커리어',
+  brand: '브랜드', academy: '아카데미', strategy: '전략',
+};
+
+const TEAM_COLOR: Record<string, string> = {
+  infra: 'bg-blue-100 text-blue-700', council: 'bg-purple-100 text-purple-700',
+  record: 'bg-zinc-100 text-zinc-600', career: 'bg-amber-100 text-amber-700',
+  brand: 'bg-pink-100 text-pink-700', academy: 'bg-emerald-100 text-emerald-700',
+  strategy: 'bg-indigo-100 text-indigo-700',
+};
+
+const PRIORITY_LABEL: Record<string, string> = { urgent: '긴급', high: '높음', medium: '중간', low: '낮음' };
+const PRIORITY_COLOR: Record<string, string> = {
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+  high:   'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  low:    'bg-zinc-100 text-zinc-500 border-zinc-200',
+};
+
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={`bg-white border border-zinc-200 rounded-xl p-3 shadow-sm ${className}`}>
       {children}
     </div>
-  );
-}
-
-function BigNumber({ value, unit }: { value: string | number; unit?: string }) {
-  return (
-    <span className="text-2xl font-black tabular-nums text-zinc-900">
-      {value}
-      {unit && <span className="text-base font-semibold text-zinc-400 ml-1">{unit}</span>}
-    </span>
   );
 }
 
@@ -151,21 +161,26 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <h2 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest mb-2">{children}</h2>
+    <div className="flex items-center justify-between mb-2">
+      <h2 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">{children}</h2>
+      {action}
+    </div>
   );
 }
 
 function formatTime(iso: string | undefined): string {
   if (!iso) return '-';
   try {
-    return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    const d = new Date(iso.includes('Z') || iso.includes('+') ? iso : iso + 'Z');
+    return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   } catch { return iso; }
 }
 
-function timeAgoShort(iso: string): string {
-  const diff = Date.now() - new Date(iso + (iso.includes('Z') ? '' : 'Z')).getTime();
+function timeAgoShort(iso: string | undefined): string {
+  if (!iso) return '-';
+  const diff = Date.now() - new Date(iso.includes('Z') || iso.includes('+') ? iso : iso + 'Z').getTime();
   const m = Math.floor(diff / 60000);
   if (m < 60) return `${m}분 전`;
   const h = Math.floor(m / 60);
@@ -173,13 +188,11 @@ function timeAgoShort(iso: string): string {
   return `${Math.floor(h / 24)}일 전`;
 }
 
-const PRIORITY_LABEL: Record<string, string> = { urgent: '긴급', high: '높음', medium: '중간', low: '낮음' };
-const PRIORITY_COLOR: Record<string, string> = {
-  urgent: 'bg-red-50 text-red-700 border-red-200',
-  high:   'bg-orange-50 text-orange-700 border-orange-200',
-  medium: 'bg-amber-50 text-amber-700 border-amber-200',
-  low:    'bg-zinc-100 text-zinc-500 border-zinc-200',
-};
+function silenceLabel(sec: number): string {
+  if (sec < 60) return `${sec}초 전`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
+  return `${Math.floor(sec / 3600)}시간 전`;
+}
 
 // ── 섹션 1: 전체 상태 ──────────────────────────────────────────────────────────
 
@@ -194,7 +207,7 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
   const pills = [
     { label: '봇', level: data.botLevel },
     { label: '자동화', level: data.cronLevel },
-    { label: '자가점검', level: data.e2eLevel },
+    { label: '인프라', level: data.e2eLevel },
     { label: '오류', level: data.errorLevel },
   ];
 
@@ -202,18 +215,20 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
     : data.overall === 'yellow' ? 'bg-amber-50 border-amber-100'
     : 'bg-red-50 border-red-100';
 
-  // sysMetrics 데이터
+  // sysMetrics
   const diskPct = sm?.disk?.used_pct ?? 0;
   const diskFree = sm?.disk?.free_gb?.toFixed(0) ?? '?';
   const memMb = sm?.health?.memory_mb ?? sm?.discord_stats?.lastHealth?.memMB ?? 0;
   const silenceSec = sm?.discord_stats?.lastHealth?.silenceSec ?? 0;
-  const silenceStr = silenceSec < 60 ? `${silenceSec}초 전` : silenceSec < 3600 ? `${Math.floor(silenceSec / 60)}분 전` : `${Math.floor(silenceSec / 3600)}시간 전`;
   const ragStuck = sm?.rag_stats?.stuck ?? false;
   const ragSize = sm?.rag_stats?.dbSize ?? '';
-  const wsPing = sm?.discord_stats?.lastHealth?.wsPing;
-  const syncedAt = sm?.synced_at;
   const launchAgents = sm?.launch_agents ?? [];
-  const cbCount = (sm?.circuit_breakers ?? []).filter(cb => cb.state === 'open' || cb.failCount && cb.failCount > 0).length;
+  const syncedAt = sm?.synced_at;
+
+  // LA 상태: pid 있고 exitCode가 0 또는 -15(SIGTERM, bot용 정상) → 정상
+  // exitCode 127 = bad (명령 못 찾음)
+  const isLaOk = (a: { pid: string | null; exitCode: number | null; loaded: boolean }) =>
+    a.loaded && (a.exitCode === 0 || a.exitCode === -15 || a.exitCode === null) && a.pid !== null;
 
   return (
     <div className={`rounded-xl border p-3 mb-4 ${overallBg}`}>
@@ -228,12 +243,12 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
         ))}
         {syncedAt && (
           <span className="ml-auto text-[10px] text-zinc-400">
-            {new Date(syncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 동기화
+            {formatTime(syncedAt)} 동기화
           </span>
         )}
       </div>
 
-      {/* Row 2: 리소스 */}
+      {/* Row 2: 리소스 미니 */}
       {sm && (
         <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
           <span className="text-zinc-600">
@@ -242,34 +257,38 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
           </span>
           {memMb > 0 && <span className="text-zinc-600">🧠 메모리 <span className="text-zinc-500">{memMb}MB</span></span>}
           <span className="text-zinc-600">
-            🤖 봇 마지막 활동 <span className={silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>{silenceStr}</span>
+            🤖 봇 마지막 활동{' '}
+            <span className={silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>
+              {silenceLabel(silenceSec)}
+            </span>
           </span>
           <span className={`${ragStuck ? 'text-amber-600 font-semibold' : 'text-zinc-600'}`}>
-            📚 RAG {ragStuck ? '⚠ 점검필요' : '정상'}{ragSize ? ` (${ragSize})` : ''}
+            📚 RAG {ragStuck ? '⚠ 점검필요' : '정상'}{ragSize ? ` ${ragSize}` : ''}
           </span>
-          {wsPing !== undefined && <span className="text-zinc-400">📡 WS {wsPing}ms</span>}
-          {cbCount > 0 && <span className="text-red-600 font-semibold">⚡ 서킷브레이커 {cbCount}개 열림</span>}
         </div>
       )}
 
-      {/* Row 3: LaunchAgents */}
+      {/* Row 3: 서비스 칩 */}
       {launchAgents.length > 0 && (
         <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-1.5">
           <span className="text-[10px] text-zinc-400 self-center mr-1">서비스</span>
           {launchAgents.map(a => {
-            const ok = a.loaded && (a.exitCode === 0 || a.exitCode === null || a.exitCode === -1);
+            const ok = isLaOk(a);
             const name = LA_SHORT[a.name] ?? a.name.split('.').pop() ?? a.name;
+            const broken = a.exitCode === 127;
             return (
-              <span key={a.name} title={a.name}
-                className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                {name} {ok ? '✓' : '✗'}
+              <span key={a.name} title={`${a.name} (exit: ${a.exitCode})`}
+                className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                  broken ? 'bg-red-100 text-red-700' : ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                {name}{ok ? '✓' : broken ? '✗' : '!'}
               </span>
             );
           })}
         </div>
       )}
 
-      {/* Row 4: 이슈 목록 */}
+      {/* Row 4: 이슈 */}
       {data.issues.length > 0 && (
         <div className="mt-2 pt-2 border-t border-black/5 space-y-0.5">
           {data.issues.map((issue, i) => (
@@ -286,23 +305,23 @@ function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: 
 
 // ── 섹션 2: 내 할 일 ──────────────────────────────────────────────────────────
 
-function ApprovalCard({ items }: { items: DashboardData['attention']['awaitingApproval'] }) {
+function ApprovalCard({ items, taskCount }: { items: DashboardData['attention']['awaitingApproval']; taskCount: number }) {
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-2">
         <span className="text-base">✅</span>
         <Label>승인 대기</Label>
-        {items.length > 0 && (
-          <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{items.length}</span>
-        )}
+        <span className="ml-auto bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+          {taskCount}
+        </span>
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-emerald-600">모두 처리 완료 ✓</p>
+        <p className="text-sm text-emerald-600 font-medium">모두 처리 완료 ✓</p>
       ) : (
-        <div className="space-y-2">
-          {items.map(task => (
+        <div className="space-y-1.5">
+          {items.slice(0, 5).map(task => (
             <Link key={task.id} href={`/dev-tasks/${task.id}`} className="block group">
-              <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-zinc-50 transition-colors">
+              <div className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
                 <span className={`mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0 ${PRIORITY_COLOR[task.priority] ?? PRIORITY_COLOR.low}`}>
                   {PRIORITY_LABEL[task.priority] ?? task.priority}
                 </span>
@@ -310,8 +329,8 @@ function ApprovalCard({ items }: { items: DashboardData['attention']['awaitingAp
               </div>
             </Link>
           ))}
-          <Link href="/dev-tasks" className="block text-[11px] text-indigo-500 hover:text-indigo-700 mt-1">
-            전체 보기 →
+          <Link href="/dev-tasks" className="block text-[11px] text-indigo-500 hover:text-indigo-700 mt-1 pl-1">
+            전체 보기 ({taskCount}건) →
           </Link>
         </div>
       )}
@@ -322,23 +341,25 @@ function ApprovalCard({ items }: { items: DashboardData['attention']['awaitingAp
 function OwnerInputCard({ items }: { items: DashboardData['attention']['needsOwnerInput'] }) {
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-2">
         <span className="text-base">💬</span>
-        <Label>내 의견 필요</Label>
+        <Label>의견 필요</Label>
         {items.length > 0 && (
           <span className="ml-auto bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{items.length}</span>
         )}
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-emerald-600">모든 토론에 참여 완료 ✓</p>
+        <p className="text-sm text-emerald-600 font-medium">모든 토론 참여 완료 ✓</p>
       ) : (
-        <div className="space-y-2">
-          {items.map(post => (
+        <div className="space-y-1.5">
+          {items.slice(0, 5).map(post => (
             <Link key={post.id} href={`/posts/${post.id}`} className="block group">
-              <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-zinc-50 transition-colors">
+              <div className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-zinc-700 group-hover:text-indigo-600 transition-colors leading-tight line-clamp-2">{post.title}</p>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">댓글 {post.comment_count}개 · {timeAgoShort(post.created_at)}</p>
+                  {post.comment_count !== undefined && (
+                    <p className="text-[10px] text-zinc-400 mt-0.5">댓글 {post.comment_count}개{post.created_at ? ` · ${timeAgoShort(post.created_at)}` : ''}</p>
+                  )}
                 </div>
               </div>
             </Link>
@@ -352,7 +373,7 @@ function OwnerInputCard({ items }: { items: DashboardData['attention']['needsOwn
 function ClosingSoonCard({ items }: { items: DashboardData['attention']['closingSoon'] }) {
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-2">
         <span className="text-base">⏰</span>
         <Label>마감 임박</Label>
         {items.length > 0 && (
@@ -360,12 +381,12 @@ function ClosingSoonCard({ items }: { items: DashboardData['attention']['closing
         )}
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-zinc-400">임박한 마감 없음 ✓</p>
+        <p className="text-sm text-emerald-600 font-medium">임박한 마감 없음 ✓</p>
       ) : (
-        <div className="space-y-2">
-          {items.map(post => (
+        <div className="space-y-1.5">
+          {items.slice(0, 5).map(post => (
             <Link key={post.id} href={`/posts/${post.id}`} className="block group">
-              <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-50 transition-colors">
+              <div className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-zinc-700 group-hover:text-indigo-600 transition-colors line-clamp-1">{post.title}</p>
                 </div>
@@ -381,366 +402,365 @@ function ClosingSoonCard({ items }: { items: DashboardData['attention']['closing
   );
 }
 
-// ── 섹션 3: 오늘 활동 ─────────────────────────────────────────────────────────
+// ── 섹션 3: Jarvis 오늘 활동 ──────────────────────────────────────────────────
 
-function TodaySummaryRow({ today, sm }: { today: DashboardData['todaySummary']; sm?: DashboardData['sysMetrics'] }) {
-  const botCalls = sm?.discord_stats?.claudeCount;
-  const botMsgs = sm?.discord_stats?.totalHuman;
-  const combined = today.weekTrend.map(d => ({ date: d.date, total: d.posts + d.comments }));
-  const maxVal = Math.max(...combined.map(d => d.total), 1);
-  const wChange = today.weekChange;
-  const wLabel = wChange > 0 ? `+${wChange}%↑` : wChange < 0 ? `${wChange}%↓` : '±0';
-  const wColor = wChange > 0 ? 'text-emerald-600' : wChange < 0 ? 'text-red-500' : 'text-zinc-400';
+function TodayActivityCard({ sm, today }: { sm?: DashboardData['sysMetrics']; today: DashboardData['todaySummary'] }) {
+  const ds = sm?.discord_stats;
+  const cs = sm?.cron_stats;
 
-  const stats = [
-    { label: '새 토론', value: today.newPosts },
-    { label: '마감됨', value: today.resolvedPosts },
-    { label: '완료 태스크', value: today.completedTasks },
-    { label: 'AI 댓글', value: today.aiComments },
-    { label: '봇 호출', value: botCalls ?? '-' },
-    { label: '사용자 메시지', value: botMsgs ?? '-' },
-  ];
+  const botCalls = ds?.claudeCount ?? 0;
+  const humanMsgs = ds?.totalHuman ?? 0;
+  const avgElapsed = ds?.avgElapsed ?? 0;
+  const restarts = ds?.restartCount ?? 0;
+
+  const cronRate = cs?.rate ?? 100;
+  const taskStatus = cs?.taskStatus ?? {};
+  const totalCronTasks = Object.keys(taskStatus).length;
+  const failedCronTasks = cs?.recentFailed ?? [];
+
+  const decisions = sm?.decisions_today ?? [];
+  const decisionCount = decisions.length;
+
+  const failNames = failedCronTasks.map(f => f.task).join(', ');
+
+  // Top active channels
+  const channels = (ds?.channelActivity ?? [])
+    .sort((a, b) => (b.human ?? 0) - (a.human ?? 0))
+    .slice(0, 3);
+
+  return (
+    <Card className="mb-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span>📈</span>
+        <Label>오늘 Jarvis 활동</Label>
+        <span className="ml-auto text-[10px] text-zinc-400">
+          {new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+        </span>
+      </div>
+
+      {/* Row 1: 봇 활동 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        <div className="bg-zinc-50 rounded-lg p-2 text-center">
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{botCalls}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">봇 응답</div>
+        </div>
+        <div className="bg-zinc-50 rounded-lg p-2 text-center">
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{humanMsgs}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">사람 메시지</div>
+        </div>
+        <div className="bg-zinc-50 rounded-lg p-2 text-center">
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{avgElapsed}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">평균 응답(초)</div>
+        </div>
+        <div className={`rounded-lg p-2 text-center ${restarts > 3 ? 'bg-amber-50' : 'bg-zinc-50'}`}>
+          <div className={`text-2xl font-black tabular-nums ${restarts > 3 ? 'text-amber-700' : 'text-zinc-900'}`}>{restarts}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">재시작</div>
+        </div>
+      </div>
+
+      {/* Row 2: 자동화 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        <div className={`rounded-lg p-2 text-center ${cronRate < 100 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+          <div className={`text-2xl font-black tabular-nums ${cronRate < 100 ? 'text-amber-700' : 'text-emerald-700'}`}>{cronRate}%</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">자동화 성공률</div>
+        </div>
+        <div className="bg-zinc-50 rounded-lg p-2 text-center">
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{totalCronTasks}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">크론 태스크</div>
+        </div>
+        <div className={`rounded-lg p-2 text-center ${failedCronTasks.length > 0 ? 'bg-red-50' : 'bg-zinc-50'}`}>
+          <div className={`text-2xl font-black tabular-nums ${failedCronTasks.length > 0 ? 'text-red-700' : 'text-zinc-900'}`}>
+            {failedCronTasks.length}
+          </div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">
+            {failedCronTasks.length > 0 ? `실패(${failNames})` : '실패'}
+          </div>
+        </div>
+        <div className="bg-zinc-50 rounded-lg p-2 text-center">
+          <div className="text-2xl font-black text-zinc-900 tabular-nums">{decisionCount}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide">결정</div>
+        </div>
+      </div>
+
+      {/* 활성 채널 뱃지 */}
+      {channels.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-t border-zinc-100 pt-2">
+          <span className="text-[10px] text-zinc-400 self-center">활성 채널</span>
+          {channels.map(ch => (
+            <span key={ch.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-medium rounded-full">
+              {CH_NAME[ch.id] ?? ch.name}
+              <span className="text-indigo-400">({ch.human}명)</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 7일 추이 미니 차트 */}
+      {today.weekTrend.length > 0 && (() => {
+        const combined = today.weekTrend.map(d => ({ date: d.date, total: d.posts + d.comments }));
+        const maxVal = Math.max(...combined.map(d => d.total), 1);
+        return (
+          <div className="mt-3 border-t border-zinc-100 pt-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-zinc-400">7일 추이 (게시글+댓글)</span>
+            </div>
+            <div className="flex items-end gap-0.5 h-8">
+              {combined.map(d => {
+                const h = d.total > 0 ? (d.total / maxVal) * 100 : 2;
+                return (
+                  <div key={d.date} className="flex-1 flex flex-col justify-end h-full" title={`${d.date}: ${d.total}건`}>
+                    <div className="bg-indigo-400 rounded-sm" style={{ height: `${h}%`, minHeight: '1px' }} />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between text-[9px] text-zinc-400 mt-0.5">
+              {combined.map(d => <span key={d.date}>{d.date.slice(5)}</span>)}
+            </div>
+          </div>
+        );
+      })()}
+    </Card>
+  );
+}
+
+// ── 섹션 4: 오늘 Jarvis 결정 (접기, 기본 열림) ────────────────────────────────
+
+function DecisionsSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const [open, setOpen] = useState(true);
+  const decisions = sm?.decisions_today ?? [];
 
   return (
     <div className="mb-4">
-      <SectionHeader>오늘 활동</SectionHeader>
-      <div className="flex gap-2 flex-wrap">
-        {stats.map(s => (
-          <div key={s.label} className="bg-white border border-zinc-200 rounded-xl p-2.5 flex-1 min-w-[80px] shadow-sm">
-            <div className="text-xl font-black tabular-nums text-zinc-800">{s.value}</div>
-            <div className="text-[10px] text-zinc-400 mt-0.5 whitespace-nowrap">{s.label}</div>
-          </div>
-        ))}
-        {/* 미니 바 차트 */}
-        <div className="bg-white border border-zinc-200 rounded-xl p-2.5 flex-[2] min-w-[120px] shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-zinc-400">7일 추이</span>
-            <span className={`text-[10px] font-semibold ${wColor}`}>{wLabel}</span>
-          </div>
-          <div className="flex items-end gap-0.5 h-8">
-            {combined.map(d => {
-              const h = d.total > 0 ? (d.total / maxVal) * 100 : 2;
-              return (
-                <div key={d.date} className="flex-1 flex flex-col justify-end h-full" title={`${d.date}: ${d.total}건`}>
-                  <div className="bg-indigo-400 rounded-sm" style={{ height: `${h}%`, minHeight: '1px' }} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 text-[10px] font-semibold text-zinc-400 hover:text-zinc-700 transition-colors mb-2"
+      >
+        <span>{open ? '▾' : '▸'}</span>
+        <span className="uppercase tracking-widest">오늘 Jarvis 결정</span>
+        <span className="ml-2 text-[11px] font-normal text-zinc-400 normal-case tracking-normal">
+          {decisions.length}건
+        </span>
+      </button>
+
+      {open && (
+        <Card>
+          {decisions.length === 0 ? (
+            <div className="text-xs text-zinc-400">오늘 결정 없음</div>
+          ) : (
+            <div className="space-y-1.5">
+              {decisions.map((d, i) => {
+                const isUnmatched = d.action === 'UNMATCHED' || d.result === 'NEEDS_MANUAL_REVIEW';
+                return (
+                  <div key={i} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${isUnmatched ? 'bg-orange-50' : 'hover:bg-zinc-50'}`}>
+                    {isUnmatched && <span className="text-[10px] text-orange-500 font-bold mt-0.5 flex-shrink-0">⚠</span>}
+                    {!isUnmatched && <span className="text-[10px] text-zinc-300 mt-0.5 flex-shrink-0">•</span>}
+                    {d.team && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-500'}`}>
+                        {TEAM_LABEL[d.team] ?? d.team}
+                      </span>
+                    )}
+                    <span className={`text-[11px] leading-snug ${isUnmatched ? 'text-orange-800' : 'text-zinc-600'}`}>
+                      {d.decision ?? '(내용 없음)'}
+                    </span>
+                    {d.status && (
+                      <span className="ml-auto text-[10px] text-zinc-300 flex-shrink-0">{d.status}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
 
-// ── 섹션 4: 팀 현황 (접기) ────────────────────────────────────────────────────
+// ── 섹션 5: 팀 현황 (접기, 기본 닫힘) ─────────────────────────────────────────
 
 function TeamOverviewSection({ data }: { data: DashboardData['teamOverview'] }) {
   const [open, setOpen] = useState(false);
 
+  const normalCount = data.teams.filter(t => t.status === 'NORMAL').length;
+  const issueCount = data.teams.length - normalCount;
+
   return (
-    <div className="mb-6">
+    <div className="mb-4">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors mb-3"
+        className="w-full flex items-center gap-2 text-[10px] font-semibold text-zinc-400 hover:text-zinc-700 transition-colors mb-2"
       >
-        <span className="text-zinc-300">{open ? '▾' : '▸'}</span>
+        <span>{open ? '▾' : '▸'}</span>
         <span className="uppercase tracking-widest">팀 현황</span>
         {!open && (
           <span className="ml-2 text-[11px] font-normal text-zinc-400 normal-case tracking-normal">
-            {data.teams.length > 0
-              ? `${data.teams.filter(t => t.status === 'NORMAL').length}개 정상 · ${data.teams.filter(t => t.status !== 'NORMAL').length}개 주의`
-              : '데이터 없음'}
+            {normalCount}개 정상{issueCount > 0 ? ` · ${issueCount}개 주의` : ''}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-3">
           {/* MVP */}
-          <Card>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-base">🏆</span>
-              <Label>이번 달 MVP</Label>
-            </div>
-            {data.mvp ? (
-              <div>
-                <p className="text-lg font-black text-zinc-800">{data.mvp.agent_id}</p>
-                <p className="text-xs text-zinc-500 mt-1">점수 {data.mvp.score}점 · {data.mvp.events}건 활동</p>
+          {data.mvp && (
+            <Card>
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🏆</span>
+                <div>
+                  <div className="text-[10px] text-zinc-400 uppercase tracking-wider">이번주 MVP</div>
+                  <div className="text-base font-black text-zinc-800">{data.mvp.agent_id}</div>
+                  <div className="text-xs text-zinc-500">{data.mvp.score}점 · {data.mvp.events}건 활동</div>
+                </div>
               </div>
-            ) : (
-              <p className="text-sm text-zinc-400">데이터 없음</p>
-            )}
-            <div className="mt-4 pt-3 border-t border-zinc-100">
-              <p className="text-xs text-zinc-500">
-                AI가 <span className="font-semibold text-zinc-700">{data.totalDecisions}건</span> 중{' '}
-                <span className="font-semibold text-zinc-700">{data.executed}건</span>을 자율 처리{' '}
-                <span className="text-indigo-600 font-semibold">({data.autonomyRate.toFixed(0)}%)</span>
-              </p>
-            </div>
-          </Card>
+            </Card>
+          )}
 
-          {/* 팀 스코어 */}
-          <Card>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-base">👥</span>
-              <Label>팀 점수</Label>
-            </div>
-            {data.teams.length === 0 ? (
-              <p className="text-sm text-zinc-400">데이터 없음</p>
-            ) : (
-              <div className="space-y-2.5">
-                {data.teams.map(team => {
-                  const statusLabel = team.status === 'NORMAL' ? '정상' : team.status === 'AT_RISK' ? '주의' : '패널티';
-                  const statusCls = team.status === 'NORMAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : team.status === 'AT_RISK' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-red-50 text-red-700 border-red-200';
-                  const maxMerit = Math.max(...data.teams.map(t => t.merit), 1);
-                  return (
-                    <div key={team.name}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-zinc-700 flex-1">{team.name}</span>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
-                      </div>
-                      <div className="flex gap-1 h-1.5">
-                        <div className="bg-emerald-400 rounded-l" style={{ width: `${(team.merit / maxMerit) * 100}%`, minWidth: team.merit > 0 ? '2px' : '0' }} />
-                        <div className="bg-red-300 rounded-r" style={{ width: `${(team.penalty / maxMerit) * 100}%`, minWidth: team.penalty > 0 ? '2px' : '0' }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
+          {/* 팀 그리드 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {data.teams.map(team => {
+              const statusCls = team.status === 'NORMAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : team.status === 'AT_RISK' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : 'bg-red-50 text-red-700 border-red-200';
+              const statusLabel = team.status === 'NORMAL' ? '정상' : team.status === 'AT_RISK' ? '주의' : '패널티';
+              return (
+                <div key={team.name} className="bg-white border border-zinc-200 rounded-xl p-2.5 shadow-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold text-zinc-800">{TEAM_LABEL[team.name] ?? team.name}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400">
+                    {team.merit > 0 && <span className="text-emerald-600 font-medium">+{team.merit}</span>}
+                    {team.penalty > 0 && <span className="text-red-500 font-medium ml-1">-{team.penalty}</span>}
+                    {team.merit === 0 && team.penalty === 0 && <span>—</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ── 섹션 5: 엔지니어링 상세 ────────────────────────────────────────────────────
+// ── 섹션 6: 엔지니어링 상세 (접기, 기본 열림) ─────────────────────────────────
 
-function CronCard({ data, sm }: { data: DashboardData['cron']; sm?: DashboardData['sysMetrics'] }) {
-  const maxVal = Math.max(...data.trend.map(d => d.ok + d.fail), 1);
-  const smRate = sm?.cron_stats?.rate;
-  const rate = smRate !== undefined ? smRate : data.successRate;
-  const smFailed = sm?.cron_stats?.recentFailed ?? [];
-  const fallbackFailed = data.recentFailures.map(f => ({ task: f, lastRun: '', failCount: 1, lastStatus: 'FAILED' }));
-  const recentFailed = smFailed.length > 0 ? smFailed : fallbackFailed;
+function CronTaskTable({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const taskStatus = sm?.cron_stats?.taskStatus ?? {};
+  const entries = Object.entries(taskStatus);
+
+  if (entries.length === 0) return null;
+
+  const sorted = entries.sort(([, a], [, b]) => {
+    if (a.lastStatus === 'FAILED' && b.lastStatus !== 'FAILED') return -1;
+    if (a.lastStatus !== 'FAILED' && b.lastStatus === 'FAILED') return 1;
+    return 0;
+  }).slice(0, 12);
 
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
         <span>⏱</span>
-        <Label>자동화 작업</Label>
+        <Label>크론 태스크 현황</Label>
+        <span className="ml-auto text-[10px] text-zinc-400">{entries.length}개</span>
       </div>
-      <div className="mb-2">
-        <BigNumber value={rate} unit="%" />
-        <span className="text-xs text-zinc-400 ml-2">성공률</span>
-      </div>
-      <div className="flex items-end gap-0.5 h-10 mb-1">
-        {data.trend.map((d) => {
-          const total = d.ok + d.fail;
-          const h = total > 0 ? (total / maxVal) * 100 : 2;
-          const failH = d.fail > 0 ? (d.fail / maxVal) * 100 : 0;
+      <div className="space-y-1">
+        {sorted.map(([name, info]) => {
+          const ok = info.lastStatus === 'OK';
           return (
-            <div key={d.date} className="flex-1 flex flex-col items-stretch justify-end h-full" title={`${d.date}: ${d.ok}ok / ${d.fail}fail`}>
-              <div style={{ height: `${h}%`, minHeight: '2px' }}>
-                {failH > 0 && <div className="bg-red-400 rounded-t" style={{ height: `${failH}%`, minHeight: '1px' }} />}
-                <div className="bg-emerald-400 flex-1" style={{ height: `${h - failH}%`, minHeight: '1px' }} />
-              </div>
+            <div key={name} className="flex items-center gap-2 py-0.5">
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ok ? 'bg-emerald-400' : 'bg-red-500'}`} />
+              <span className={`text-[11px] flex-1 truncate ${ok ? 'text-zinc-600' : 'text-red-700 font-medium'}`}>
+                {name.replace(/-/g, ' ')}
+              </span>
+              <span className="text-[10px] text-zinc-400 flex-shrink-0 tabular-nums">
+                {formatTime(info.lastRun)}
+              </span>
+              {info.failCount > 0 && (
+                <span className="text-[10px] text-red-500 font-medium flex-shrink-0">×{info.failCount}</span>
+              )}
             </div>
           );
         })}
       </div>
-      <div className="flex justify-between text-[9px] text-zinc-400 mb-2">
-        {data.trend.map(d => <span key={d.date}>{d.date.slice(5)}</span>)}
-      </div>
-      {recentFailed.length > 0 && (
-        <div className="space-y-0.5 border-t border-zinc-100 pt-1.5 mt-1">
-          {recentFailed.slice(0, 4).map((f, i) => (
-            <div key={i} className="text-[11px] text-red-500 flex gap-1">
-              <span className="flex-shrink-0">•</span>
-              <span className="truncate">{f.task}{f.failCount > 1 ? ` (${f.failCount}회)` : ''}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </Card>
   );
 }
-
-function ClaudeCard({ data, sm }: { data: DashboardData['claude']; sm?: DashboardData['sysMetrics'] }) {
-  const maxH = Math.max(...data.hourly, 1);
-  const currentHour = new Date().getHours();
-  const botCalls = sm?.discord_stats?.claudeCount;
-  const avgMs = sm?.discord_stats?.avgElapsed;
-  return (
-    <Card>
-      <div className="flex items-center gap-2 mb-2">
-        <span>🤖</span>
-        <Label>AI 호출 현황</Label>
-      </div>
-      <div className="mb-1">
-        <BigNumber value={data.todayCalls} />
-        <span className="text-xs text-zinc-500 ml-1.5">Claude CLI</span>
-        {botCalls !== undefined && (
-          <span className="text-xs text-zinc-400 ml-3">봇 {botCalls}회</span>
-        )}
-      </div>
-      <div className="text-xs text-zinc-400 mb-2">
-        1시간: {data.lastHourCalls}회{avgMs !== undefined && ` · 평균응답 ${avgMs}s`}
-      </div>
-      <div className="grid grid-cols-12 gap-[2px]">
-        {data.hourly.map((count, h) => {
-          const opacity = count > 0 ? Math.max(0.15, count / maxH) : 0.04;
-          return (
-            <div key={h} className={`aspect-square rounded-sm ${h === currentHour ? 'ring-1 ring-indigo-400' : ''}`}
-              style={{ backgroundColor: `rgba(99, 102, 241, ${opacity})` }} title={`${h}시: ${count}회`} />
-          );
-        })}
-      </div>
-      <div className="flex justify-between text-[8px] text-zinc-400 mt-1">
-        <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
-      </div>
-    </Card>
-  );
-}
-
-function E2ECard({ data }: { data: DashboardData['e2e'] }) {
-  const rateColor = data.rate >= 90 ? 'text-emerald-600' : data.rate >= 70 ? 'text-amber-600' : 'text-red-600';
-  return (
-    <Card>
-      <div className="flex items-center gap-2 mb-2">
-        <span>🔬</span>
-        <Label>자가점검</Label>
-      </div>
-      <div className="mb-1">
-        <span className={`text-2xl font-black tabular-nums ${rateColor}`}>{data.rate}</span>
-        <span className="text-base font-semibold text-zinc-400 ml-1">%</span>
-      </div>
-      <div className="text-xs text-zinc-400 mb-2">{data.passed}/{data.total} 통과 · {formatTime(data.lastRun)}</div>
-      {data.failures.length > 0 && (
-        <div className="space-y-0.5">
-          {data.failures.map((f, i) => <div key={i} className="text-[11px] text-red-500 truncate">• {f}</div>)}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ErrorsCard({ data }: { data: DashboardData['errors'] }) {
-  return (
-    <Card>
-      <div className="flex items-center gap-2 mb-2">
-        <span>⚠️</span>
-        <Label>오류 현황</Label>
-      </div>
-      <div className="flex items-baseline gap-2 mb-1">
-        <BigNumber value={data.total24h} />
-        <span className="text-xs text-zinc-500">24h 오류</span>
-        <span className="text-[11px] text-zinc-400 ml-1">누적 {data.totalAll}건</span>
-      </div>
-      {data.topErrors.length > 0 && (
-        <div className="space-y-1 mt-2">
-          {data.topErrors.slice(0, 4).map((e, i) => (
-            <div key={i} className="flex items-start gap-1.5">
-              <span className="text-[11px] font-bold text-red-400 tabular-nums w-5 text-right flex-shrink-0">{e.count}×</span>
-              <span className="text-[11px] text-zinc-600 break-all leading-tight">{e.msg}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-const TEAM_LABEL: Record<string, string> = {
-  infra: '인프라', council: '이사회', record: '기록', career: '커리어',
-  brand: '브랜드', academy: '아카데미', strategy: '전략',
-};
-const TEAM_COLOR: Record<string, string> = {
-  infra: 'bg-blue-100 text-blue-700', council: 'bg-purple-100 text-purple-700',
-  record: 'bg-zinc-100 text-zinc-600', career: 'bg-amber-100 text-amber-700',
-  brand: 'bg-pink-100 text-pink-700', academy: 'bg-emerald-100 text-emerald-700',
-  strategy: 'bg-indigo-100 text-indigo-700',
-};
 
 function DiscordChannelCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   const channels = sm?.discord_stats?.channelActivity ?? [];
-  const p95 = sm?.discord_stats?.avgElapsed;
   const restarts = sm?.discord_stats?.restartCount ?? 0;
   const errs = sm?.discord_stats?.botErrors ?? 0;
+
+  if (channels.length === 0) return null;
+
+  const maxTotal = Math.max(...channels.map(c => c.human + (c.bot ?? c.claudes)), 1);
+
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
-        <span>💬</span><Label>Discord 채널별 활동</Label>
+        <span>💬</span>
+        <Label>Discord 채널별 활동</Label>
         {restarts > 0 && <span className="ml-auto text-[10px] text-amber-600">재시작 {restarts}회</span>}
         {errs > 0 && <span className="text-[10px] text-red-500">에러 {errs}건</span>}
       </div>
-      {channels.length === 0 ? (
-        <div className="text-xs text-zinc-400">데이터 없음</div>
-      ) : (
-        <div className="space-y-1">
-          {channels.slice(0, 6).map(ch => {
-            const total = ch.human + ch.claudes;
-            const barPct = total > 0 ? Math.round((ch.claudes / Math.max(...channels.map(c => c.human + c.claudes))) * 100) : 0;
-            return (
-              <div key={ch.id} className="flex items-center gap-2">
-                <span className="text-[11px] text-zinc-600 w-28 truncate flex-shrink-0">{CH_NAME[ch.id] ?? ch.name ?? ch.id.slice(-6)}</span>
-                <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barPct}%` }} />
-                </div>
-                <span className="text-[10px] text-zinc-400 tabular-nums w-16 text-right flex-shrink-0">
-                  👤{ch.human} 🤖{ch.claudes}
-                </span>
+      <div className="space-y-1.5">
+        {channels.slice(0, 6).map(ch => {
+          const botCount = ch.bot ?? ch.claudes;
+          const total = ch.human + botCount;
+          const barPct = total > 0 ? Math.round((total / maxTotal) * 100) : 0;
+          return (
+            <div key={ch.id} className="flex items-center gap-2">
+              <span className="text-[11px] text-zinc-600 w-28 truncate flex-shrink-0">{CH_NAME[ch.id] ?? ch.name ?? ch.id.slice(-6)}</span>
+              <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barPct}%` }} />
               </div>
-            );
-          })}
-        </div>
-      )}
-      {p95 !== undefined && p95 > 0 && (
-        <div className="mt-2 pt-2 border-t border-zinc-100 text-[11px] text-zinc-400">평균 응답 {p95}s</div>
-      )}
+              <span className="text-[10px] text-zinc-400 tabular-nums w-16 text-right flex-shrink-0">
+                👤{ch.human} 🤖{botCount}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </Card>
   );
 }
 
-function DecisionsCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
-  const decisions = sm?.decisions_today ?? [];
-  const confirmed = decisions.filter(d => d.action !== 'UNMATCHED' && d.result !== 'NEEDS_MANUAL_REVIEW');
-  const unmatched = decisions.filter(d => d.action === 'UNMATCHED' || d.result === 'NEEDS_MANUAL_REVIEW');
+function RagCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const rag = sm?.rag_stats;
+  if (!rag) return null;
+
+  const inboxHigh = (rag.inboxCount ?? 0) > 5000;
+
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
-        <span>🧭</span><Label>오늘 결정</Label>
-        <span className="ml-auto text-[10px] text-zinc-400">{decisions.length}건</span>
-        {unmatched.length > 0 && (
-          <span className="text-[10px] font-semibold text-orange-600">수동처리 {unmatched.length}건</span>
-        )}
+        <span>📚</span>
+        <Label>RAG 상태</Label>
+        {rag.stuck && <span className="ml-auto text-[10px] text-red-500 font-semibold">⚠ 중단됨</span>}
       </div>
-      {decisions.length === 0 ? (
-        <div className="text-xs text-zinc-400">오늘 결정 없음</div>
-      ) : (
-        <div className="space-y-1">
-          {unmatched.slice(0, 3).map((d, i) => (
-            <div key={i} className="flex items-start gap-1.5 bg-orange-50 rounded px-2 py-1">
-              <span className="text-[10px] font-medium text-orange-600 mt-0.5">⚠</span>
-              <div className="flex-1 min-w-0">
-                {d.team && <span className={`inline-block text-[10px] px-1 py-0.5 rounded mr-1 ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-500'}`}>{TEAM_LABEL[d.team] ?? d.team}</span>}
-                <span className="text-[11px] text-orange-800 break-words">{d.decision ?? '(내용 없음)'}</span>
-              </div>
-            </div>
-          ))}
-          {confirmed.slice(0, 4).map((d, i) => (
-            <div key={i} className="flex items-start gap-1.5">
-              <span className="text-[10px] text-zinc-300 mt-0.5">•</span>
-              <div className="flex-1 min-w-0">
-                {d.team && <span className={`inline-block text-[10px] px-1 py-0.5 rounded mr-1 ${TEAM_COLOR[d.team] ?? 'bg-zinc-100 text-zinc-500'}`}>{TEAM_LABEL[d.team] ?? d.team}</span>}
-                <span className="text-[11px] text-zinc-600 break-words">{d.decision ?? '(내용 없음)'}</span>
-              </div>
-            </div>
-          ))}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <div className="text-lg font-black text-zinc-900">{rag.dbSize ?? '-'}</div>
+          <div className="text-[10px] text-zinc-400">DB 크기</div>
+        </div>
+        <div>
+          <div className="text-lg font-black text-zinc-900">{rag.chunks?.toLocaleString() ?? '-'}</div>
+          <div className="text-[10px] text-zinc-400">청크 수</div>
+        </div>
+        <div>
+          <div className={`text-lg font-black ${inboxHigh ? 'text-amber-600' : 'text-zinc-900'}`}>
+            {rag.inboxCount?.toLocaleString() ?? '-'}
+          </div>
+          <div className={`text-[10px] ${inboxHigh ? 'text-amber-600' : 'text-zinc-400'}`}>
+            {inboxHigh ? '⚠ 인박스 대기' : '인박스'}
+          </div>
+        </div>
+      </div>
+      {inboxHigh && (
+        <div className="mt-2 text-[11px] text-amber-600 font-medium">
+          인박스 처리 대기 {rag.inboxCount?.toLocaleString()}건 — 적극 처리 권장
         </div>
       )}
     </Card>
@@ -748,24 +768,24 @@ function DecisionsCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
 }
 
 function DevQueueCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
-  const queue = sm?.dev_queue ?? [];
+  const queue = (sm?.dev_queue ?? []).filter(i => i.status === 'pending');
   return (
     <Card>
       <div className="flex items-center gap-2 mb-2">
-        <span>⚙️</span><Label>Dev 대기열</Label>
-        <span className="ml-auto text-[10px] text-zinc-400">{queue.length}건 대기</span>
+        <span>⚙️</span>
+        <Label>Dev 대기열</Label>
+        <span className="ml-auto text-[10px] text-zinc-400">{queue.length}건</span>
       </div>
       {queue.length === 0 ? (
         <div className="text-xs text-zinc-400">대기 중인 작업 없음 ✓</div>
       ) : (
         <div className="space-y-1">
-          {queue.slice(0, 6).map(item => (
-            <div key={item.id} className="flex items-center gap-2">
-              <span className={`text-[10px] font-bold w-4 flex-shrink-0 ${(item.priority ?? 0) >= 8 ? 'text-red-500' : (item.priority ?? 0) >= 5 ? 'text-amber-500' : 'text-zinc-400'}`}>
+          {queue.slice(0, 6).map((item, idx) => (
+            <div key={item.id ?? idx} className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold w-5 flex-shrink-0 ${(item.priority ?? 0) >= 8 ? 'text-red-500' : (item.priority ?? 0) >= 5 ? 'text-amber-500' : 'text-zinc-400'}`}>
                 P{item.priority ?? 0}
               </span>
-              <span className="text-[11px] text-zinc-700 flex-1 truncate">{item.name}</span>
-              {item.assignee && <span className="text-[10px] text-zinc-400 flex-shrink-0">{item.assignee}</span>}
+              <span className="text-[11px] text-zinc-700 flex-1 line-clamp-1">{item.name}</span>
             </div>
           ))}
         </div>
@@ -774,9 +794,76 @@ function DevQueueCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   );
 }
 
-function EngineeringSection({ data }: { data: DashboardData }) {
+function CircuitBreakerCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const cbs = (sm?.circuit_breakers ?? []).filter(cb => (cb.failCount ?? 0) > 0);
+  if (cbs.length === 0) return null;
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-2">
+        <span>⚡</span>
+        <Label>서킷브레이커</Label>
+        <span className="ml-auto text-[10px] text-amber-600">{cbs.length}개 이력</span>
+      </div>
+      <div className="space-y-1">
+        {cbs.map((cb, i) => {
+          const stateOpen = cb.state === 'open';
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateOpen ? 'bg-red-500' : 'bg-amber-400'}`} />
+              <span className={`text-[11px] flex-1 ${stateOpen ? 'text-red-700 font-medium' : 'text-zinc-600'}`}>
+                {cb.name ?? '(unnamed)'}
+              </span>
+              <span className="text-[10px] text-zinc-400">{cb.failCount}회 실패</span>
+              <span className={`text-[10px] font-medium ${stateOpen ? 'text-red-600' : 'text-amber-600'}`}>
+                {stateOpen ? '열림' : '닫힘'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function LaunchAgentsDetail({ sm }: { sm?: DashboardData['sysMetrics'] }) {
+  const agents = sm?.launch_agents ?? [];
+  if (agents.length === 0) return null;
+
+  const isOk = (a: { pid: string | null; exitCode: number | null; loaded: boolean }) =>
+    a.loaded && (a.exitCode === 0 || a.exitCode === -15 || a.exitCode === null) && a.pid !== null;
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-2">
+        <span>🖥️</span>
+        <Label>서비스 상태</Label>
+      </div>
+      <div className="space-y-1">
+        {agents.map(a => {
+          const ok = isOk(a);
+          const broken = a.exitCode === 127;
+          const name = LA_SHORT[a.name] ?? a.name.replace('ai.jarvis.', '');
+          return (
+            <div key={a.name} className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${broken ? 'bg-red-500' : ok ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className={`text-[11px] flex-1 ${broken ? 'text-red-700 font-medium' : ok ? 'text-zinc-600' : 'text-amber-700'}`}>{name}</span>
+              <span className="text-[10px] text-zinc-400">
+                {a.pid ? `PID ${a.pid}` : '미실행'}
+              </span>
+              <span className={`text-[10px] font-medium ${broken ? 'text-red-600' : ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {broken ? '오류(127)' : ok ? '정상' : `exit:${a.exitCode}`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function EngineeringSection({ sm }: { sm?: DashboardData['sysMetrics'] }) {
   const [open, setOpen] = useState(true);
-  const sm = data.sysMetrics;
 
   return (
     <div>
@@ -790,13 +877,12 @@ function EngineeringSection({ data }: { data: DashboardData }) {
 
       {open && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <CronCard data={data.cron} sm={sm} />
-          <ClaudeCard data={data.claude} sm={sm} />
-          <E2ECard data={data.e2e} />
-          <ErrorsCard data={data.errors} />
+          <CronTaskTable sm={sm} />
+          <LaunchAgentsDetail sm={sm} />
           <DiscordChannelCard sm={sm} />
-          <DecisionsCard sm={sm} />
+          <RagCard sm={sm} />
           <DevQueueCard sm={sm} />
+          <CircuitBreakerCard sm={sm} />
         </div>
       )}
     </div>
@@ -805,13 +891,13 @@ function EngineeringSection({ data }: { data: DashboardData }) {
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 
-const EMPTY_HEALTH = {
-  overall: 'green' as const, botLevel: 'green' as const, cronLevel: 'green' as const,
-  e2eLevel: 'green' as const, errorLevel: 'green' as const, issues: [],
+const EMPTY_HEALTH: DashboardData['healthSummary'] = {
+  overall: 'green', botLevel: 'green', cronLevel: 'green',
+  e2eLevel: 'green', errorLevel: 'green', issues: [],
 };
-const EMPTY_ATTENTION = { awaitingApproval: [], needsOwnerInput: [], closingSoon: [] };
-const EMPTY_TODAY = { newPosts: 0, resolvedPosts: 0, completedTasks: 0, aiComments: 0, weekChange: 0, weekTrend: [] };
-const EMPTY_TEAM = { mvp: null, autonomyRate: 0, totalDecisions: 0, executed: 0, teams: [] };
+const EMPTY_ATTENTION: DashboardData['attention'] = { awaitingApproval: [], needsOwnerInput: [], closingSoon: [] };
+const EMPTY_TODAY: DashboardData['todaySummary'] = { newPosts: 0, resolvedPosts: 0, completedTasks: 0, aiComments: 0, weekChange: 0, weekTrend: [] };
+const EMPTY_TEAM: DashboardData['teamOverview'] = { mvp: null, autonomyRate: 0, totalDecisions: 0, executed: 0, teams: [] };
 
 const EMPTY_DATA: DashboardData = {
   ts: '',
@@ -868,11 +954,14 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   }, [subscribe, fetchData]);
 
   const d = data;
-  // 구 데이터 호환: healthSummary 없으면 fallback
   const health = d.healthSummary ?? EMPTY_HEALTH;
   const attention = d.attention ?? EMPTY_ATTENTION;
   const today = d.todaySummary ?? EMPTY_TODAY;
   const team = d.teamOverview ?? EMPTY_TEAM;
+  const sm = d.sysMetrics;
+
+  // 실제 awaiting 카운트: tasks.awaiting (DB 원본) 우선
+  const awaitingCount = d.tasks?.awaiting ?? attention.awaitingApproval.length;
 
   return (
     <>
@@ -897,27 +986,30 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
       <main className="max-w-5xl mx-auto px-4 py-3">
 
-        {/* 섹션 1: Jarvis 시스템 상태 */}
-        <HealthPanel data={health} sm={d.sysMetrics} />
+        {/* 섹션 1: 전체 상태 */}
+        <HealthPanel data={health} sm={sm} />
 
         {/* 섹션 2: 내 할 일 */}
         <div className="mb-4">
           <SectionHeader>내 할 일</SectionHeader>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <ApprovalCard items={attention.awaitingApproval} />
+            <ApprovalCard items={attention.awaitingApproval} taskCount={awaitingCount} />
             <OwnerInputCard items={attention.needsOwnerInput} />
             <ClosingSoonCard items={attention.closingSoon} />
           </div>
         </div>
 
         {/* 섹션 3: 오늘 활동 */}
-        <TodaySummaryRow today={today} sm={d.sysMetrics} />
+        <TodayActivityCard sm={sm} today={today} />
 
-        {/* 섹션 4: 팀 현황 (접기) */}
+        {/* 섹션 4: 오늘 Jarvis 결정 */}
+        <DecisionsSection sm={sm} />
+
+        {/* 섹션 5: 팀 현황 */}
         <TeamOverviewSection data={team} />
 
-        {/* 섹션 5: 엔지니어링 상세 */}
-        <EngineeringSection data={d} />
+        {/* 섹션 6: 엔지니어링 상세 */}
+        <EngineeringSection sm={sm} />
 
       </main>
     </>
