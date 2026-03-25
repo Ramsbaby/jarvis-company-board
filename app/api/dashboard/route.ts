@@ -26,7 +26,7 @@ function readTextFile(path: string): string {
 function parseCronStats() {
   const logPath = join(JARVIS_HOME, 'logs', 'cron.log');
   const content = readTextFile(logPath);
-  if (!content) return { todaySuccess: 0, todayFail: 0, todayTotal: 0, successRate: 0, recentFailures: [] as string[], trend: [] as Array<{ date: string; ok: number; fail: number }> };
+  if (!content) return { todaySuccess: 0, todayFail: 0, todayTotal: 0, successRate: 100, recentFailures: [] as string[], trend: [] as Array<{ date: string; ok: number; fail: number }> };
 
   const lines = content.split('\n');
   const today = new Date().toISOString().slice(0, 10);
@@ -258,32 +258,42 @@ export async function GET(req: NextRequest) {
   // ── 10. Errors ──
   const errors = parseErrors();
 
-  // ── 11. healthSummary — 기존 데이터에서 CEO용 상태 계산 ──
+  // ── 11. healthSummary — sysMetrics 우선, 로컬 fallback ──
   type HealthLevel = 'green' | 'yellow' | 'red';
   const issues: Array<{ severity: 'warning' | 'critical'; message: string }> = [];
 
-  const silenceSec = (sysMetrics?.discord_stats as { lastHealth?: { silenceSec?: number } } | undefined)?.lastHealth?.silenceSec ?? 0;
-  const botIsHealthy = health.discord_bot === 'healthy';
+  // 봇: sysMetrics.health 우선 (Railway에서 local health.json 없음)
+  const smHealth = sysMetrics?.health as { discord_bot?: string; memory_mb?: number } | undefined;
+  const botStatus = smHealth?.discord_bot ?? health.discord_bot;
+  const smDiscord = sysMetrics?.discord_stats as { lastHealth?: { silenceSec?: number } } | undefined;
+  const silenceSec = smDiscord?.lastHealth?.silenceSec ?? 0;
+  const botIsHealthy = botStatus === 'healthy';
   const botLevel: HealthLevel = botIsHealthy && silenceSec < 900 ? 'green' : botIsHealthy ? 'yellow' : 'red';
   if (botLevel === 'red') issues.push({ severity: 'critical', message: '봇이 응답하지 않습니다' });
   else if (botLevel === 'yellow') issues.push({ severity: 'warning', message: `봇 ${Math.floor(silenceSec / 60)}분째 침묵 중` });
 
-  // Disk alert
+  // 디스크
   const diskPct = (sysMetrics?.disk as { used_pct?: number } | undefined)?.used_pct ?? 0;
   if (diskPct >= 90) issues.push({ severity: 'critical', message: `디스크 ${diskPct}% 사용 중` });
   else if (diskPct >= 80) issues.push({ severity: 'warning', message: `디스크 사용량 높음: ${diskPct}%` });
 
-  const cronLevel: HealthLevel = cron.successRate >= 90 ? 'green' : cron.successRate >= 70 ? 'yellow' : 'red';
+  // 크론: sysMetrics.cron_stats.rate 우선 (로컬 파일 없으면 successRate=100 이지만 sysMetrics가 더 정확)
+  const smCronRate = (sysMetrics?.cron_stats as { rate?: number } | undefined)?.rate;
+  const smCronFailed = (sysMetrics?.cron_stats as { recentFailed?: Array<{ task: string }> } | undefined)?.recentFailed ?? [];
+  const effectiveCronRate = smCronRate ?? cron.successRate;
+  const cronLevel: HealthLevel = effectiveCronRate >= 90 ? 'green' : effectiveCronRate >= 70 ? 'yellow' : 'red';
   if (cronLevel !== 'green') {
-    const failMsg = cron.recentFailures.slice(0, 2).join(', ');
-    issues.push({ severity: cronLevel === 'red' ? 'critical' : 'warning', message: `자동화 작업 ${cron.todayFail}건 실패${failMsg ? `: ${failMsg}` : ''}` });
+    const failNames = smCronFailed.slice(0, 2).map(f => f.task).join(', ') || cron.recentFailures.slice(0, 2).join(', ');
+    issues.push({ severity: cronLevel === 'red' ? 'critical' : 'warning', message: `자동화 성공률 ${effectiveCronRate}%${failNames ? ` (${failNames})` : ''}` });
   }
 
-  const e2eLevel: HealthLevel = e2e.rate >= 95 ? 'green' : e2e.rate >= 80 ? 'yellow' : 'red';
+  // E2E: total=0이면 데이터 없음으로 green 처리
+  const e2eLevel: HealthLevel = e2e.total === 0 ? 'green' : e2e.rate >= 95 ? 'green' : e2e.rate >= 80 ? 'yellow' : 'red';
   if (e2eLevel !== 'green') {
     issues.push({ severity: e2eLevel === 'red' ? 'critical' : 'warning', message: `자가점검 ${e2e.total - e2e.passed}건 실패 (${e2e.rate}% 통과)` });
   }
 
+  // 오류
   const errorLevel: HealthLevel = errors.total24h < 5 ? 'green' : errors.total24h < 20 ? 'yellow' : 'red';
   if (errorLevel !== 'green') {
     issues.push({ severity: errorLevel === 'red' ? 'critical' : 'warning', message: `24시간 내 오류 ${errors.total24h}건 발생` });
@@ -362,15 +372,21 @@ export async function GET(req: NextRequest) {
     weekTrend: boardStats.recentDays,
   };
 
-  // ── 14. teamOverview — 팀 현황 ──
+  // ── 14. teamOverview — 팀 현황 (sysMetrics.scorecard 우선) ──
   const mvpAgent = topAgents[0] ?? null;
   const autonomyRate = parseFloat(autonomy.autonomy_rate ?? '0');
+  const smScorecard = (sysMetrics?.scorecard as { teams?: Record<string, { merit: number; penalty: number; status: string }> } | undefined)?.teams;
+  const effectiveTeams = teams.length > 0
+    ? teams
+    : smScorecard
+      ? Object.entries(smScorecard).map(([name, v]) => ({ name, merit: v.merit, penalty: v.penalty, status: v.status }))
+      : [];
   const teamOverview = {
     mvp: mvpAgent,
     autonomyRate,
     totalDecisions: autonomy.total_decisions ?? 0,
     executed: autonomy.executed ?? 0,
-    teams,
+    teams: effectiveTeams,
   };
 
   return NextResponse.json({

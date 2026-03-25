@@ -99,6 +99,21 @@ interface DashboardData {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const CH_NAME: Record<string, string> = {
+  '1468386844621144065': 'jarvis-main',
+  '1469190688083280065': 'jarvis-dev',
+  '1469190686145384513': 'jarvis-ceo',
+  '1475786634510467186': 'workgroup-board',
+  '1471694919339868190': 'jarvis-career',
+  '1474650972310605886': 'news',
+  '1484008782853050483': 'jarvis-boram',
+  '1470559565258162312': 'jarvis-lite',
+  '1469905074661757049': 'jarvis-blog',
+  '1472965899790061680': 'quiet-ch2',
+  '1470011814803935274': 'quiet-ch1',
+  '1469999923633328279': 'jarvis-family',
+};
+
 const LA_SHORT: Record<string, string> = {
   'ai.jarvis.discord-bot': '봇',
   'ai.jarvis.watchdog': '감시',
@@ -672,7 +687,7 @@ function DiscordChannelCard({ sm }: { sm?: DashboardData['sysMetrics'] }) {
             const barPct = total > 0 ? Math.round((ch.claudes / Math.max(...channels.map(c => c.human + c.claudes))) * 100) : 0;
             return (
               <div key={ch.id} className="flex items-center gap-2">
-                <span className="text-[11px] text-zinc-600 w-28 truncate flex-shrink-0">{ch.name ?? ch.id.slice(-6)}</span>
+                <span className="text-[11px] text-zinc-600 w-28 truncate flex-shrink-0">{CH_NAME[ch.id] ?? ch.name ?? ch.id.slice(-6)}</span>
                 <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barPct}%` }} />
                 </div>
