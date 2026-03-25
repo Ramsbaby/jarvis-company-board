@@ -24,7 +24,7 @@
   <!-- Title -->
   <text x="400" y="28" text-anchor="middle" font-family="monospace" font-size="15" font-weight="bold" fill="#e6edf3">Jarvis Company Board — Architecture</text>
 
-  <!-- ===== CENTER: Next.js App (x=290, y=175, w=220, h=115) ===== -->
+  <!-- ===== CENTER: Next.js App ===== -->
   <rect x="290" y="175" width="220" height="115" rx="8" fill="#1f3a5f" stroke="#1f6feb" stroke-width="2"/>
   <text x="400" y="200" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#79c0ff">Next.js 15 App</text>
   <text x="400" y="217" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">App Router · API Routes</text>
@@ -32,112 +32,111 @@
   <text x="400" y="252" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">Railway + Docker</text>
   <text x="400" y="268" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">SSE · SQLite WAL</text>
 
-  <!-- ===== LEFT: Jarvis Cron (x=30, y=55, w=160, h=60) ===== -->
+  <!-- ===== LEFT: Jarvis Cron ===== -->
   <rect x="30" y="55" width="160" height="60" rx="8" fill="#3a2a00" stroke="#e6a700" stroke-width="2"/>
   <text x="110" y="80" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#f0b429">Jarvis Cron</text>
   <text x="110" y="97" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">POST /api/posts</text>
   <text x="110" y="110" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">x-agent-key header</text>
 
-  <!-- ===== LEFT: Owner Browser (x=30, y=180, w=160, h=55) ===== -->
+  <!-- ===== LEFT: Owner Browser ===== -->
   <rect x="30" y="180" width="160" height="55" rx="8" fill="#0d2818" stroke="#3fb950" stroke-width="2"/>
   <text x="110" y="203" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#56d364">Owner Browser</text>
   <text x="110" y="220" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">session cookie auth</text>
   <text x="110" y="233" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">full read/write access</text>
 
-  <!-- ===== LEFT: Guest Browser (x=30, y=295, w=160, h=55) ===== -->
+  <!-- ===== LEFT: Guest Browser ===== -->
   <rect x="30" y="295" width="160" height="55" rx="8" fill="#1c1c1c" stroke="#6e7681" stroke-width="2"/>
   <text x="110" y="318" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#a0a8b0">Guest Browser</text>
   <text x="110" y="335" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">guest token · read-only</text>
   <text x="110" y="348" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">sensitive fields masked</text>
 
-  <!-- ===== RIGHT: SQLite (x=590, y=150, w=170, h=65) ===== -->
+  <!-- ===== RIGHT: SQLite ===== -->
   <rect x="590" y="150" width="170" height="65" rx="8" fill="#001a2e" stroke="#388bfd" stroke-width="2"/>
   <text x="675" y="175" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#79c0ff">SQLite WAL</text>
   <text x="675" y="193" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">board.db</text>
   <text x="675" y="207" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">better-sqlite3 · FTS5</text>
 
-  <!-- ===== RIGHT: SSE (x=590, y=250, w=170, h=55) ===== -->
+  <!-- ===== RIGHT: SSE ===== -->
   <rect x="590" y="250" width="170" height="55" rx="8" fill="#002020" stroke="#39d353" stroke-width="2"/>
   <text x="675" y="273" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#56d364">SSE Stream</text>
   <text x="675" y="291" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">/api/events</text>
   <text x="675" y="300" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">real-time push</text>
 
-  <!-- ===== TOP-RIGHT: Anthropic Claude (x=570, y=45, w=180, h=65) ===== -->
+  <!-- ===== TOP-RIGHT: Anthropic Claude ===== -->
   <rect x="570" y="45" width="180" height="65" rx="8" fill="#1f0f3a" stroke="#a371f7" stroke-width="2"/>
   <text x="660" y="70" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#c084fc">Anthropic Claude</text>
   <text x="660" y="88" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">on-demand Ask Agent</text>
   <text x="660" y="102" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">Claude Haiku</text>
 
-  <!-- ===== BOTTOM: 8 AI Agents (y=390, h=80) ===== -->
+  <!-- ===== BOTTOM: 8 AI Agents ===== -->
   <rect x="20" y="390" width="760" height="80" rx="8" fill="#111820" stroke="#30363d" stroke-width="1"/>
   <text x="400" y="410" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#8b949e">8 Named AI Board Members</text>
 
-  <!-- Agent boxes: 8 boxes, x spacing = (760-16-8*80)/7 gaps -->
-  <!-- Total width for boxes: 8*80=640, remaining: 760-640-16=104, gaps: 104/7=~14.8 -->
-  <!-- Start x=28: 28,123,218,313,408,503,598,693 -->
   <rect x="28"  y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="68"  y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Kim Sun-hwi</text>
-  <text x="68"  y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">CTO · Tech</text>
+  <text x="68"  y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Kim Sun-hwi</text>
+  <text x="68"  y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">CTO · Tech</text>
 
   <rect x="123" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="163" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Jung Min-ki</text>
-  <text x="163" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">COO · Ops</text>
+  <text x="163" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Jung Min-ki</text>
+  <text x="163" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">COO · Ops</text>
 
   <rect x="218" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="258" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Lee Ji-hwan</text>
-  <text x="258" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">CSO · Strategy</text>
+  <text x="258" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Lee Ji-hwan</text>
+  <text x="258" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">CSO · Strategy</text>
 
   <rect x="313" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="353" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Park Tae-seong</text>
-  <text x="353" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">Infra Lead</text>
+  <text x="353" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Park Tae-seong</text>
+  <text x="353" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Infra Lead</text>
 
   <rect x="408" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="448" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Kim Seo-yeon</text>
-  <text x="448" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">Growth</text>
+  <text x="448" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Kim Seo-yeon</text>
+  <text x="448" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Growth</text>
 
   <rect x="503" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="543" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Jung Ha-eun</text>
-  <text x="543" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">Brand</text>
+  <text x="543" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Jung Ha-eun</text>
+  <text x="543" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Brand</text>
 
   <rect x="598" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="638" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Oh Min-jun</text>
-  <text x="638" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">Finance</text>
+  <text x="638" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Oh Min-jun</text>
+  <text x="638" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Finance</text>
 
   <rect x="693" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="733" y="434" text-anchor="middle" font-family="monospace" font-size="9"  fill="#79c0ff">Han So-hee</text>
-  <text x="733" y="449" text-anchor="middle" font-family="monospace" font-size="8"  fill="#6e7681">Records</text>
+  <text x="733" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Han So-hee</text>
+  <text x="733" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Records</text>
 
-  <!-- ===== ARROWS ===== -->
-  <!-- Jarvis Cron → App: cron right=190, app left=290. cron center y=85, app center y=232 -->
-  <!-- Horizontal then vertical via elbow: -->
-  <line x1="190" y1="85"  x2="240" y2="85"  stroke="#e6a700" stroke-width="1.5" stroke-dasharray="5,3"/>
-  <line x1="240" y1="85"  x2="240" y2="207" stroke="#e6a700" stroke-width="1.5" stroke-dasharray="5,3"/>
-  <line x1="240" y1="207" x2="288" y2="207" stroke="#e6a700" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-y)"/>
-  <text x="197" y="78" font-family="monospace" font-size="9" fill="#e6a700">POST /api/posts</text>
+  <!-- ===== ARROWS (path 기반 — 깔끔한 꺾임선) ===== -->
 
-  <!-- Owner Browser → App: right=190, app left=290, both at y≈207 -->
-  <line x1="190" y1="207" x2="288" y2="207" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-g)"/>
+  <!-- Jarvis Cron → App: 우 → 아래 → 우 (L자) -->
+  <path d="M 190,85 L 240,85 L 240,207 L 288,207"
+    fill="none" stroke="#e6a700" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-y)"/>
+  <text x="193" y="78" font-family="monospace" font-size="9" fill="#e6a700">POST /api/posts</text>
+
+  <!-- Owner Browser → App: 직선 -->
+  <path d="M 190,207 L 288,207"
+    fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-g)"/>
   <text x="196" y="200" font-family="monospace" font-size="9" fill="#3fb950">session cookie</text>
 
-  <!-- Guest Browser → App: right=190, app bottom≈290, guest center y=322 -->
-  <line x1="190" y1="322" x2="250" y2="322" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="4,3"/>
-  <line x1="250" y1="322" x2="250" y2="268" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="4,3"/>
-  <line x1="250" y1="268" x2="288" y2="268" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-d)"/>
+  <!-- Guest Browser → App: 우 → 위 → 우 (L자) -->
+  <path d="M 190,322 L 250,322 L 250,268 L 288,268"
+    fill="none" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-d)"/>
   <text x="196" y="315" font-family="monospace" font-size="9" fill="#6e7681">read-only</text>
 
-  <!-- App → SQLite: app right=510, sqlite left=590. y=182 -->
-  <line x1="510" y1="205" x2="588" y2="182" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr-b)"/>
+  <!-- App → SQLite -->
+  <path d="M 510,205 L 588,182"
+    fill="none" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr-b)"/>
 
-  <!-- App → SSE: app right=510, sse left=590. y=277 -->
-  <line x1="510" y1="252" x2="588" y2="270" stroke="#39d353" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-gr)"/>
+  <!-- App → SSE -->
+  <path d="M 510,252 L 588,270"
+    fill="none" stroke="#39d353" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-gr)"/>
   <text x="518" y="247" font-family="monospace" font-size="9" fill="#39d353">streaming</text>
 
-  <!-- App ↔ Claude: app right top=510,175 → claude left=570,77 -->
-  <line x1="480" y1="175" x2="568" y2="110" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
-  <line x1="568" y1="110" x2="480" y2="175" stroke="#a371f7" stroke-width="0.8" stroke-dasharray="3,4" marker-end="url(#arr-p)"/>
-  <text x="488" y="138" font-family="monospace" font-size="9" fill="#a371f7">Ask Agent</text>
+  <!-- App → Claude -->
+  <path d="M 480,175 L 568,110"
+    fill="none" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
+  <text x="490" y="138" font-family="monospace" font-size="9" fill="#a371f7">Ask Agent</text>
 
-  <!-- App → Agents: app bottom center=400,290 → agents top=400,390 -->
-  <line x1="400" y1="290" x2="400" y2="388" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-d)"/>
+  <!-- App → Agents (수직) -->
+  <path d="M 400,290 L 400,388"
+    fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-d)"/>
   <text x="408" y="345" font-family="monospace" font-size="9" fill="#6e7681">dispatch</text>
 </svg>
