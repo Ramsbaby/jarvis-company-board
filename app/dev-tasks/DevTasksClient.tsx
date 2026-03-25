@@ -494,6 +494,41 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
     router.refresh();
   }
 
+  // 그룹 전체 삭제 (deletable 상태만 — awaiting_approval | rejected | failed)
+  async function handleGroupDeleteAll(group: TaskGroup) {
+    const DELETABLE = ['awaiting_approval', 'rejected', 'failed'];
+    const deletableCount = [
+      ...group.tasks.filter(t => DELETABLE.includes(t.status)),
+      ...(group.parentTask && DELETABLE.includes(group.parentTask.status) ? [group.parentTask] : []),
+    ].length;
+    const total = group.tasks.length + (group.parentTask ? 1 : 0);
+    const skippable = total - deletableCount;
+
+    const msg = skippable > 0
+      ? `그룹 내 삭제 가능한 태스크 ${deletableCount}개를 삭제합니다.\n(진행 중/완료 ${skippable}개는 건너뜁니다)\n\n계속할까요?`
+      : `그룹 태스크 ${deletableCount}개를 전체 삭제할까요?`;
+    if (deletableCount === 0 || !confirm(msg)) return;
+
+    setBulkLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/dev-tasks/groups?group_id=${encodeURIComponent(group.groupId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setTasks(prev => prev.filter(t => t.group_id !== group.groupId));
+      } else {
+        setActionError(data.error ?? `그룹 삭제 실패 (${res.status})`);
+      }
+    } catch {
+      setActionError('네트워크 오류가 발생했습니다.');
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   // 부모 태스크는 탭 카운트/필터에서 제외 (그룹 헤더 전용)
   const nonParentTasks = useMemo(() => tasks.filter(t => t.task_type !== 'group_parent'), [tasks]);
 
@@ -962,6 +997,18 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                           className="text-[10px] px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap font-medium shadow-sm"
                         >
                           ✓ 그룹 승인
+                        </button>
+                      )}
+                      {/* 그룹 전체 삭제 버튼 — deletable 상태 태스크가 있을 때만 표시 */}
+                      {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
+                        ['awaiting_approval', 'rejected', 'failed'].includes(t.status)
+                      ) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
+                          disabled={bulkLoading}
+                          className="text-[10px] px-2 py-1 rounded-md bg-red-100 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap font-medium"
+                        >
+                          🗑 그룹 삭제
                         </button>
                       )}
                       <button

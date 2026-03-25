@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { broadcastEvent } from '@/lib/sse';
 import { getRequestAuth } from '@/lib/guest-guard';
 import type { DevTask } from '@/lib/types';
 
@@ -67,4 +68,46 @@ export async function GET(req: NextRequest) {
   }));
 
   return NextResponse.json(result);
+}
+
+/**
+ * DELETE /api/dev-tasks/groups?group_id=xxx
+ * Deletes all deletable tasks in the group (awaiting_approval | rejected | failed).
+ * group_parent task is also deleted if deletable.
+ * Returns { deleted: number, skipped: number }
+ */
+export async function DELETE(req: NextRequest) {
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const groupId = req.nextUrl.searchParams.get('group_id');
+  if (!groupId) return NextResponse.json({ error: 'group_id required' }, { status: 400 });
+
+  const db = getDb();
+  const DELETABLE = ['awaiting_approval', 'rejected', 'failed'];
+
+  // Include group_parent task (group_id match) and child tasks (group_id match)
+  const allInGroup = db.prepare(
+    `SELECT id, status FROM dev_tasks WHERE group_id = ? OR (task_type = 'group_parent' AND group_id = ?)`
+  ).all(groupId, groupId) as Array<{ id: string; status: string }>;
+
+  const toDelete = allInGroup.filter(t => DELETABLE.includes(t.status));
+  const skipped = allInGroup.length - toDelete.length;
+
+  if (toDelete.length === 0) {
+    return NextResponse.json({ deleted: 0, skipped, message: '삭제 가능한 태스크가 없습니다' });
+  }
+
+  const deleteGroup = db.transaction(() => {
+    for (const t of toDelete) {
+      db.prepare('DELETE FROM dev_tasks WHERE id = ?').run(t.id);
+    }
+  });
+  deleteGroup();
+
+  for (const t of toDelete) {
+    broadcastEvent({ type: 'dev_task_deleted', data: { id: t.id } });
+  }
+
+  return NextResponse.json({ deleted: toDelete.length, skipped });
 }
