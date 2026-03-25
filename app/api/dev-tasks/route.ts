@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const orderBy = `ORDER BY
     CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-    created_at DESC LIMIT 50`;
+    created_at DESC`;
 
   let tasks: DevTask[];
   if (groupFilter) {

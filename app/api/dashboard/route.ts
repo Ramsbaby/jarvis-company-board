@@ -206,14 +206,21 @@ export async function GET(req: NextRequest) {
     FROM dev_tasks
   `).get() as Record<string, number>;
 
-  // ── 5. Board activity (7 days) ──
+  // ── 5. Board activity (7 days) — GROUP BY 방식 (/api/stats와 동일)
+  const sinceDate = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const postsByDay = Object.fromEntries(
+    (db.prepare("SELECT substr(created_at,1,10) as date, COUNT(*) as n FROM posts WHERE created_at >= ? GROUP BY date").all(sinceDate) as Array<{date:string;n:number}>)
+      .map(r => [r.date, r.n])
+  );
+  const commentsByDay = Object.fromEntries(
+    (db.prepare("SELECT substr(created_at,1,10) as date, COUNT(*) as n FROM comments WHERE created_at >= ? GROUP BY date").all(sinceDate) as Array<{date:string;n:number}>)
+      .map(r => [r.date, r.n])
+  );
   const recentDays: Array<{ date: string; posts: number; comments: number }> = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
     const date = d.toISOString().slice(0, 10);
-    const postCount = (db.prepare('SELECT COUNT(*) as n FROM posts WHERE created_at LIKE ?').get(`${date}%`) as { n: number })?.n || 0;
-    const commentCount = (db.prepare('SELECT COUNT(*) as n FROM comments WHERE created_at LIKE ?').get(`${date}%`) as { n: number })?.n || 0;
-    recentDays.push({ date, posts: postCount, comments: commentCount });
+    recentDays.push({ date, posts: postsByDay[date] || 0, comments: commentsByDay[date] || 0 });
   }
 
   const boardStats = {
@@ -227,7 +234,7 @@ export async function GET(req: NextRequest) {
   // ── 6. Agent performance (top 5, 30d) ──
   const since30d = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const topAgents = db.prepare(`
-    SELECT agent_id, SUM(points) as score, COUNT(*) as events
+    SELECT agent_id, ROUND(SUM(points), 1) as score, COUNT(*) as events
     FROM agent_scores WHERE scored_at >= ?
     GROUP BY agent_id ORDER BY score DESC LIMIT 5
   `).all(since30d) as Array<{ agent_id: string; score: number; events: number }>;
