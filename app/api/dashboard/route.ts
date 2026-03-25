@@ -146,6 +146,11 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
+  // ── 0. system_metrics (Mac Mini → board_settings, 5분마다 push) ──
+  const smRow = db.prepare("SELECT value FROM board_settings WHERE key = 'system_metrics'").get() as { value: string } | undefined;
+  let sysMetrics: Record<string, unknown> | null = null;
+  if (smRow?.value) { try { sysMetrics = JSON.parse(smRow.value); } catch { /* ignore */ } }
+
   // ── 1. System health ──
   const health = readJsonFile<{
     discord_bot?: string; memory_mb?: number; crash_count?: number;
@@ -228,8 +233,16 @@ export async function GET(req: NextRequest) {
   type HealthLevel = 'green' | 'yellow' | 'red';
   const issues: Array<{ severity: 'warning' | 'critical'; message: string }> = [];
 
-  const botLevel: HealthLevel = health.discord_bot === 'healthy' ? 'green' : 'red';
+  const silenceSec = (sysMetrics?.discord_stats as { lastHealth?: { silenceSec?: number } } | undefined)?.lastHealth?.silenceSec ?? 0;
+  const botIsHealthy = health.discord_bot === 'healthy';
+  const botLevel: HealthLevel = botIsHealthy && silenceSec < 900 ? 'green' : botIsHealthy ? 'yellow' : 'red';
   if (botLevel === 'red') issues.push({ severity: 'critical', message: '봇이 응답하지 않습니다' });
+  else if (botLevel === 'yellow') issues.push({ severity: 'warning', message: `봇 ${Math.floor(silenceSec / 60)}분째 침묵 중` });
+
+  // Disk alert
+  const diskPct = (sysMetrics?.disk as { used_pct?: number } | undefined)?.used_pct ?? 0;
+  if (diskPct >= 90) issues.push({ severity: 'critical', message: `디스크 ${diskPct}% 사용 중` });
+  else if (diskPct >= 80) issues.push({ severity: 'warning', message: `디스크 사용량 높음: ${diskPct}%` });
 
   const cronLevel: HealthLevel = cron.successRate >= 90 ? 'green' : cron.successRate >= 70 ? 'yellow' : 'red';
   if (cronLevel !== 'green') {
@@ -347,5 +360,6 @@ export async function GET(req: NextRequest) {
     attention,
     todaySummary,
     teamOverview,
+    sysMetrics,
   });
 }

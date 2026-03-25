@@ -70,13 +70,48 @@ interface DashboardData {
     executed: number;
     teams: Array<{ name: string; merit: number; penalty: number; status: string }>;
   };
+  sysMetrics?: {
+    synced_at?: string;
+    disk?: { used_pct: number; free_gb: number; total_gb: number };
+    health?: { discord_bot?: string; memory_mb?: number };
+    discord_stats?: {
+      claudeCount?: number;
+      totalHuman?: number;
+      avgElapsed?: number;
+      restartCount?: number;
+      botErrors?: number;
+      lastHealth?: { silenceSec?: number; memMB?: number; wsPing?: number };
+      channelActivity?: Array<{ id: string; name: string; human: number; claudes: number }>;
+    };
+    rag_stats?: { dbSize?: string; stuck?: boolean; inboxCount?: number; chunks?: number };
+    launch_agents?: Array<{ name: string; pid: string | null; exitCode: number | null; loaded: boolean }>;
+    circuit_breakers?: Array<{ name?: string; state?: string; last_fail_ts?: number; failCount?: number }>;
+    cron_stats?: {
+      rate?: number;
+      recentFailed?: Array<{ task: string; lastRun: string; failCount: number; lastStatus: string }>;
+      taskStatus?: Record<string, { lastRun: string; lastStatus: string; failCount: number }>;
+    };
+    decisions_today?: Array<{ action?: string; task?: string; ts?: string }>;
+  } | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const LA_SHORT: Record<string, string> = {
+  'ai.jarvis.discord-bot': '봇',
+  'ai.jarvis.watchdog': '감시',
+  'ai.jarvis.dashboard-tunnel': '터널',
+  'ai.jarvis.dashboard': '대시보드',
+  'ai.jarvis.rag-watcher': 'RAG',
+  'ai.jarvis.webhook-listener': '훅',
+  'ai.jarvis.event-watcher': '이벤트',
+  'ai.jarvis.sync-system-metrics': '메트릭',
+  'ai.jarvis.orchestrator': '오케스트라',
+};
+
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm ${className}`}>
+    <div className={`bg-white border border-zinc-200 rounded-xl p-3 shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -84,9 +119,9 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 function BigNumber({ value, unit }: { value: string | number; unit?: string }) {
   return (
-    <span className="text-3xl font-black tabular-nums text-zinc-900">
+    <span className="text-2xl font-black tabular-nums text-zinc-900">
       {value}
-      {unit && <span className="text-lg font-semibold text-zinc-400 ml-1">{unit}</span>}
+      {unit && <span className="text-base font-semibold text-zinc-400 ml-1">{unit}</span>}
     </span>
   );
 }
@@ -101,7 +136,7 @@ function Label({ children }: { children: React.ReactNode }) {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">{children}</h2>
+    <h2 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest mb-2">{children}</h2>
   );
 }
 
@@ -131,12 +166,11 @@ const PRIORITY_COLOR: Record<string, string> = {
 
 // ── 섹션 1: 전체 상태 ──────────────────────────────────────────────────────────
 
-function HealthBanner({ data }: { data: DashboardData['healthSummary'] }) {
+function HealthPanel({ data, sm }: { data: DashboardData['healthSummary']; sm?: DashboardData['sysMetrics'] }) {
   const levelColor = (level: 'green' | 'yellow' | 'red') =>
     level === 'green' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
     level === 'yellow' ? 'bg-amber-50 text-amber-700 border-amber-200' :
     'bg-red-50 text-red-700 border-red-200';
-
   const levelDot = (level: 'green' | 'yellow' | 'red') =>
     level === 'green' ? 'bg-emerald-500' : level === 'yellow' ? 'bg-amber-500' : 'bg-red-500';
 
@@ -151,19 +185,76 @@ function HealthBanner({ data }: { data: DashboardData['healthSummary'] }) {
     : data.overall === 'yellow' ? 'bg-amber-50 border-amber-100'
     : 'bg-red-50 border-red-100';
 
+  // sysMetrics 데이터
+  const diskPct = sm?.disk?.used_pct ?? 0;
+  const diskFree = sm?.disk?.free_gb?.toFixed(0) ?? '?';
+  const memMb = sm?.health?.memory_mb ?? sm?.discord_stats?.lastHealth?.memMB ?? 0;
+  const silenceSec = sm?.discord_stats?.lastHealth?.silenceSec ?? 0;
+  const silenceStr = silenceSec < 60 ? `${silenceSec}초 전` : silenceSec < 3600 ? `${Math.floor(silenceSec / 60)}분 전` : `${Math.floor(silenceSec / 3600)}시간 전`;
+  const ragStuck = sm?.rag_stats?.stuck ?? false;
+  const ragSize = sm?.rag_stats?.dbSize ?? '';
+  const wsPing = sm?.discord_stats?.lastHealth?.wsPing;
+  const syncedAt = sm?.synced_at;
+  const launchAgents = sm?.launch_agents ?? [];
+  const cbCount = (sm?.circuit_breakers ?? []).filter(cb => cb.state === 'open' || cb.failCount && cb.failCount > 0).length;
+
   return (
-    <div className={`rounded-2xl border p-4 mb-6 ${overallBg}`}>
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mr-1">전체 상태</span>
+    <div className={`rounded-xl border p-3 mb-4 ${overallBg}`}>
+      {/* Row 1: 상태 알약 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">상태</span>
         {pills.map(p => (
-          <span key={p.label} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${levelColor(p.level)}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${levelDot(p.level)}`} />
-            {p.label}: {p.level === 'green' ? '정상' : p.level === 'yellow' ? '주의' : '이상'}
+          <span key={p.label} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${levelColor(p.level)}`}>
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${levelDot(p.level)}`} />
+            {p.label} {p.level === 'green' ? '✓' : p.level === 'yellow' ? '!' : '✗'}
           </span>
         ))}
+        {syncedAt && (
+          <span className="ml-auto text-[10px] text-zinc-400">
+            {new Date(syncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 동기화
+          </span>
+        )}
       </div>
+
+      {/* Row 2: 리소스 */}
+      {sm && (
+        <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+          <span className="text-zinc-600">
+            💾 디스크 <span className={diskPct >= 80 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>{diskPct}%</span>
+            <span className="text-zinc-400"> ({diskFree}GB 여유)</span>
+          </span>
+          {memMb > 0 && <span className="text-zinc-600">🧠 메모리 <span className="text-zinc-500">{memMb}MB</span></span>}
+          <span className="text-zinc-600">
+            🤖 봇 마지막 활동 <span className={silenceSec > 600 ? 'text-amber-600 font-semibold' : 'text-zinc-500'}>{silenceStr}</span>
+          </span>
+          <span className={`${ragStuck ? 'text-amber-600 font-semibold' : 'text-zinc-600'}`}>
+            📚 RAG {ragStuck ? '⚠ 점검필요' : '정상'}{ragSize ? ` (${ragSize})` : ''}
+          </span>
+          {wsPing !== undefined && <span className="text-zinc-400">📡 WS {wsPing}ms</span>}
+          {cbCount > 0 && <span className="text-red-600 font-semibold">⚡ 서킷브레이커 {cbCount}개 열림</span>}
+        </div>
+      )}
+
+      {/* Row 3: LaunchAgents */}
+      {launchAgents.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-black/5 flex flex-wrap gap-1.5">
+          <span className="text-[10px] text-zinc-400 self-center mr-1">서비스</span>
+          {launchAgents.map(a => {
+            const ok = a.loaded && (a.exitCode === 0 || a.exitCode === null || a.exitCode === -1);
+            const name = LA_SHORT[a.name] ?? a.name.split('.').pop() ?? a.name;
+            return (
+              <span key={a.name} title={a.name}
+                className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                {name} {ok ? '✓' : '✗'}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Row 4: 이슈 목록 */}
       {data.issues.length > 0 && (
-        <div className="mt-3 space-y-1">
+        <div className="mt-2 pt-2 border-t border-black/5 space-y-0.5">
           {data.issues.map((issue, i) => (
             <div key={i} className={`text-xs flex items-center gap-1.5 ${issue.severity === 'critical' ? 'text-red-700' : 'text-amber-700'}`}>
               <span>{issue.severity === 'critical' ? '🔴' : '🟡'}</span>
@@ -275,60 +366,53 @@ function ClosingSoonCard({ items }: { items: DashboardData['attention']['closing
 
 // ── 섹션 3: 오늘 활동 ─────────────────────────────────────────────────────────
 
-function TodayStatsCard({ data }: { data: DashboardData['todaySummary'] }) {
+function TodaySummaryRow({ today, sm }: { today: DashboardData['todaySummary']; sm?: DashboardData['sysMetrics'] }) {
+  const botCalls = sm?.discord_stats?.claudeCount;
+  const botMsgs = sm?.discord_stats?.totalHuman;
+  const combined = today.weekTrend.map(d => ({ date: d.date, total: d.posts + d.comments }));
+  const maxVal = Math.max(...combined.map(d => d.total), 1);
+  const wChange = today.weekChange;
+  const wLabel = wChange > 0 ? `+${wChange}%↑` : wChange < 0 ? `${wChange}%↓` : '±0';
+  const wColor = wChange > 0 ? 'text-emerald-600' : wChange < 0 ? 'text-red-500' : 'text-zinc-400';
+
   const stats = [
-    { label: '새 토론', value: data.newPosts, emoji: '📝' },
-    { label: '마감됨', value: data.resolvedPosts, emoji: '✅' },
-    { label: '완료 태스크', value: data.completedTasks, emoji: '⚙️' },
-    { label: 'AI 의견', value: data.aiComments, emoji: '🤖' },
+    { label: '새 토론', value: today.newPosts },
+    { label: '마감됨', value: today.resolvedPosts },
+    { label: '완료 태스크', value: today.completedTasks },
+    { label: 'AI 댓글', value: today.aiComments },
+    { label: '봇 호출', value: botCalls ?? '-' },
+    { label: '사용자 메시지', value: botMsgs ?? '-' },
   ];
+
   return (
-    <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-base">📅</span>
-        <Label>오늘 처리 현황</Label>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+    <div className="mb-4">
+      <SectionHeader>오늘 활동</SectionHeader>
+      <div className="flex gap-2 flex-wrap">
         {stats.map(s => (
-          <div key={s.label} className="bg-zinc-50 rounded-xl p-3">
+          <div key={s.label} className="bg-white border border-zinc-200 rounded-xl p-2.5 flex-1 min-w-[80px] shadow-sm">
             <div className="text-xl font-black tabular-nums text-zinc-800">{s.value}</div>
-            <div className="text-[11px] text-zinc-500 mt-0.5">{s.emoji} {s.label}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5 whitespace-nowrap">{s.label}</div>
           </div>
         ))}
+        {/* 미니 바 차트 */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-2.5 flex-[2] min-w-[120px] shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-zinc-400">7일 추이</span>
+            <span className={`text-[10px] font-semibold ${wColor}`}>{wLabel}</span>
+          </div>
+          <div className="flex items-end gap-0.5 h-8">
+            {combined.map(d => {
+              const h = d.total > 0 ? (d.total / maxVal) * 100 : 2;
+              return (
+                <div key={d.date} className="flex-1 flex flex-col justify-end h-full" title={`${d.date}: ${d.total}건`}>
+                  <div className="bg-indigo-400 rounded-sm" style={{ height: `${h}%`, minHeight: '1px' }} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
-    </Card>
-  );
-}
-
-function WeekTrendCard({ data }: { data: DashboardData['todaySummary'] }) {
-  const combined = data.weekTrend.map(d => ({ date: d.date, total: d.posts + d.comments }));
-  const maxVal = Math.max(...combined.map(d => d.total), 1);
-  const changeAbs = Math.abs(data.weekChange);
-  const changeLabel = data.weekChange > 0 ? `↑ ${changeAbs}% 증가` : data.weekChange < 0 ? `↓ ${changeAbs}% 감소` : '변화 없음';
-  const changeColor = data.weekChange > 0 ? 'text-emerald-600' : data.weekChange < 0 ? 'text-red-500' : 'text-zinc-400';
-
-  return (
-    <Card>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-base">📈</span>
-        <Label>7일 활동 추이</Label>
-        <span className={`ml-auto text-xs font-semibold ${changeColor}`}>{changeLabel}</span>
-      </div>
-      <p className="text-[11px] text-zinc-400 mb-4">지난주 대비</p>
-      <div className="flex items-end gap-1.5 h-14">
-        {combined.map((d) => {
-          const h = d.total > 0 ? (d.total / maxVal) * 100 : 2;
-          return (
-            <div key={d.date} className="flex-1 flex flex-col items-stretch justify-end h-full" title={`${d.date}: ${d.total}건`}>
-              <div className="bg-indigo-400 rounded-t" style={{ height: `${h}%`, minHeight: '2px' }} />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between text-[9px] text-zinc-400 mt-1">
-        {combined.map(d => <span key={d.date}>{d.date.slice(5)}</span>)}
-      </div>
-    </Card>
+    </div>
   );
 }
 
@@ -417,30 +501,36 @@ function TeamOverviewSection({ data }: { data: DashboardData['teamOverview'] }) 
   );
 }
 
-// ── 섹션 5: 엔지니어링 상세 (접기) ────────────────────────────────────────────
+// ── 섹션 5: 엔지니어링 상세 ────────────────────────────────────────────────────
 
-function CronCard({ data }: { data: DashboardData['cron'] }) {
+function CronCard({ data, sm }: { data: DashboardData['cron']; sm?: DashboardData['sysMetrics'] }) {
   const maxVal = Math.max(...data.trend.map(d => d.ok + d.fail), 1);
+  const smRate = sm?.cron_stats?.rate;
+  const rate = smRate !== undefined ? smRate : data.successRate;
+  const smFailed = sm?.cron_stats?.recentFailed ?? [];
+  const fallbackFailed = data.recentFailures.map(f => ({ task: f, lastRun: '', failCount: 1, lastStatus: 'FAILED' }));
+  const recentFailed = smFailed.length > 0 ? smFailed : fallbackFailed;
+
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-lg">⏱</span>
+      <div className="flex items-center gap-2 mb-2">
+        <span>⏱</span>
         <Label>자동화 작업</Label>
       </div>
-      <div className="mb-3">
-        <BigNumber value={data.successRate} unit="%" />
-        <div className="text-xs text-zinc-500 mt-1">오늘 성공률 · {data.todaySuccess}성공 / {data.todayFail}실패</div>
+      <div className="mb-2">
+        <BigNumber value={rate} unit="%" />
+        <span className="text-xs text-zinc-400 ml-2">성공률</span>
       </div>
-      <div className="flex items-end gap-1 h-12 mb-3">
+      <div className="flex items-end gap-0.5 h-10 mb-1">
         {data.trend.map((d) => {
           const total = d.ok + d.fail;
           const h = total > 0 ? (total / maxVal) * 100 : 2;
           const failH = d.fail > 0 ? (d.fail / maxVal) * 100 : 0;
           return (
             <div key={d.date} className="flex-1 flex flex-col items-stretch justify-end h-full" title={`${d.date}: ${d.ok}ok / ${d.fail}fail`}>
-              <div className="rounded-t" style={{ height: `${h}%`, minHeight: '2px' }}>
+              <div style={{ height: `${h}%`, minHeight: '2px' }}>
                 {failH > 0 && <div className="bg-red-400 rounded-t" style={{ height: `${failH}%`, minHeight: '1px' }} />}
-                <div className="bg-emerald-400 rounded-t flex-1" style={{ height: `${h - failH}%`, minHeight: '1px' }} />
+                <div className="bg-emerald-400 flex-1" style={{ height: `${h - failH}%`, minHeight: '1px' }} />
               </div>
             </div>
           );
@@ -449,30 +539,42 @@ function CronCard({ data }: { data: DashboardData['cron'] }) {
       <div className="flex justify-between text-[9px] text-zinc-400 mb-2">
         {data.trend.map(d => <span key={d.date}>{d.date.slice(5)}</span>)}
       </div>
-      {data.recentFailures.length > 0 && (
-        <div className="mt-2 space-y-1">
-          {data.recentFailures.map((f, i) => <div key={i} className="text-[11px] text-red-500 truncate">• {f}</div>)}
+      {recentFailed.length > 0 && (
+        <div className="space-y-0.5 border-t border-zinc-100 pt-1.5 mt-1">
+          {recentFailed.slice(0, 4).map((f, i) => (
+            <div key={i} className="text-[11px] text-red-500 flex gap-1">
+              <span className="flex-shrink-0">•</span>
+              <span className="truncate">{f.task}{f.failCount > 1 ? ` (${f.failCount}회)` : ''}</span>
+            </div>
+          ))}
         </div>
       )}
     </Card>
   );
 }
 
-function ClaudeCard({ data }: { data: DashboardData['claude'] }) {
+function ClaudeCard({ data, sm }: { data: DashboardData['claude']; sm?: DashboardData['sysMetrics'] }) {
   const maxH = Math.max(...data.hourly, 1);
   const currentHour = new Date().getHours();
+  const botCalls = sm?.discord_stats?.claudeCount;
+  const avgMs = sm?.discord_stats?.avgElapsed;
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-lg">🤖</span>
+      <div className="flex items-center gap-2 mb-2">
+        <span>🤖</span>
         <Label>AI 호출 현황</Label>
       </div>
       <div className="mb-1">
         <BigNumber value={data.todayCalls} />
-        <span className="text-sm text-zinc-500 ml-2">오늘 호출</span>
+        <span className="text-xs text-zinc-500 ml-1.5">Claude CLI</span>
+        {botCalls !== undefined && (
+          <span className="text-xs text-zinc-400 ml-3">봇 {botCalls}회</span>
+        )}
       </div>
-      <div className="text-xs text-zinc-500 mb-4">최근 1시간: {data.lastHourCalls}회 · 전체: {data.totalTracked}회</div>
-      <div className="grid grid-cols-12 gap-[3px]">
+      <div className="text-xs text-zinc-400 mb-2">
+        1시간: {data.lastHourCalls}회{avgMs !== undefined && ` · 평균응답 ${avgMs}s`}
+      </div>
+      <div className="grid grid-cols-12 gap-[2px]">
         {data.hourly.map((count, h) => {
           const opacity = count > 0 ? Math.max(0.15, count / maxH) : 0.04;
           return (
@@ -492,17 +594,17 @@ function E2ECard({ data }: { data: DashboardData['e2e'] }) {
   const rateColor = data.rate >= 90 ? 'text-emerald-600' : data.rate >= 70 ? 'text-amber-600' : 'text-red-600';
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-lg">🔬</span>
+      <div className="flex items-center gap-2 mb-2">
+        <span>🔬</span>
         <Label>자가점검</Label>
       </div>
       <div className="mb-1">
-        <span className={`text-3xl font-black tabular-nums ${rateColor}`}>{data.rate}</span>
-        <span className="text-lg font-semibold text-zinc-400 ml-1">%</span>
+        <span className={`text-2xl font-black tabular-nums ${rateColor}`}>{data.rate}</span>
+        <span className="text-base font-semibold text-zinc-400 ml-1">%</span>
       </div>
-      <div className="text-xs text-zinc-500 mb-3">{data.passed}/{data.total} 통과 · 마지막: {formatTime(data.lastRun)}</div>
+      <div className="text-xs text-zinc-400 mb-2">{data.passed}/{data.total} 통과 · {formatTime(data.lastRun)}</div>
       {data.failures.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {data.failures.map((f, i) => <div key={i} className="text-[11px] text-red-500 truncate">• {f}</div>)}
         </div>
       )}
@@ -513,20 +615,20 @@ function E2ECard({ data }: { data: DashboardData['e2e'] }) {
 function ErrorsCard({ data }: { data: DashboardData['errors'] }) {
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-lg">⚠️</span>
+      <div className="flex items-center gap-2 mb-2">
+        <span>⚠️</span>
         <Label>오류 현황</Label>
       </div>
-      <div className="flex items-baseline gap-3 mb-3">
+      <div className="flex items-baseline gap-2 mb-1">
         <BigNumber value={data.total24h} />
-        <span className="text-sm text-zinc-500">24시간 오류</span>
+        <span className="text-xs text-zinc-500">24h 오류</span>
+        <span className="text-[11px] text-zinc-400 ml-1">누적 {data.totalAll}건</span>
       </div>
-      <div className="text-xs text-zinc-400 mb-3">전체 누적: {data.totalAll}건</div>
       {data.topErrors.length > 0 && (
-        <div className="space-y-1.5">
-          {data.topErrors.map((e, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-xs font-bold text-red-400 tabular-nums w-6 text-right flex-shrink-0">{e.count}×</span>
+        <div className="space-y-1 mt-2">
+          {data.topErrors.slice(0, 4).map((e, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span className="text-[11px] font-bold text-red-400 tabular-nums w-5 text-right flex-shrink-0">{e.count}×</span>
               <span className="text-[11px] text-zinc-600 break-all leading-tight">{e.msg}</span>
             </div>
           ))}
@@ -537,33 +639,25 @@ function ErrorsCard({ data }: { data: DashboardData['errors'] }) {
 }
 
 function EngineeringSection({ data }: { data: DashboardData }) {
-  const [open, setOpen] = useState(false);
-
-  const hasIssues = data.healthSummary.issues.length > 0;
-  const summaryText = hasIssues
-    ? `${data.healthSummary.issues.length}건 주의 필요`
-    : '모두 정상';
-  const summaryColor = hasIssues ? 'text-amber-600' : 'text-emerald-600';
+  const [open, setOpen] = useState(true);
+  const sm = data.sysMetrics;
 
   return (
     <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors mb-3"
+        className="w-full flex items-center gap-2 text-[10px] font-semibold text-zinc-400 hover:text-zinc-700 transition-colors mb-2"
       >
-        <span className="text-zinc-300">{open ? '▾' : '▸'}</span>
+        <span>{open ? '▾' : '▸'}</span>
         <span className="uppercase tracking-widest">엔지니어링 상세</span>
-        {!open && <span className={`ml-2 text-[11px] font-normal normal-case tracking-normal ${summaryColor}`}>{summaryText}</span>}
       </button>
 
       {open && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <CronCard data={data.cron} />
-          <ClaudeCard data={data.claude} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <CronCard data={data.cron} sm={sm} />
+          <ClaudeCard data={data.claude} sm={sm} />
           <E2ECard data={data.e2e} />
-          <div className="md:col-span-2">
-            <ErrorsCard data={data.errors} />
-          </div>
+          <ErrorsCard data={data.errors} />
         </div>
       )}
     </div>
@@ -596,6 +690,7 @@ const EMPTY_DATA: DashboardData = {
   attention: EMPTY_ATTENTION,
   todaySummary: EMPTY_TODAY,
   teamOverview: EMPTY_TEAM,
+  sysMetrics: null,
 };
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -661,15 +756,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-5xl mx-auto px-4 py-3">
 
-        {/* 섹션 1: 전체 상태 */}
-        <HealthBanner data={health} />
+        {/* 섹션 1: Jarvis 시스템 상태 */}
+        <HealthPanel data={health} sm={d.sysMetrics} />
 
         {/* 섹션 2: 내 할 일 */}
-        <div className="mb-6">
+        <div className="mb-4">
           <SectionHeader>내 할 일</SectionHeader>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <ApprovalCard items={attention.awaitingApproval} />
             <OwnerInputCard items={attention.needsOwnerInput} />
             <ClosingSoonCard items={attention.closingSoon} />
@@ -677,18 +772,12 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         </div>
 
         {/* 섹션 3: 오늘 활동 */}
-        <div className="mb-6">
-          <SectionHeader>오늘 활동</SectionHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TodayStatsCard data={today} />
-            <WeekTrendCard data={today} />
-          </div>
-        </div>
+        <TodaySummaryRow today={today} sm={d.sysMetrics} />
 
         {/* 섹션 4: 팀 현황 (접기) */}
         <TeamOverviewSection data={team} />
 
-        {/* 섹션 5: 엔지니어링 상세 (접기) */}
+        {/* 섹션 5: 엔지니어링 상세 */}
         <EngineeringSection data={d} />
 
       </main>
