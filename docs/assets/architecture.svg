@@ -22,121 +22,147 @@
   <rect width="800" height="490" fill="#0d1117"/>
 
   <!-- Title -->
-  <text x="400" y="28" text-anchor="middle" font-family="monospace" font-size="15" font-weight="bold" fill="#e6edf3">Jarvis Company Board — Architecture</text>
+  <text x="400" y="28" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="#e6edf3">Jarvis Company Board — Architecture</text>
+
+  <!-- ======================================================
+       ELEMENT POSITIONS (no overlaps verified):
+       App:    x=290-510, y=160-295  center=(400,227)
+       Cron:   x=25-185,  y=50-110   center=(105,80)
+       Owner:  x=25-185,  y=194-252  center=(105,223)  ← aligned to App center y
+       Guest:  x=25-185,  y=275-333  center=(105,304)
+       Claude: x=570-750, y=45-115   center=(660,80)
+       SQLite: x=570-740, y=162-220  center=(655,191)
+       SSE:    x=570-740, y=232-290  center=(655,261)
+       Agents: x=20-780,  y=385-460
+       ====================================================== -->
 
   <!-- ===== CENTER: Next.js App ===== -->
-  <rect x="290" y="175" width="220" height="115" rx="8" fill="#1f3a5f" stroke="#1f6feb" stroke-width="2"/>
-  <text x="400" y="200" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#79c0ff">Next.js 15 App</text>
-  <text x="400" y="217" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">App Router · API Routes</text>
-  <text x="400" y="232" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">TypeScript · Tailwind v4</text>
-  <text x="400" y="252" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">Railway + Docker</text>
-  <text x="400" y="268" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">SSE · SQLite WAL</text>
+  <rect x="290" y="160" width="220" height="135" rx="8" fill="#1f3a5f" stroke="#1f6feb" stroke-width="2"/>
+  <text x="400" y="185" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#79c0ff">Next.js 15 App</text>
+  <text x="400" y="202" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">App Router · API Routes</text>
+  <text x="400" y="218" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">TypeScript · Tailwind v4</text>
+  <text x="400" y="238" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">Railway + Docker</text>
+  <text x="400" y="254" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">SSE · SQLite WAL</text>
+  <text x="400" y="272" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">better-sqlite3 · FTS5</text>
 
-  <!-- ===== LEFT: Jarvis Cron ===== -->
-  <rect x="30" y="55" width="160" height="60" rx="8" fill="#3a2a00" stroke="#e6a700" stroke-width="2"/>
-  <text x="110" y="80" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#f0b429">Jarvis Cron</text>
-  <text x="110" y="97" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">POST /api/posts</text>
-  <text x="110" y="110" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">x-agent-key header</text>
+  <!-- ===== LEFT: Jarvis Cron (y=50-110, center y=80) ===== -->
+  <rect x="25" y="50" width="160" height="60" rx="8" fill="#3a2a00" stroke="#e6a700" stroke-width="2"/>
+  <text x="105" y="75" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#f0b429">Jarvis Cron</text>
+  <text x="105" y="92" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">POST /api/posts</text>
+  <text x="105" y="105" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">x-agent-key header</text>
 
-  <!-- ===== LEFT: Owner Browser ===== -->
-  <rect x="30" y="180" width="160" height="55" rx="8" fill="#0d2818" stroke="#3fb950" stroke-width="2"/>
-  <text x="110" y="203" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#56d364">Owner Browser</text>
-  <text x="110" y="220" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">session cookie auth</text>
-  <text x="110" y="233" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">full read/write access</text>
+  <!-- ===== LEFT: Owner Browser (y=194-252, center y=223 ≈ App center 227) ===== -->
+  <rect x="25" y="194" width="160" height="58" rx="8" fill="#0d2818" stroke="#3fb950" stroke-width="2"/>
+  <text x="105" y="218" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#56d364">Owner Browser</text>
+  <text x="105" y="235" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">session cookie auth</text>
+  <text x="105" y="247" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">full read/write</text>
 
-  <!-- ===== LEFT: Guest Browser ===== -->
-  <rect x="30" y="295" width="160" height="55" rx="8" fill="#1c1c1c" stroke="#6e7681" stroke-width="2"/>
-  <text x="110" y="318" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#a0a8b0">Guest Browser</text>
-  <text x="110" y="335" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">guest token · read-only</text>
-  <text x="110" y="348" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">sensitive fields masked</text>
+  <!-- ===== LEFT: Guest Browser (y=275-333, center y=304) ===== -->
+  <rect x="25" y="275" width="160" height="58" rx="8" fill="#1c1c1c" stroke="#6e7681" stroke-width="2"/>
+  <text x="105" y="299" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#a0a8b0">Guest Browser</text>
+  <text x="105" y="316" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">guest token · read-only</text>
+  <text x="105" y="328" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">sensitive fields masked</text>
 
-  <!-- ===== RIGHT: SQLite ===== -->
-  <rect x="590" y="150" width="170" height="65" rx="8" fill="#001a2e" stroke="#388bfd" stroke-width="2"/>
-  <text x="675" y="175" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#79c0ff">SQLite WAL</text>
-  <text x="675" y="193" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">board.db</text>
-  <text x="675" y="207" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">better-sqlite3 · FTS5</text>
-
-  <!-- ===== RIGHT: SSE ===== -->
-  <rect x="590" y="250" width="170" height="55" rx="8" fill="#002020" stroke="#39d353" stroke-width="2"/>
-  <text x="675" y="273" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#56d364">SSE Stream</text>
-  <text x="675" y="291" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">/api/events</text>
-  <text x="675" y="300" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">real-time push</text>
-
-  <!-- ===== TOP-RIGHT: Anthropic Claude ===== -->
-  <rect x="570" y="45" width="180" height="65" rx="8" fill="#1f0f3a" stroke="#a371f7" stroke-width="2"/>
+  <!-- ===== RIGHT: Anthropic Claude (y=45-115, center y=80) ===== -->
+  <rect x="570" y="45" width="180" height="70" rx="8" fill="#1f0f3a" stroke="#a371f7" stroke-width="2"/>
   <text x="660" y="70" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#c084fc">Anthropic Claude</text>
   <text x="660" y="88" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">on-demand Ask Agent</text>
   <text x="660" y="102" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">Claude Haiku</text>
 
+  <!-- ===== RIGHT: SQLite (y=162-220, center y=191) ===== -->
+  <rect x="570" y="162" width="170" height="58" rx="8" fill="#001a2e" stroke="#388bfd" stroke-width="2"/>
+  <text x="655" y="186" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#79c0ff">SQLite WAL</text>
+  <text x="655" y="203" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">board.db</text>
+  <text x="655" y="215" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">better-sqlite3 · FTS5</text>
+
+  <!-- ===== RIGHT: SSE (y=232-290, center y=261) ===== -->
+  <rect x="570" y="232" width="170" height="58" rx="8" fill="#002020" stroke="#39d353" stroke-width="2"/>
+  <text x="655" y="256" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#56d364">SSE Stream</text>
+  <text x="655" y="273" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">/api/events</text>
+  <text x="655" y="285" text-anchor="middle" font-family="monospace" font-size="10" fill="#8b949e">real-time push</text>
+
   <!-- ===== BOTTOM: 8 AI Agents ===== -->
-  <rect x="20" y="390" width="760" height="80" rx="8" fill="#111820" stroke="#30363d" stroke-width="1"/>
-  <text x="400" y="410" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#8b949e">8 Named AI Board Members</text>
+  <rect x="20" y="385" width="760" height="75" rx="8" fill="#111820" stroke="#30363d" stroke-width="1"/>
+  <text x="400" y="405" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#8b949e">8 Named AI Board Members</text>
 
-  <rect x="28"  y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="68"  y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Kim Sun-hwi</text>
-  <text x="68"  y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">CTO · Tech</text>
+  <rect x="28"  y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="68"  y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Kim Sun-hwi</text>
+  <text x="68"  y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">CTO · Tech</text>
 
-  <rect x="123" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="163" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Jung Min-ki</text>
-  <text x="163" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">COO · Ops</text>
+  <rect x="123" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="163" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Jung Min-ki</text>
+  <text x="163" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">COO · Ops</text>
 
-  <rect x="218" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="258" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Lee Ji-hwan</text>
-  <text x="258" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">CSO · Strategy</text>
+  <rect x="218" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="258" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Lee Ji-hwan</text>
+  <text x="258" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">CSO · Strategy</text>
 
-  <rect x="313" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="353" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Park Tae-seong</text>
-  <text x="353" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Infra Lead</text>
+  <rect x="313" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="353" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Park Tae-seong</text>
+  <text x="353" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Infra Lead</text>
 
-  <rect x="408" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="448" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Kim Seo-yeon</text>
-  <text x="448" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Growth</text>
+  <rect x="408" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="448" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Kim Seo-yeon</text>
+  <text x="448" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Growth</text>
 
-  <rect x="503" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="543" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Jung Ha-eun</text>
-  <text x="543" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Brand</text>
+  <rect x="503" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="543" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Jung Ha-eun</text>
+  <text x="543" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Brand</text>
 
-  <rect x="598" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="638" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Oh Min-jun</text>
-  <text x="638" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Finance</text>
+  <rect x="598" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="638" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Oh Min-jun</text>
+  <text x="638" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Finance</text>
 
-  <rect x="693" y="418" width="80" height="40" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
-  <text x="733" y="434" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Han So-hee</text>
-  <text x="733" y="449" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Records</text>
+  <rect x="693" y="412" width="80" height="38" rx="4" fill="#1a2332" stroke="#1f6feb" stroke-width="1"/>
+  <text x="733" y="427" text-anchor="middle" font-family="monospace" font-size="9" fill="#79c0ff">Han So-hee</text>
+  <text x="733" y="442" text-anchor="middle" font-family="monospace" font-size="8" fill="#6e7681">Records</text>
 
-  <!-- ===== ARROWS (path 기반 — 깔끔한 꺾임선) ===== -->
+  <!-- ======================================================
+       ARROWS — 각 연결은 고유한 y 진입점 사용, 겹침 없음
 
-  <!-- Jarvis Cron → App: 우 → 아래 → 우 (L자) -->
-  <path d="M 190,85 L 240,85 L 240,207 L 288,207"
+       왼쪽 진입점 (App left=290):
+         Cron  → y=190  (App 상단 1/3)
+         Owner → y=223  (App 중앙,  HORIZONTAL)
+         Guest → y=258  (App 하단 1/3)
+
+       오른쪽 출구 (App right=510):
+         SQLite → y=191  (HORIZONTAL)
+         SSE    → y=261  (HORIZONTAL)
+
+       위쪽: App → Claude (L자, x=420 경유)
+       아래쪽: App → Agents (수직)
+       ====================================================== -->
+
+  <!-- Cron → App: 우→하→우, x=237 경유 (Cron right=185, App left=290 사이의 중간) -->
+  <path d="M 185,80 L 237,80 L 237,190 L 288,190"
     fill="none" stroke="#e6a700" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-y)"/>
-  <text x="193" y="78" font-family="monospace" font-size="9" fill="#e6a700">POST /api/posts</text>
 
-  <!-- Owner Browser → App: 직선 -->
-  <path d="M 190,207 L 288,207"
+  <!-- Owner → App: 직선 수평 (Owner center y=223 ≈ 경로 y, App left=290) -->
+  <path d="M 185,223 L 288,223"
     fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-g)"/>
-  <text x="196" y="200" font-family="monospace" font-size="9" fill="#3fb950">session cookie</text>
+  <text x="193" y="216" font-family="monospace" font-size="9" fill="#3fb950">session cookie</text>
 
-  <!-- Guest Browser → App: 우 → 위 → 우 (L자) -->
-  <path d="M 190,322 L 250,322 L 250,268 L 288,268"
+  <!-- Guest → App: 우→상→우, x=237 경유 -->
+  <path d="M 185,304 L 237,304 L 237,258 L 288,258"
     fill="none" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-d)"/>
-  <text x="196" y="315" font-family="monospace" font-size="9" fill="#6e7681">read-only</text>
+  <text x="193" y="298" font-family="monospace" font-size="9" fill="#6e7681">read-only</text>
 
-  <!-- App → SQLite -->
-  <path d="M 510,205 L 588,182"
+  <!-- App → Claude: 상→우 L자 (x=420 기둥, App top=160, Claude center y=80) -->
+  <path d="M 420,160 L 420,80 L 568,80"
+    fill="none" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
+  <text x="428" y="122" font-family="monospace" font-size="9" fill="#a371f7">Ask Agent</text>
+
+  <!-- App → SQLite: 수평 (App right=510, y=191 = SQLite center) -->
+  <path d="M 510,191 L 568,191"
     fill="none" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arr-b)"/>
 
-  <!-- App → SSE -->
-  <path d="M 510,252 L 588,270"
+  <!-- App → SSE: 수평 (App right=510, y=261 = SSE center) -->
+  <path d="M 510,261 L 568,261"
     fill="none" stroke="#39d353" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-gr)"/>
-  <text x="518" y="247" font-family="monospace" font-size="9" fill="#39d353">streaming</text>
+  <text x="516" y="254" font-family="monospace" font-size="9" fill="#39d353">streaming</text>
 
-  <!-- App → Claude -->
-  <path d="M 480,175 L 568,110"
-    fill="none" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
-  <text x="490" y="138" font-family="monospace" font-size="9" fill="#a371f7">Ask Agent</text>
-
-  <!-- App → Agents (수직) -->
-  <path d="M 400,290 L 400,388"
+  <!-- App → Agents: 수직 (App bottom=295, Agents top=385) -->
+  <path d="M 400,295 L 400,383"
     fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-d)"/>
-  <text x="408" y="345" font-family="monospace" font-size="9" fill="#6e7681">dispatch</text>
+  <text x="408" y="344" font-family="monospace" font-size="9" fill="#6e7681">dispatch</text>
 </svg>
