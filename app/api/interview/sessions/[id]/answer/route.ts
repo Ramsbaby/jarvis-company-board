@@ -29,7 +29,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!apiKey) return new Response('GROQ_API_KEY missing', { status: 500 });
 
   const systemPrompt = getSystemPrompt(session.company, session.category, session.difficulty);
-  const prompt = `[지원자 답변]\n${answer}\n\n[질문]\n${questionContent ?? '이전 질문'}\n\n위 답변에 대해 JSON 형식으로 평가해주세요.`;
+  // 답변이 "모르겠어요", "모름", 공백 등 비어있어도 반드시 JSON 평가를 수행하도록 명시
+  const answerNote = answer.trim().length < 20
+    ? `(지원자가 짧게 답변하였습니다. 내용이 부족하더라도 반드시 JSON 형식으로 평가하세요.)`
+    : '';
+  const prompt = `[지원자 답변]\n${answer}\n${answerNote}\n\n[질문]\n${questionContent ?? '이전 질문'}\n\n위 답변에 대해 반드시 JSON 형식으로만 평가해주세요. 답변이 불충분하더라도 score:0과 함께 weaknesses와 better_answer를 반드시 포함하세요.`;
 
   const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -39,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       max_tokens: 1200,
       temperature: 0.3,
       stream: true,
+      response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
@@ -112,6 +117,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   return new Response(stream, {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // Railway/Nginx 버퍼링 방지
+    },
   });
 }

@@ -26,26 +26,31 @@ interface Session {
 }
 
 function FeedbackCard({ msg }: { msg: Message }) {
-  const [open, setOpen] = useState(false);
   let strengths: string[] = [];
   let weaknesses: string[] = [];
   try { strengths = JSON.parse(msg.strengths ?? '[]'); } catch { /* empty */ }
   try { weaknesses = JSON.parse(msg.weaknesses ?? '[]'); } catch { /* empty */ }
 
   const score = msg.score ?? 0;
+  // 상세 피드백이 있으면 기본 열림, 없으면 닫힘
+  const hasDetail = strengths.length > 0 || weaknesses.length > 0 || !!msg.better_answer;
+  const [open, setOpen] = useState(hasDetail);
+
   const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600';
   const scoreBg = score >= 80 ? 'bg-emerald-50 border-emerald-200' : score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
 
   return (
     <div className={`rounded-xl border p-4 space-y-3 ${scoreBg}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{score}</span>
-          <span className="text-zinc-400 text-sm">/ 100</span>
+          <span className="text-zinc-400 text-sm">/ 100점</span>
         </div>
-        <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline">
-          {open ? '접기 ▲' : '상세 보기 ▼'}
-        </button>
+        {hasDetail && (
+          <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline shrink-0">
+            {open ? '접기 ▲' : '상세 보기 ▼'}
+          </button>
+        )}
       </div>
       {open && (
         <div className="space-y-3 pt-1 border-t border-zinc-200">
@@ -79,7 +84,6 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
   const [messages, setMessages] = useState<Message[]>([]);
   const [answer, setAnswer] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +96,7 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText]);
+  }, [messages, streaming]);
 
   const lastQuestion = [...messages].reverse().find(m => m.role === 'question');
 
@@ -101,7 +105,6 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
     const answerText = answer.trim();
     setAnswer('');
     setStreaming(true);
-    setStreamingText('');
 
     const tempAnswer: Message = { id: `temp_${Date.now()}`, session_id: sessionId, role: 'answer', content: answerText, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, tempAnswer]);
@@ -116,7 +119,6 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
       if (!res.body) throw new Error('No stream');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let accumulated = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -125,17 +127,15 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
           if (!line.startsWith('data: ')) continue;
           try {
             const d = JSON.parse(line.slice(6));
-            if (d.token) { accumulated += d.token; setStreamingText(accumulated); }
             if (d.done) {
               const updated = await fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' }).then(r => r.json());
               setMessages(updated.messages ?? []);
-              setStreamingText('');
             }
           } catch { /* skip */ }
         }
       }
     } catch (e) { console.error(e); }
-    finally { setStreaming(false); setStreamingText(''); }
+    finally { setStreaming(false); }
   }
 
   async function handleEnd() {
@@ -203,15 +203,12 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
             <div className="max-w-[90%] bg-white border border-zinc-200 rounded-2xl rounded-tl-sm px-4 py-3">
-              {streamingText ? (
-                <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-wrap">{streamingText}</p>
-              ) : (
-                <div className="flex gap-1 items-center">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              )}
+              <p className="text-[11px] font-semibold text-zinc-400 mb-2">AI 피드백 분석 중...</p>
+              <div className="flex gap-1 items-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </div>
         )}
