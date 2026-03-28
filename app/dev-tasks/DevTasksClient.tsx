@@ -311,6 +311,7 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
   const { subscribe } = useEvent();
 
   useEffect(() => {
@@ -948,11 +949,14 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
           {/* Grouped tasks */}
           {taskGroups.map(group => {
             const isExpanded = expandedGroups.has(group.groupId);
-            const doneCount = group.tasks.filter(t => t.status === 'done').length;
-            const total = group.tasks.length;
-            const allDone = total > 0 && doneCount === total;
-            const inProgressCount = group.tasks.filter(t => t.status === 'in-progress').length;
-            const awaitingCount = group.tasks.filter(t => t.status === 'awaiting_approval').length;
+            // 진행률은 탭 필터와 무관하게 그룹 전체 자식 기준으로 계산
+            const allGroupChildren = tasks.filter(t => t.group_id === group.groupId && t.task_type !== 'group_parent');
+            const doneCount = allGroupChildren.filter(t => t.status === 'done').length;
+            const failedCount = allGroupChildren.filter(t => t.status === 'failed' || t.status === 'rejected').length;
+            const total = allGroupChildren.length;
+            const allDone = total > 0 && (doneCount + failedCount) === total;
+            const inProgressCount = allGroupChildren.filter(t => t.status === 'in-progress').length;
+            const awaitingCount = allGroupChildren.filter(t => t.status === 'awaiting_approval').length;
             const pt = group.parentTask; // shorthand for parent task
 
             // Build a set of all task IDs in this group for dependency checking
@@ -991,22 +995,26 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                           📦 {group.label}
                         </h3>
                       )}
-                      {/* Progress bar */}
+                      {/* Progress bar — 전체 그룹 기준 */}
                       <div className="flex items-center gap-2 mt-2">
                         <div className="flex-1 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
                           {total > 0 && (
                             <div className="h-full flex">
                               {doneCount > 0 && (
-                                <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
+                                <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${(doneCount / total) * 100}%` }} />
                               )}
                               {inProgressCount > 0 && (
-                                <div className="bg-indigo-500 h-full transition-all" style={{ width: `${(inProgressCount / total) * 100}%` }} />
+                                <div className="bg-indigo-400 h-full transition-all duration-500" style={{ width: `${(inProgressCount / total) * 100}%` }} />
+                              )}
+                              {failedCount > 0 && (
+                                <div className="bg-zinc-400 h-full transition-all duration-500" style={{ width: `${(failedCount / total) * 100}%` }} />
                               )}
                             </div>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">
-                          {doneCount}/{total} 완료
+                        <span className="text-[10px] tabular-nums shrink-0 font-medium" style={{ color: allDone ? '#059669' : '#71717a' }}>
+                          {doneCount}/{total}
+                          {total > 0 && <span className="font-normal opacity-70"> 완료</span>}
                         </span>
                       </div>
                     </div>
@@ -1098,8 +1106,49 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
             );
           })}
 
-          {/* Ungrouped tasks (no group_id) */}
-          {ungroupedTasks.map(task => renderTaskCard(task))}
+          {/* Ungrouped tasks — active 먼저, done/rejected/failed는 아카이브로 접기 */}
+          {(() => {
+            const ARCHIVED_STATUSES = ['done', 'rejected', 'failed'];
+            const activeTasks = ungroupedTasks.filter(t => !ARCHIVED_STATUSES.includes(t.status));
+            const archivedTasks = ungroupedTasks.filter(t => ARCHIVED_STATUSES.includes(t.status));
+
+            return (
+              <>
+                {activeTasks.map(task => renderTaskCard(task))}
+                {archivedTasks.length > 0 && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => setShowArchived(p => !p)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-xs font-medium"
+                    >
+                      <span className={`transition-transform duration-200 ${showArchived ? 'rotate-90' : ''}`}>▶</span>
+                      <span>
+                        {showArchived ? '아카이브 접기' : `완료·반려·실패 ${archivedTasks.length}건 보기`}
+                      </span>
+                      <span className="ml-auto flex gap-1">
+                        {['done', 'rejected', 'failed'].map(s => {
+                          const cnt = archivedTasks.filter(t => t.status === s).length;
+                          if (!cnt) return null;
+                          const cls = s === 'done' ? 'bg-emerald-100 text-emerald-700' : s === 'rejected' ? 'bg-zinc-100 text-zinc-500' : 'bg-red-50 text-red-400';
+                          const lbl = s === 'done' ? '완료' : s === 'rejected' ? '반려' : '실패';
+                          return (
+                            <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded-full ${cls}`}>
+                              {lbl} {cnt}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </button>
+                    {showArchived && (
+                      <div className="mt-2 space-y-2 opacity-80">
+                        {archivedTasks.map(task => renderTaskCard(task))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

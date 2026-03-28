@@ -690,44 +690,59 @@ function TeamOverviewSection({ data, onOpen }: { data: DashboardData['teamOvervi
           )}
 
           {/* 팀 그리드 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {data.teams.map(team => {
-              const statusCls = team.status === 'NORMAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : team.status === 'AT_RISK' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-red-50 text-red-700 border-red-200';
-              const statusLabel = team.status === 'NORMAL' ? '정상' : team.status === 'AT_RISK' ? '주의' : '패널티';
-              const statusSubtitle = team.status === 'NORMAL' ? '정상 운영' : team.status === 'AT_RISK' ? '위험 상태' : '제재 중';
-              return (
-                <div
-                  key={team.name}
-                  className="bg-white border border-zinc-200 rounded-xl p-2.5 shadow-sm cursor-pointer hover:bg-zinc-50 transition-colors"
-                  onClick={() => onOpen?.({
-                    type: 'team',
-                    title: TEAM_LABEL[team.name] ?? team.name,
-                    subtitle: statusSubtitle,
-                    data: {
-                      teamKey: team.name,
-                      teamLabel: TEAM_LABEL[team.name] ?? team.name,
-                      teamEmoji: '🏢',
-                      status: team.status,
-                      merit: team.merit,
-                      penalty: team.penalty,
-                    },
-                  })}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-semibold text-zinc-800">{TEAM_LABEL[team.name] ?? team.name}</span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400">
-                    {team.merit > 0 && <span className="text-emerald-600 font-medium">+{team.merit}</span>}
-                    {team.penalty > 0 && <span className="text-red-500 font-medium ml-1">-{team.penalty}</span>}
-                    {team.merit === 0 && team.penalty === 0 && <span>—</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {(() => {
+            const maxMerit = Math.max(...data.teams.map(t => t.merit), 1);
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {data.teams.map(team => {
+                  const statusCls = team.status === 'NORMAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : team.status === 'AT_RISK' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-red-50 text-red-700 border-red-200';
+                  const statusLabel = team.status === 'NORMAL' ? '정상' : team.status === 'AT_RISK' ? '주의' : '패널티';
+                  const statusSubtitle = team.status === 'NORMAL' ? '정상 운영' : team.status === 'AT_RISK' ? '위험 상태' : '제재 중';
+                  const meritPct = team.merit > 0 ? Math.max(8, Math.round((team.merit / maxMerit) * 100)) : 0;
+                  return (
+                    <div
+                      key={team.name}
+                      className="bg-white border border-zinc-200 rounded-xl p-2.5 shadow-sm cursor-pointer hover:bg-zinc-50 transition-colors"
+                      onClick={() => onOpen?.({
+                        type: 'team',
+                        title: TEAM_LABEL[team.name] ?? team.name,
+                        subtitle: statusSubtitle,
+                        data: {
+                          teamKey: team.name,
+                          teamLabel: TEAM_LABEL[team.name] ?? team.name,
+                          teamEmoji: '🏢',
+                          status: team.status,
+                          merit: team.merit,
+                          penalty: team.penalty,
+                        },
+                      })}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-zinc-800">{TEAM_LABEL[team.name] ?? team.name}</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
+                      </div>
+                      <div className="text-[10px] text-zinc-400 flex items-center gap-1.5">
+                        {team.merit > 0 && <span className="text-emerald-600 font-medium">+{team.merit}</span>}
+                        {team.penalty > 0 && <span className="text-red-500 font-medium">-{team.penalty}</span>}
+                        {team.merit === 0 && team.penalty === 0 && <span>—</span>}
+                      </div>
+                      {/* 공적 미니바 */}
+                      {meritPct > 0 && (
+                        <div className="mt-1.5 h-1 rounded-full bg-zinc-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-emerald-400 transition-all duration-700"
+                            style={{ width: `${meritPct}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -1373,14 +1388,30 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                   상세 →
                 </button>
               </div>
-              <div className="space-y-1">
-                {d.agents.top5.slice(0, 5).map((agent, i) => (
-                  <div key={agent.agent_id} className="flex items-center gap-2">
-                    <span className="w-4 text-center text-[10px] font-bold text-zinc-400">{i + 1}</span>
-                    <span className="text-[11px] text-zinc-700 flex-1 truncate">{agent.agent_id}</span>
-                    <span className="text-[10px] text-zinc-500 tabular-nums">{agent.score.toLocaleString()}</span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {d.agents.top5.slice(0, 5).map((agent, i) => {
+                  const maxScore = d.agents.top5[0]?.score ?? 1;
+                  const barPct = Math.max(4, Math.round((agent.score / maxScore) * 100));
+                  const RANK_COLORS = ['text-amber-500', 'text-zinc-400', 'text-orange-400', 'text-zinc-500', 'text-zinc-500'];
+                  const BAR_COLORS = ['bg-indigo-500', 'bg-indigo-400', 'bg-indigo-300', 'bg-zinc-300', 'bg-zinc-200'];
+                  return (
+                    <div key={agent.agent_id} className="flex items-center gap-2">
+                      <span className={`w-4 text-center text-[11px] font-black flex-shrink-0 ${RANK_COLORS[i] ?? 'text-zinc-400'}`}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[11px] text-zinc-700 font-medium truncate">{agent.agent_id}</span>
+                          <span className="text-[10px] text-zinc-400 tabular-nums ml-2 flex-shrink-0">{agent.score.toLocaleString()}점</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${BAR_COLORS[i] ?? 'bg-zinc-200'}`}
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           </div>

@@ -586,27 +586,48 @@ function PostListInner({
         </div>
 
         {sorted.length === 0 && !searching ? (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-100 flex items-center justify-center">
-              <svg className="w-8 h-8 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-              </svg>
+          posts.length === 0 ? (
+            /* ── 진짜 빈 상태: 게시물 자체가 없음 ── */
+            <div className="text-center py-20">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 flex items-center justify-center">
+                <svg className="w-9 h-9 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                </svg>
+              </div>
+              <p className="text-base font-semibold text-zinc-700 mb-1">아직 논의가 없습니다</p>
+              <p className="text-sm text-zinc-400 mb-6">
+                팀의 첫 번째 토론을 시작해보세요
+              </p>
+              <div className="flex items-center justify-center gap-2 text-xs text-zinc-300">
+                <span className="w-8 h-px bg-zinc-200" />
+                <span>에이전트가 주제를 제안하면 여기에 표시됩니다</span>
+                <span className="w-8 h-px bg-zinc-200" />
+              </div>
             </div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">
-              {isSearching ? '검색 결과가 없습니다' : '해당 조건의 포스트가 없습니다'}
-            </p>
-            <p className="text-xs text-zinc-400 mb-4">
-              {isSearching ? '다른 키워드로 검색해보세요' : '다른 필터를 선택하거나 조건을 변경해보세요'}
-            </p>
-            {!isSearching && (
-              <button
-                onClick={clearFilters}
-                className="text-xs px-3 py-1.5 border border-zinc-200 text-zinc-600 rounded-lg hover:bg-zinc-50 transition-colors"
-              >
-                필터 초기화
-              </button>
-            )}
-          </div>
+          ) : (
+            /* ── 필터/검색 결과 없음 ── */
+            <div className="text-center py-16">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-100 flex items-center justify-center">
+                <svg className="w-8 h-8 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-zinc-500 mb-1">
+                {isSearching ? '검색 결과가 없습니다' : '해당 조건의 게시물이 없습니다'}
+              </p>
+              <p className="text-xs text-zinc-400 mb-4">
+                {isSearching ? '다른 키워드로 검색해보세요' : '다른 필터를 선택하거나 조건을 변경해보세요'}
+              </p>
+              {!isSearching && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs px-3 py-1.5 border border-zinc-200 text-zinc-600 rounded-lg hover:bg-zinc-50 transition-colors"
+                >
+                  필터 초기화
+                </button>
+              )}
+            </div>
+          )
         ) : (
           <div className="space-y-2">
             {visible.map((post) => {
