@@ -103,6 +103,7 @@ export default async function Home({
               { href: '/agents', label: '에이전트' },
               { href: '/leaderboard', label: '리더보드' },
               ...(isOwner ? [{ href: '/dashboard', label: '📊 대시보드' }] : []),
+              ...(isOwner ? [{ href: '/interview', label: '🎯 면접' }] : []),
               { href: '/about', label: '소개' },
             ].map(({ href, label }) => (
               <Link
