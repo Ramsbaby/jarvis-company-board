@@ -864,12 +864,12 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 flex-wrap border-b border-zinc-200 pb-0 -mb-1">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 pb-0 -mb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {STATUS_TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors relative -mb-px ${
+            className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors relative -mb-px whitespace-nowrap ${
               tab === t.key
                 ? 'text-indigo-600 border border-zinc-200 border-b-white bg-white'
                 : 'text-zinc-500 hover:text-zinc-700'
@@ -972,10 +972,11 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                   {/* Status stripe from parent task */}
                   {pt && ptSt?.stripe && <div className={`h-1 w-full ${ptSt.stripe}`} />}
 
-                  <div className="flex items-center gap-3 p-4">
+                  {/* Main header row */}
+                  <div className="flex items-start gap-3 p-4 pb-3">
                     <button
                       onClick={() => toggleGroup(group.groupId)}
-                      className="shrink-0 p-0.5 rounded hover:bg-indigo-100 transition-colors"
+                      className="shrink-0 p-1 mt-0.5 rounded hover:bg-indigo-100 transition-colors"
                     >
                       {isExpanded
                         ? <ChevronDown className="w-4 h-4 text-indigo-400" />
@@ -983,19 +984,31 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                       }
                     </button>
                     <div className="flex-1 min-w-0">
-                      {/* Title: link to parent task if exists */}
-                      {pt ? (
-                        <Link href={`/dev-tasks/${pt.id}`} className="block group/ptitle hover:opacity-80 transition-opacity">
-                          <h3 className="text-sm font-semibold text-zinc-800 truncate group-hover/ptitle:text-indigo-700">
-                            🏛️ {group.label}
-                          </h3>
-                        </Link>
-                      ) : (
-                        <h3 className="text-sm font-semibold text-zinc-800 truncate">
-                          📦 {group.label}
-                        </h3>
-                      )}
-                      {/* Progress bar — 전체 그룹 기준 */}
+                      {/* Title + collapse toggle */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {pt ? (
+                            <Link href={`/dev-tasks/${pt.id}`} className="block group/ptitle hover:opacity-80 transition-opacity">
+                              <h3 className="text-sm font-semibold text-zinc-800 leading-snug group-hover/ptitle:text-indigo-700">
+                                🏛️ {group.label}
+                              </h3>
+                            </Link>
+                          ) : (
+                            <h3 className="text-sm font-semibold text-zinc-800 leading-snug">
+                              📦 {group.label}
+                            </h3>
+                          )}
+                          <p className="text-[10px] text-zinc-400 mt-0.5">이사회 토론 · 서브태스크 {total}개</p>
+                        </div>
+                        <button
+                          onClick={() => toggleGroup(group.groupId)}
+                          className="shrink-0 text-[11px] text-zinc-400 hover:text-zinc-600 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                        >
+                          {isExpanded ? '접기 ▲' : `${group.tasks.length}개 보기 ▼`}
+                        </button>
+                      </div>
+
+                      {/* Progress bar */}
                       <div className="flex items-center gap-2 mt-2">
                         <div className="flex-1 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
                           {total > 0 && (
@@ -1017,59 +1030,74 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
                           {total > 0 && <span className="font-normal opacity-70"> 완료</span>}
                         </span>
                       </div>
-                    </div>
-                    {/* Status badges */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {pt && ptSt && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ptSt.badgeCls}`}>
-                          {ptSt.badgeLabel}
-                        </span>
+
+                      {/* Non-awaiting status badges */}
+                      {awaitingCount === 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                          {pt && ptSt && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ptSt.badgeCls}`}>
+                              {ptSt.badgeLabel}
+                            </span>
+                          )}
+                          {inProgressCount > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
+                              ⚙ {inProgressCount}개 작업 중
+                            </span>
+                          )}
+                          {allDone && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
+                              🎉 전체 완료
+                            </span>
+                          )}
+                          {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
+                            GROUP_DELETABLE.includes(t.status)
+                          ) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
+                              disabled={bulkLoading}
+                              className="ml-auto text-[10px] px-2 py-1 rounded-md bg-white text-zinc-400 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors font-medium"
+                            >
+                              🗑 삭제
+                            </button>
+                          )}
+                        </div>
                       )}
-                      {awaitingCount > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 font-medium">
-                          🔍 {awaitingCount}
-                        </span>
-                      )}
-                      {inProgressCount > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
-                          ⚙ {inProgressCount}
-                        </span>
-                      )}
-                      {allDone && !pt && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
-                          🎉 완료
-                        </span>
-                      )}
-                      {/* 그룹 내 awaiting 태스크가 있을 때 그룹 승인 버튼 */}
-                      {group.tasks.some(t => t.status === 'awaiting_approval') && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleGroupApproveAll(group); }}
-                          disabled={bulkLoading}
-                          className="text-[10px] px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap font-medium shadow-sm"
-                        >
-                          ✓ 그룹 승인
-                        </button>
-                      )}
-                      {/* 그룹 전체 삭제 버튼 — deletable 상태 태스크가 있을 때만 표시 */}
-                      {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
-                        GROUP_DELETABLE.includes(t.status)
-                      ) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
-                          disabled={bulkLoading}
-                          className="text-[10px] px-2 py-1 rounded-md bg-red-100 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap font-medium"
-                        >
-                          🗑 그룹 삭제
-                        </button>
-                      )}
-                      <button
-                        onClick={() => toggleGroup(group.groupId)}
-                        className="text-[10px] px-1.5 py-0.5 rounded text-zinc-400 hover:text-zinc-600 transition-colors"
-                      >
-                        {isExpanded ? '접기' : `${group.tasks.length}개`}
-                      </button>
                     </div>
                   </div>
+
+                  {/* ── 승인 패널 — awaiting 태스크가 있을 때 표시 ── */}
+                  {awaitingCount > 0 && (
+                    <div className="mx-3 mb-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-amber-800">🔍 {awaitingCount}개 서브태스크 승인 필요</p>
+                          <p className="text-[11px] text-amber-600 mt-0.5">에이전트가 대기 중 · 승인하면 즉시 실행됩니다</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {[...group.tasks, ...(group.parentTask ? [group.parentTask] : [])].some(t =>
+                            GROUP_DELETABLE.includes(t.status)
+                          ) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleGroupDeleteAll(group); }}
+                              disabled={bulkLoading}
+                              className="px-3 py-2 text-xs font-medium rounded-lg bg-white text-zinc-500 border border-zinc-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                            >
+                              🗑 그룹 삭제
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleGroupApproveAll(group); }}
+                            disabled={bulkLoading}
+                            className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap min-h-[44px]"
+                          >
+                            {bulkLoading ? (
+                              <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />처리 중</>
+                            ) : `✓ 그룹 전체 승인`}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Expanded child tasks */}
@@ -1149,6 +1177,26 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
               </>
             );
           })()}
+        </div>
+      )}
+      {/* ── 플로팅 승인 바 — 모바일 전용, 승인 대기 태스크 있을 때만 ── */}
+      {grouped.awaiting_approval.length > 0 && (tab === 'all' || tab === 'awaiting_approval') && !searchQuery.trim() && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white border-t-2 border-amber-200 shadow-xl px-4 py-3 safe-area-pb">
+          <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-amber-800">🔍 {grouped.awaiting_approval.length}개 승인 대기</p>
+              <p className="text-[11px] text-amber-600 mt-0.5">에이전트가 작업 시작을 기다립니다</p>
+            </div>
+            <button
+              onClick={handleApproveAll}
+              disabled={bulkLoading}
+              className="shrink-0 flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-md whitespace-nowrap min-h-[48px]"
+            >
+              {bulkLoading ? (
+                <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />처리 중</>
+              ) : <>✓ 전체 승인</>}
+            </button>
+          </div>
         </div>
       )}
     </div>

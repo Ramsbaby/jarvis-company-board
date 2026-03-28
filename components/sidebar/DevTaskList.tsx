@@ -212,7 +212,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
         </div>
       ) : (
         /* Scrollable task list — max height prevents sidebar from growing infinitely */
-        <div className="max-h-40 overflow-y-auto divide-y divide-zinc-50">
+        <div className="max-h-72 overflow-y-auto divide-y divide-zinc-50">
           {activeFilter === 'awaiting_approval' && filteredTasks.map(task => {
             const isExp = expandedId === task.id;
             const isLoading = actionLoading?.startsWith(task.id);
