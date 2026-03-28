@@ -1,0 +1,245 @@
+'use client';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { COMPANIES, CATEGORIES } from '@/lib/interview-data';
+
+interface Message {
+  id: string;
+  session_id: string;
+  role: 'question' | 'answer' | 'feedback';
+  content: string;
+  score?: number | null;
+  strengths?: string;
+  weaknesses?: string;
+  better_answer?: string | null;
+  created_at: string;
+}
+
+interface Session {
+  id: string;
+  company: string;
+  category: string;
+  difficulty: string;
+  status: string;
+  total_score?: number | null;
+}
+
+function FeedbackCard({ msg }: { msg: Message }) {
+  const [open, setOpen] = useState(false);
+  let strengths: string[] = [];
+  let weaknesses: string[] = [];
+  try { strengths = JSON.parse(msg.strengths ?? '[]'); } catch { /* empty */ }
+  try { weaknesses = JSON.parse(msg.weaknesses ?? '[]'); } catch { /* empty */ }
+
+  const score = msg.score ?? 0;
+  const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600';
+  const scoreBg = score >= 80 ? 'bg-emerald-50 border-emerald-200' : score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+
+  return (
+    <div className={`rounded-xl border p-4 space-y-3 ${scoreBg}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{score}</span>
+          <span className="text-zinc-400 text-sm">/ 100</span>
+        </div>
+        <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline">
+          {open ? '접기 ▲' : '상세 보기 ▼'}
+        </button>
+      </div>
+      {open && (
+        <div className="space-y-3 pt-1 border-t border-zinc-200">
+          {strengths.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">✅ 잘한 점</p>
+              <ul className="space-y-1">{strengths.map((s, i) => <li key={i} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-emerald-500 shrink-0">•</span>{s}</li>)}</ul>
+            </div>
+          )}
+          {weaknesses.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-red-600 uppercase tracking-wider mb-1">❌ 부족한 점</p>
+              <ul className="space-y-1">{weaknesses.map((w, i) => <li key={i} className="text-xs text-zinc-700 flex gap-1.5"><span className="text-red-400 shrink-0">•</span>{w}</li>)}</ul>
+            </div>
+          )}
+          {msg.better_answer && (
+            <div>
+              <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1">💡 더 좋은 답변</p>
+              <p className="text-xs text-zinc-700 leading-relaxed bg-white rounded-lg p-3 border border-indigo-100">{msg.better_answer}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function InterviewSessionClient({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [answer, setAnswer] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => { setSession(data.session); setMessages(data.messages ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [sessionId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, streamingText]);
+
+  const lastQuestion = [...messages].reverse().find(m => m.role === 'question');
+
+  async function handleSubmit() {
+    if (!answer.trim() || streaming) return;
+    const answerText = answer.trim();
+    setAnswer('');
+    setStreaming(true);
+    setStreamingText('');
+
+    const tempAnswer: Message = { id: `temp_${Date.now()}`, session_id: sessionId, role: 'answer', content: answerText, created_at: new Date().toISOString() };
+    setMessages(prev => [...prev, tempAnswer]);
+
+    try {
+      const res = await fetch(`/api/interview/sessions/${sessionId}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ answer: answerText, questionContent: lastQuestion?.content }),
+      });
+      if (!res.body) throw new Error('No stream');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const d = JSON.parse(line.slice(6));
+            if (d.token) { accumulated += d.token; setStreamingText(accumulated); }
+            if (d.done) {
+              const updated = await fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' }).then(r => r.json());
+              setMessages(updated.messages ?? []);
+              setStreamingText('');
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (e) { console.error(e); }
+    finally { setStreaming(false); setStreamingText(''); }
+  }
+
+  async function handleEnd() {
+    const scores = messages.filter(m => m.role === 'feedback' && m.score != null).map(m => m.score as number);
+    const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+    await fetch(`/api/interview/sessions/${sessionId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ status: 'completed', total_score: avg }),
+    });
+    router.push('/interview');
+  }
+
+  const company = COMPANIES.find(c => c.id === session?.company);
+  const category = CATEGORIES.find(c => c.id === session?.category);
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-zinc-400 text-sm">로딩 중...</div>;
+
+  return (
+    <div className="bg-zinc-50 min-h-screen flex flex-col">
+      <header className="sticky top-0 z-10 bg-white border-b border-zinc-200">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Link href="/interview" className="text-zinc-400 hover:text-zinc-600 text-sm">← 목록</Link>
+          <span className="text-zinc-300">|</span>
+          <span className="text-sm font-bold text-zinc-800">{company?.emoji} {company?.name}</span>
+          <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full">{category?.name}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-zinc-400">{messages.filter(m => m.role === 'feedback').length}문제 완료</span>
+            <button onClick={handleEnd} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors">종료</button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 space-y-4">
+        {messages.map((msg, idx) => {
+          if (msg.role === 'question') return (
+            <div key={msg.id ?? idx} className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">{company?.emoji}</div>
+              <div className="max-w-[85%] bg-white border border-zinc-200 rounded-2xl rounded-tl-sm px-4 py-3">
+                <p className="text-[11px] font-semibold text-zinc-400 mb-1">{company?.name} 면접관</p>
+                <p className="text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              </div>
+            </div>
+          );
+          if (msg.role === 'answer') return (
+            <div key={msg.id ?? idx} className="flex gap-3 justify-end">
+              <div className="max-w-[85%] bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-3">
+                <p className="text-[11px] font-semibold text-indigo-200 mb-1">나</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              </div>
+            </div>
+          );
+          if (msg.role === 'feedback') return (
+            <div key={msg.id ?? idx} className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
+              <div className="max-w-[90%]">
+                <p className="text-[11px] font-semibold text-zinc-400 mb-1 ml-1">AI 피드백</p>
+                <FeedbackCard msg={msg} />
+              </div>
+            </div>
+          );
+          return null;
+        })}
+
+        {streaming && (
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
+            <div className="max-w-[90%] bg-white border border-zinc-200 rounded-2xl rounded-tl-sm px-4 py-3">
+              {streamingText ? (
+                <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-wrap">{streamingText}</p>
+              ) : (
+                <div className="flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {session?.status !== 'completed' && (
+        <div className="sticky bottom-0 bg-white border-t border-zinc-200">
+          <div className="max-w-3xl mx-auto px-4 py-3">
+            <div className="flex gap-2 items-end">
+              <textarea
+                value={answer}
+                onChange={e => setAnswer(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit(); }}
+                placeholder={streaming ? '피드백 분석 중...' : '답변을 입력하세요 (Cmd+Enter 제출)'}
+                disabled={streaming}
+                className="flex-1 text-sm text-zinc-800 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 resize-none outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all disabled:opacity-50"
+                rows={4}
+              />
+              <button onClick={handleSubmit} disabled={!answer.trim() || streaming}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors shrink-0">
+                {streaming ? '...' : '제출'}
+              </button>
+            </div>
+            <p className="text-[11px] text-zinc-400 mt-1">Cmd+Enter로 빠르게 제출</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

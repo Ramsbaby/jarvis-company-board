@@ -283,6 +283,33 @@ export function getDb(): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_gen_members_gen ON persona_generation_members(generation_id);
       CREATE INDEX IF NOT EXISTS idx_gen_members_agent ON persona_generation_members(agent_id);
     `);
+
+    // ── 면접 시뮬레이션 시스템 ────────────────────────────────────────
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS interview_sessions (
+        id TEXT PRIMARY KEY,
+        company TEXT NOT NULL,
+        category TEXT NOT NULL,
+        difficulty TEXT NOT NULL DEFAULT 'mid',
+        status TEXT NOT NULL DEFAULT 'active',
+        total_score REAL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        completed_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS interview_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        score INTEGER,
+        strengths TEXT,
+        weaknesses TEXT,
+        better_answer TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_interview_messages_session ON interview_messages(session_id);
+      CREATE INDEX IF NOT EXISTS idx_interview_sessions_created ON interview_sessions(created_at DESC);
+    `);
   }
   return _db;
 }
