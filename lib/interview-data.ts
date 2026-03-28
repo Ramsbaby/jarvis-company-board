@@ -36,6 +36,46 @@ const CANDIDATE_PROFILE = `
 - 특이사항: 카카오페이 서버 개발자 - 결제 서비스 서류 전형 합격 상태
 `.trim();
 
+/** 답변 평가 전용 프롬프트 — 질문 생성 규칙 없이 JSON 평가에만 집중 */
+export function getFeedbackSystemPrompt(companyId: string, categoryId: string, difficulty: string): string {
+  const companyNames: Record<string, string> = {
+    kakaopay: '카카오페이 결제 플랫폼팀', kakao: '카카오', naver: '네이버',
+    toss: '토스', line: '라인', coupang: '쿠팡', sk: 'SK D&D',
+  };
+  const categoryHints: Record<string, string> = {
+    'distributed-tx': '분산 트랜잭션 (Saga, TCC, 2PC)', 'concurrency': '동시성 제어',
+    'payment-arch': '결제 시스템 아키텍처', 'mysql-tuning': 'MySQL 대용량 처리',
+    'kafka': 'Kafka 비동기', 'java-spring': 'Java/Spring 심화',
+    'cs-basics': 'CS 기초', 'system-design': '시스템 디자인',
+    'behavioral': '행동 면접', 'live-coding': '라이브 코딩',
+  };
+  const difficultyLabel = { junior: '주니어(3~5년)', mid: '미드(5~7년)', senior: '시니어(9년+)' }[difficulty] ?? 'mid';
+  const company = companyNames[companyId] ?? '테크 기업';
+  const category = categoryHints[categoryId] ?? '기술 면접';
+
+  return `당신은 ${company} 면접관으로서 지원자의 기술 면접 답변을 평가합니다.
+
+[평가 맥락]
+- 카테고리: ${category}
+- 난이도 기준: ${difficultyLabel}
+- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)
+
+[평가 기준]
+- 기술 정확도, 실무 경험 연결, 구체성, 깊이를 종합 평가
+- 답변이 불충분하거나 "모른다"는 경우도 정직하게 낮은 점수를 부여하고 weaknesses와 better_answer를 반드시 제공
+
+[응답 형식 — 반드시 아래 JSON만 출력]
+{
+  "score": 50,
+  "strengths": ["잘한 점을 구체적으로"],
+  "weaknesses": ["부족한 점을 구체적으로"],
+  "better_answer": "이렇게 답했으면 더 좋았을 구체적인 예시 답변 (3~5문장)",
+  "next_question": "이 답변에 대한 꼬리 질문 또는 새로운 관련 질문"
+}
+
+JSON 외 다른 텍스트는 절대 출력하지 마세요.`;
+}
+
 export function getSystemPrompt(companyId: string, categoryId: string, difficulty: string): string {
   const companyPersonas: Record<string, string> = {
     kakaopay: `당신은 카카오페이 결제 플랫폼팀 시니어 백엔드 엔지니어 면접관입니다.

@@ -2,7 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
-import { getSystemPrompt } from '@/lib/interview-data';
+import { getFeedbackSystemPrompt } from '@/lib/interview-data';
 
 function nanoid() {
   return `iv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return new Response('GROQ_API_KEY missing', { status: 500 });
 
-  const systemPrompt = getSystemPrompt(session.company, session.category, session.difficulty);
+  const systemPrompt = getFeedbackSystemPrompt(session.company, session.category, session.difficulty);
   // 답변이 "모르겠어요", "모름", 공백 등 비어있어도 반드시 JSON 평가를 수행하도록 명시
   const answerNote = answer.trim().length < 20
     ? `(지원자가 짧게 답변하였습니다. 내용이 부족하더라도 반드시 JSON 형식으로 평가하세요.)`

@@ -3,8 +3,87 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMPANIES, CATEGORIES, DIFFICULTIES } from '@/lib/interview-data';
+import { apiFetch } from '@/lib/api-fetch';
 
-export default function InterviewHomeClient() {
+// 모듈 레벨 순수 함수 — 렌더 중 불순 함수 호출 방지
+function relativeTime(dateStr: string, now: number): string {
+  const diff = now - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return '방금';
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
+}
+
+interface InterviewSession {
+  id: string;
+  company: string;
+  category: string;
+  difficulty: string;
+  status: string;
+  total_score: number | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+function scoreColor(score: number | null): string {
+  if (score == null) return 'text-zinc-400';
+  if (score >= 80) return 'text-emerald-600';
+  if (score >= 60) return 'text-amber-600';
+  return 'text-red-500';
+}
+
+function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
+  if (sessions.length === 0) return null;
+  const now = new Date().getTime();
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-bold text-zinc-700">📋 최근 면접 이력</h2>
+      <div className="space-y-2">
+        {sessions.map(s => {
+          const company = COMPANIES.find(c => c.id === s.company);
+          const category = CATEGORIES.find(c => c.id === s.category);
+          const difficulty = DIFFICULTIES.find(d => d.id === s.difficulty);
+          const isCompleted = s.status === 'completed';
+          return (
+            <Link
+              key={s.id}
+              href={`/interview/${s.id}`}
+              className="flex items-center gap-3 p-3 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 hover:shadow-sm transition-all group"
+            >
+              <div className="text-xl shrink-0">{company?.emoji ?? '🎯'}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-zinc-800">{company?.name}</span>
+                  <span className="text-[11px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded-full">{category?.name}</span>
+                  <span className="text-[11px] text-zinc-400">{difficulty?.emoji} {difficulty?.name}</span>
+                </div>
+                <div className="text-[11px] text-zinc-400 mt-0.5">{relativeTime(s.created_at, now)}</div>
+              </div>
+              <div className="shrink-0 text-right">
+                {isCompleted ? (
+                  <div>
+                    <span className={`text-lg font-black tabular-nums ${scoreColor(s.total_score)}`}>
+                      {s.total_score ?? '-'}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 ml-0.5">점</span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">진행중</span>
+                )}
+              </div>
+              <span className="text-zinc-300 group-hover:text-zinc-500 transition-colors text-sm shrink-0">→</span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function InterviewHomeClient({ sessions }: { sessions: InterviewSession[] }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [company, setCompany] = useState('');
@@ -17,18 +96,13 @@ export default function InterviewHomeClient() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/interview/sessions', {
+      const result = await apiFetch<{ sessionId: string }>('/api/interview/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ company, category, difficulty }),
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(errData.error ?? '세션 생성 실패');
-      }
-      const data = await res.json() as { sessionId: string };
-      router.push(`/interview/${data.sessionId}`);
+      if (!result.ok) throw new Error(result.message);
+      router.push(`/interview/${result.data.sessionId}`);
     } catch (e) {
       setError(String(e));
       setLoading(false);
@@ -46,6 +120,7 @@ export default function InterviewHomeClient() {
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+        {/* Step indicator */}
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center gap-2">
@@ -130,6 +205,9 @@ export default function InterviewHomeClient() {
             </div>
           </div>
         )}
+
+        {/* 면접 이력 */}
+        <SessionHistory sessions={sessions} />
       </main>
     </div>
   );
