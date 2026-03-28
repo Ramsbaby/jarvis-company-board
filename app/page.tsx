@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
-import { closeExpiredDiscussions, COMMENT_COUNT_EXPR, AGENT_COMMENTERS_SUBQUERY } from '@/lib/discussion';
+import { closeExpiredDiscussions, buildPostsCTE } from '@/lib/discussion';
 import type { PostWithCommentCount, CountRow, BoardSetting } from '@/lib/types';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
@@ -31,12 +31,8 @@ export default async function Home({
    
   closeExpiredDiscussions();
 
-  const posts = db.prepare(`
-    SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
-      ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
-    FROM posts p LEFT JOIN comments c ON c.post_id = p.id
-    GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
-  `).all() as PostWithCommentCount[];
+  // CTE 기반 집계 쿼리 — 코릴레이티드 서브쿼리 N회 → CTE 1회로 대체
+  const posts = db.prepare(buildPostsCTE()).all(50) as PostWithCommentCount[];
 
   const stats = {
     open: posts.filter((p) => p.status === 'open').length,

@@ -7,7 +7,7 @@ import { cookies } from 'next/headers';
 import { GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
 import { getDiscussionWindow } from '@/lib/constants';
-import { COMMENT_COUNT_EXPR, AGENT_COMMENTERS_SUBQUERY } from '@/lib/discussion';
+import { buildPostsCTE } from '@/lib/discussion';
 import type { PostWithCommentCount, PostCursorRow, CountRow, BoardSetting, IdRow } from '@/lib/types';
 
 function checkAuth(req: NextRequest) {
@@ -30,52 +30,28 @@ export async function GET(req: NextRequest) {
   let posts: PostWithCommentCount[];
 
   if (search) {
-    // FTS5 search — sanitize by escaping quotes
+    // FTS5 검색 — CTE + FTS JOIN
     const safeSearch = search.replace(/"/g, '""') + '*';
-    posts = db.prepare(`
-      SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
-        ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
-      FROM posts p
-      JOIN posts_fts f ON p.rowid = f.rowid
-      LEFT JOIN comments c ON c.post_id = p.id
-      WHERE posts_fts MATCH ?
-      GROUP BY p.id
-      ORDER BY rank
-      LIMIT ?
-    `).all(safeSearch, limit) as PostWithCommentCount[];
+    posts = db.prepare(
+      buildPostsCTE({
+        join: 'JOIN posts_fts f ON p.rowid = f.rowid',
+        where: 'posts_fts MATCH ?',
+        orderBy: 'rank',
+      })
+    ).all(safeSearch, limit) as PostWithCommentCount[];
   } else if (cursor) {
-    // Cursor-based pagination
+    // 커서 기반 페이지네이션 — CTE + created_at 필터
     const cursorPost = db.prepare('SELECT created_at FROM posts WHERE id = ?').get(cursor) as PostCursorRow | undefined;
     if (cursorPost) {
-      posts = db.prepare(`
-        SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN ('system', 'dev-runner', 'jarvis-coder') AND c.parent_id IS NULL THEN c.id END) as comment_count,
-          (
-            SELECT GROUP_CONCAT(author)
-            FROM (
-              SELECT DISTINCT author
-              FROM comments
-              WHERE post_id = p.id
-                AND is_visitor = 0
-                AND is_resolution = 0
-                AND author NOT IN ('system', 'dev-runner', 'jarvis-coder')
-              ORDER BY created_at ASC
-              LIMIT 4
-            )
-          ) as agent_commenters
-        FROM posts p LEFT JOIN comments c ON c.post_id = p.id
-        WHERE p.created_at < ?
-        GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
-      `).all(cursorPost.created_at, limit) as PostWithCommentCount[];
+      posts = db.prepare(
+        buildPostsCTE({ where: 'p.created_at < ?' })
+      ).all(cursorPost.created_at, limit) as PostWithCommentCount[];
     } else {
       posts = [];
     }
   } else {
-    posts = db.prepare(`
-      SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
-        ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
-      FROM posts p LEFT JOIN comments c ON c.post_id = p.id
-      GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
-    `).all(limit) as PostWithCommentCount[];
+    // 기본 목록 — CTE 집계 쿼리
+    posts = db.prepare(buildPostsCTE()).all(limit) as PostWithCommentCount[];
   }
 
   const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;
