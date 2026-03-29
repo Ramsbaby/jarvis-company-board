@@ -26,6 +26,90 @@ interface Session {
   total_score?: number | null;
 }
 
+/** better_answer 텍스트를 번호형 팁 배열로 분해 */
+function parseTips(text: string): string[] {
+  // 문장 단위로 분리 (마침표/느낌표/개행 기준)
+  const sentences = text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 10);
+  return sentences.length >= 2 ? sentences : [text];
+}
+
+/** 점수 구간별 모범 답안 표시 전략 */
+function BetterAnswerSection({ betterAnswer, score, missingKeywords }: {
+  betterAnswer: string;
+  score: number;
+  missingKeywords: string[];
+}) {
+  // <60: 자동 펼침(못 답한 경우), 60~79: 접힌 버튼, ≥80: 최소 토글
+  const autoOpen = score < 60;
+  const [open, setOpen] = useState(autoOpen);
+  const tips = parseTips(betterAnswer);
+
+  // 점수 구간별 UI 설정
+  const config = score < 60
+    ? {
+        label: '📖 모범 답안',
+        sublabel: '이렇게 답했어야 합니다',
+        btnText: open ? '접기 ▲' : '모범 답안 보기 ▼',
+        containerCls: 'bg-red-50 border border-red-200 rounded-xl p-3',
+        headerCls: 'text-red-700',
+        tipNumCls: 'bg-red-500 text-white',
+      }
+    : score < 80
+    ? {
+        label: '💡 모범 답안',
+        sublabel: '펼쳐서 확인하세요',
+        btnText: open ? '접기 ▲' : `모범 답안 보기 (${tips.length}가지 팁) ▼`,
+        containerCls: 'bg-amber-50 border border-amber-200 rounded-xl p-3',
+        headerCls: 'text-amber-700',
+        tipNumCls: 'bg-amber-500 text-white',
+      }
+    : {
+        label: '✨ 더 발전시키려면',
+        sublabel: '추가 심화 포인트',
+        btnText: open ? '접기 ▲' : '심화 팁 보기 ▼',
+        containerCls: 'bg-indigo-50 border border-indigo-100 rounded-xl p-3',
+        headerCls: 'text-indigo-700',
+        tipNumCls: 'bg-indigo-500 text-white',
+      };
+
+  return (
+    <div className={config.containerCls}>
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <span className={`text-[11px] font-bold ${config.headerCls}`}>{config.label}</span>
+          {!open && <span className="text-[10px] text-zinc-400 ml-2">{config.sublabel}</span>}
+        </div>
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={`text-[11px] font-semibold ${config.headerCls} hover:opacity-70 transition-opacity`}
+        >
+          {config.btnText}
+        </button>
+      </div>
+      {open && (
+        <ol className="space-y-2 mt-2">
+          {tips.map((tip, i) => {
+            // missing_keywords 중 이 팁에 포함된 것 하이라이트
+            const rendered = tip;
+            const highlighted = missingKeywords.some(kw => tip.includes(kw));
+            return (
+              <li key={i} className={`flex gap-2 items-start text-xs text-zinc-800 leading-relaxed ${highlighted ? 'font-medium' : ''}`}>
+                <span className={`shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center mt-0.5 ${config.tipNumCls}`}>
+                  {i + 1}
+                </span>
+                <span>{rendered}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function FeedbackCard({ msg }: { msg: Message }) {
   let strengths: string[] = [];
   let weaknesses: string[] = [];
@@ -35,11 +119,15 @@ function FeedbackCard({ msg }: { msg: Message }) {
   try { missingKeywords = JSON.parse(msg.missing_keywords ?? '[]'); } catch { /* empty */ }
 
   const score = msg.score ?? 0;
-  const hasDetail = strengths.length > 0 || weaknesses.length > 0 || !!msg.better_answer || missingKeywords.length > 0;
-  const [open, setOpen] = useState(hasDetail);
+  const hasDetail = strengths.length > 0 || weaknesses.length > 0 || missingKeywords.length > 0;
+  // 점수 낮으면 강점/약점도 자동 펼침
+  const [open, setOpen] = useState(score < 80 ? true : hasDetail);
 
   const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600';
   const scoreBg = score >= 80 ? 'bg-emerald-50 border-emerald-200' : score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+
+  // 점수 구간별 라벨
+  const scoreLabel = score >= 80 ? '✅ 합격권' : score >= 60 ? '⚠️ 아쉬움' : '❌ 재학습 필요';
 
   return (
     <div className={`rounded-xl border p-4 space-y-3 ${scoreBg}`}>
@@ -47,6 +135,9 @@ function FeedbackCard({ msg }: { msg: Message }) {
         <div className="flex items-center gap-2 shrink-0">
           <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{score}</span>
           <span className="text-zinc-400 text-sm">/ 100점</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${score >= 80 ? 'bg-emerald-100 text-emerald-700' : score >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+            {scoreLabel}
+          </span>
         </div>
         {hasDetail && (
           <button onClick={() => setOpen(v => !v)} className="text-xs text-zinc-500 hover:text-zinc-700 underline shrink-0">
@@ -78,13 +169,15 @@ function FeedbackCard({ msg }: { msg: Message }) {
               </div>
             </div>
           )}
-          {msg.better_answer && (
-            <div>
-              <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1">💡 더 좋은 답변</p>
-              <p className="text-xs text-zinc-700 leading-relaxed bg-white rounded-lg p-3 border border-indigo-100">{msg.better_answer}</p>
-            </div>
-          )}
         </div>
+      )}
+      {/* 모범 답안 — 점수 구간별 자동 분기 */}
+      {msg.better_answer && (
+        <BetterAnswerSection
+          betterAnswer={msg.better_answer}
+          score={score}
+          missingKeywords={missingKeywords}
+        />
       )}
     </div>
   );
