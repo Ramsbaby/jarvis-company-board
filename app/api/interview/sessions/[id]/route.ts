@@ -8,6 +8,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   const db = getDb();
+  // 1시간 이상 경과한 미완료 세션 자동 종료
+  db.prepare(
+    `UPDATE interview_sessions SET status = 'abandoned', completed_at = datetime('now')
+     WHERE id = ? AND status NOT IN ('completed', 'abandoned')
+     AND created_at < datetime('now', '-1 hour')`
+  ).run(id);
   const session = db.prepare(`SELECT * FROM interview_sessions WHERE id = ?`).get(id);
   if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const messages = db.prepare(`SELECT * FROM interview_messages WHERE session_id = ? ORDER BY created_at ASC`).all(id);

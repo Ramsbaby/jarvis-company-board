@@ -214,6 +214,8 @@ function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
                     </span>
                     <span className="text-[11px] text-zinc-400 ml-0.5">점</span>
                   </div>
+                ) : s.status === 'abandoned' ? (
+                  <span className="text-[11px] bg-zinc-100 text-zinc-400 px-2 py-0.5 rounded-full font-semibold">시간초과</span>
                 ) : (
                   <span className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">진행중</span>
                 )}

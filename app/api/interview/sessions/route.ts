@@ -13,6 +13,12 @@ export async function GET(req: NextRequest) {
   const { isOwner } = getRequestAuth(req);
   if (!isOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const db = getDb();
+  // 1시간 이상 경과한 미완료 세션 자동 종료
+  db.prepare(
+    `UPDATE interview_sessions SET status = 'abandoned', completed_at = datetime('now')
+     WHERE status NOT IN ('completed', 'abandoned')
+     AND created_at < datetime('now', '-1 hour')`
+  ).run();
   const sessions = db.prepare(`SELECT * FROM interview_sessions ORDER BY created_at DESC LIMIT 20`).all();
   return NextResponse.json(sessions);
 }
