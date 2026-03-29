@@ -84,8 +84,41 @@ const CANDIDATE_PROFILE = `
 - 이름: 이정우
 - 경력: 9년+ 백엔드 개발자
 - 현직: SK D&D — IoT 플랫폼 개발, 계약·정산 자동화 시스템
-- 기술 스택: Java 17, Spring Boot, Spring WebFlux, gRPC, AWS (EC2/ECS/RDS), Kafka, Redis
+- 기술 스택: Java 17, Spring Boot, Spring WebFlux, gRPC, AWS (EC2/ECS/RDS/SQS/SNS/Lambda), Kafka, Redis
 - 특이사항: 카카오페이 서버 개발자 - 결제 서비스 서류 전형 합격 상태
+
+[지원자 실제 경험 — 면접 평가 기준으로 활용]
+지원자는 아래 경험들을 보유합니다. 답변에서 이 경험을 언급하면 높이 평가하고,
+이 경험이 있음에도 추상적·이론적 답변만 하면 "실제 경험을 구체적으로 말씀해 주세요"로 파고드세요.
+
+【STAR-1】Spring Batch 20배 성능 개선 (JANDI/토스랩)
+- 상황: 5000만 건 데이터 처리 배치가 3시간 12분 초과, Jenkins 타임아웃 반복 발생
+- 분석: StepExecutionListener로 각 단계 시간 계측 → 특정 Step에서 95% 시간 소비 발견
+- 해결: ExecutorService로 5개 Step 병렬화, Chunk 크기 최적화
+- 결과: 3시간 12분 → 9분 20초 (20배 개선). 이론상 예상(42분)보다 훨씬 빠른 결과
+
+【STAR-2】Virtual Thread + HikariCP 커넥션풀 고갈 (SK D&D)
+- 상황: 개발 서버 완전 먹통, ALB 헬스체크 무응답, 로그 한 줄도 없음
+- 원인: Virtual Thread 100개 병렬 DB 조회 + HikariCP 개발환경 풀 크기 10개 → Deadlock
+- 해결: 커넥션풀 10 → 50으로 증가, 병렬 조회 수 10개로 제한, 타임아웃 설정
+- 결과: Starvation 해소, 운영 환경 사전 가이드라인 수립
+
+【STAR-3】IoT 다중벤더 Adapter 패턴 (SK D&D)
+- 상황: 제조사마다 다른 API(REST/MQTT, 인증방식, 응답형식) → if-else 100줄 지옥, 신규 제조사 추가 2주 소요
+- 해결: 공통 IotDeviceAdapter 인터페이스 + 제조사별 구현체 + Event-Driven으로 결합도 제거
+- 결과: 신규 제조사 온보딩 2주 → 2일, 비즈니스 로직이 제조사 API에서 완전 독립
+
+【STAR-4】스케줄러 데드락 해결 (SK D&D)
+- 상황: 10분마다 실행 스케줄러 간헐적 데드락 (시간당 3회), 재현 불가, 운영 DB Lock 경합
+- 원인: 20만 건 전체 조회로 20초간 Lock 유지 → API 서버와 Lock 경합
+- 해결: 조회 범위 90% 축소(20만→2만 건) + REQUIRES_NEW 트랜잭션 분리 + 500건 Chunking
+- 결과: 데드락 주 3-4회 → 0회, Lock 유지 20초 → 1ms (99.9% 감소)
+
+【STAR-5】SQS DLQ 멱등성 설계 (SK D&D)
+- 상황: 예약 메시지 발송 간헐적 실패, 3일간 모니터링 부재로 DLQ 150건 적체
+- 원인: 가시성 타임아웃(30s) < 처리 시간(45s) → 메시지 중복 수신 후 중복 발송
+- 해결: 가시성 타임아웃 90s로 조정 + 멱등성 키 기반 중복 처리 방지 + CloudWatch DLQ 알림
+- 결과: 발송 실패율 3% → 0%, MTTD 3일 → 5분
 `.trim();
 
 /** 답변 평가 전용 프롬프트 — 질문 생성 규칙 없이 JSON 평가에만 집중 */
@@ -135,7 +168,17 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
 [평가 맥락]
 - 카테고리: ${category}
 - 난이도 기준: ${difficultyLabel}
-- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)${keywordsLine}${kakaoPayEvalCriteria}
+- 지원자: 9년차 Java/Spring 백엔드 개발자 (AWS, Kafka, Redis, gRPC 경험)${keywordsLine}
+
+[지원자 실제 보유 경험 — 평가 기준으로 활용]
+지원자가 아래 경험과 연결해 구체적으로 답변하면 강점으로 인정하세요.
+반대로 이 경험이 있음에도 추상적 이론만 답하면 weaknesses에 "실제 경험 연결 부족" 명시.
+
+① Spring Batch 20배 개선: 5000만건 배치 3시간 12분 → 9분 20초 (StepExecutionListener 계측 → ExecutorService 병렬화)
+② Virtual Thread 서버 다운: HikariCP 풀 10개 고갈 → 커넥션 Deadlock → ALB 504 (JDK21 Virtual Thread 환경)
+③ IoT 다중벤더 Adapter 패턴: if-else 100줄 → 공통 인터페이스 추상화 → 제조사 추가 2주 → 2일
+④ 스케줄러 데드락: 20만건 Full Scan Lock 20초 → REQUIRES_NEW 분리 + 500건 Chunking → Lock 1ms
+⑤ SQS DLQ 멱등성: 가시성 타임아웃 < 처리시간 → 중복 수신 → 멱등성 키 + DLQ 알림 (3% → 0%)${kakaoPayEvalCriteria}
 
 [평가 기준]
 - 기술 정확도, 실무 경험 연결, 구체성, 깊이를 종합 평가
