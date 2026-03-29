@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { COMPANIES, CATEGORIES, DIFFICULTIES, COMPANY_PASS_CRITERIA } from '@/lib/interview-data';
 import { apiFetch } from '@/lib/api-fetch';
+import { BetterAnswerSection } from '@/components/interview/BetterAnswerSection';
 
 interface Message {
   id: string;
@@ -262,10 +263,11 @@ export default function ReportClient({
                 </div>
                 <p className="text-xs text-zinc-700 leading-relaxed line-clamp-3">{q.content}</p>
                 {f?.better_answer && (
-                  <details className="group">
-                    <summary className="text-[11px] text-indigo-600 cursor-pointer hover:text-indigo-800 font-semibold">💡 모범 답변 보기</summary>
-                    <p className="text-xs text-zinc-600 leading-relaxed mt-2 bg-white rounded-lg p-3 border border-indigo-100">{f.better_answer}</p>
-                  </details>
+                  <BetterAnswerSection
+                    betterAnswer={f.better_answer}
+                    score={f.score ?? 50}
+                    missingKeywords={parseJson<string[]>(f.missing_keywords, [])}
+                  />
                 )}
               </div>
             ))}

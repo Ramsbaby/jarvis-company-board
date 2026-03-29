@@ -126,6 +126,112 @@ function scoreColor(score: number | null): string {
   return 'text-red-500';
 }
 
+interface TendencyData {
+  total_answers: number;
+  avg_score: number;
+  score_distribution: { over80: number; over60: number; under60: number };
+  top_strengths: Array<{ text: string; count: number }>;
+  top_weaknesses: Array<{ text: string; count: number }>;
+  tendency_diagnosis: string[];
+}
+
+function TendencyWidget({ company }: { company: string }) {
+  const [data, setData] = useState<TendencyData | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    apiFetch<TendencyData>(`/api/interview/tendency?company=${company}`)
+      .then(res => { if (res.ok && res.data.total_answers > 0) setData(res.data); })
+      .catch(() => {});
+  }, [company]);
+
+  if (!data) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-bold text-zinc-700">🧬 나의 답변 성향</h2>
+          <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full">{data.total_answers}개 답변 분석</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/interview/notes" className="text-[11px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-semibold hover:bg-red-200 transition-colors">
+            📓 오답노트 →
+          </Link>
+          <button onClick={() => setOpen(v => !v)} className="text-[11px] text-zinc-400 hover:text-zinc-600">
+            {open ? '접기 ▲' : '상세 ▼'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3">
+        {/* 점수 분포 바 */}
+        <div className="space-y-1">
+          <p className="text-[10px] text-zinc-400">점수 분포 (전체 {data.total_answers}개)</p>
+          <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
+            {data.score_distribution.over80 > 0 && (
+              <div className="bg-emerald-400" style={{ flex: data.score_distribution.over80 }} title={`80점+ : ${data.score_distribution.over80}개`} />
+            )}
+            {data.score_distribution.over60 > 0 && (
+              <div className="bg-amber-400" style={{ flex: data.score_distribution.over60 }} title={`60~79점 : ${data.score_distribution.over60}개`} />
+            )}
+            {data.score_distribution.under60 > 0 && (
+              <div className="bg-red-400" style={{ flex: data.score_distribution.under60 }} title={`60점 미만 : ${data.score_distribution.under60}개`} />
+            )}
+          </div>
+          <div className="flex gap-3 text-[10px] text-zinc-400">
+            <span><span className="text-emerald-500">●</span> 80+ ({data.score_distribution.over80})</span>
+            <span><span className="text-amber-500">●</span> 60~79 ({data.score_distribution.over60})</span>
+            <span><span className="text-red-400">●</span> ~59 ({data.score_distribution.under60})</span>
+          </div>
+        </div>
+
+        {/* 성향 진단 */}
+        {data.tendency_diagnosis.length > 0 && (
+          <div className="space-y-1">
+            {data.tendency_diagnosis.map((d, i) => (
+              <p key={i} className="text-xs text-zinc-700 leading-relaxed">{d}</p>
+            ))}
+          </div>
+        )}
+
+        {open && (
+          <div className="space-y-3 pt-2 border-t border-zinc-100">
+            {data.top_strengths.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-emerald-600 mb-1.5">✅ 반복 강점 패턴</p>
+                <ul className="space-y-1">
+                  {data.top_strengths.map((s, i) => (
+                    <li key={i} className="text-xs text-zinc-600 flex gap-1.5">
+                      <span className="text-emerald-400 shrink-0">•</span>
+                      <span className="truncate">{s.text}</span>
+                      <span className="text-[10px] text-zinc-400 shrink-0">×{s.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.top_weaknesses.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-red-500 mb-1.5">❌ 반복 약점 패턴</p>
+                <ul className="space-y-1">
+                  {data.top_weaknesses.map((w, i) => (
+                    <li key={i} className="text-xs text-zinc-600 flex gap-1.5">
+                      <span className="text-red-400 shrink-0">•</span>
+                      <span className="truncate">{w.text}</span>
+                      <span className="text-[10px] text-zinc-400 shrink-0">×{w.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ScoreHistoryChart({ sessions, onNavigate }: { sessions: InterviewSession[]; onNavigate: (id: string) => void }) {
   const recentSessions = sessions
     .filter(s => s.status === 'completed' && s.total_score != null)
@@ -357,6 +463,9 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
 
         {/* 반복 약점 분석 위젯 — 카카오페이 세션 데이터 기반 */}
         <WeaknessWidget company="kakaopay" />
+
+        {/* 성향 분석 + 오답노트 바로가기 */}
+        <TendencyWidget company="kakaopay" />
 
         {/* 면접 이력 */}
         <SessionHistory sessions={sessions} />
