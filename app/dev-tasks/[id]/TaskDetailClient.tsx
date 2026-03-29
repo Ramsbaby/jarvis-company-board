@@ -154,13 +154,21 @@ function parseDependsOn(raw: string | null | undefined): string[] {
   } catch { return []; }
 }
 
+// "진행 중 (Xs 경과)" 형태의 헛비트 패턴 — 단계 정보 없으므로 건너뜀
+const HEARTBEAT_RE = /진행\s*중\s*\(\d+s\s*경과\)/;
+
 function detectPhase(logs: LogEntry[]): number {
   if (logs.length === 0) return 0;
-  const last = logs[logs.length - 1].message.toLowerCase();
-  if (/완료|done|success|finish/.test(last)) return 3;
-  if (/테스트|test|검증|verify|build/.test(last)) return 2;
-  if (/수정|writing|edit|create|update/.test(last)) return 1;
-  if (/분석|reading|checking|read|check/.test(last)) return 0;
+  // 마지막부터 역순으로 탐색 — 헛비트는 건너뜀
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const msg = logs[i].message.toLowerCase();
+    if (HEARTBEAT_RE.test(msg)) continue; // 헛비트 무시
+    if (/완료|done|success|finish/.test(msg)) return 3;
+    if (/테스트|test|검증|verify|build/.test(msg)) return 2;
+    if (/수정|writing|edit|create|update/.test(msg)) return 1;
+    if (/분석|reading|checking|read|check/.test(msg)) return 0;
+    break; // 패턴 없는 일반 로그 → 0단계 유지
+  }
   return 0;
 }
 
@@ -746,8 +754,8 @@ export default function TaskDetailClient({
                       isApproved ? 'bg-gradient-to-r from-teal-400 to-emerald-400' :
                                    'bg-zinc-100';
 
-  // Phase detection for in-progress
-  const currentPhase = detectPhase(logs);
+  // Phase detection — done일 때만 3(마무리), in-progress 중 서브스텝 "완료" 로그는 최대 2(검증)
+  const currentPhase = isDone ? 3 : Math.min(detectPhase(logs), 2);
   const phaseNames = ['코드 분석', '코드 수정', '검증', '마무리'];
   const phaseIcons = ['📖', '✏️', '🔍', '✅'];
 
@@ -1730,45 +1738,79 @@ export default function TaskDetailClient({
             <div className="p-4 font-mono text-xs max-h-[480px] overflow-y-auto space-y-0.5">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
-              ) : (
-                (logExpanded ? logs : logs.slice(-8)).map((entry, i) => {
-                  // 메시지에 박힌 중복 시각 제거 — UI 왼쪽 타임스탬프로 이미 표시됨
-                  const msg = entry.message.replace(/\s*\([^)]*\d{2}:\d{2}:\d{2}[^)]*\)\s*$/, '').trim();
-                  const isErr      = /error|fail|failed/i.test(msg);
-                  const isWarn     = /warn|warning/i.test(msg);
-                  const isStart    = /^⚙️/.test(msg);
-                  const isDone     = /^✅/.test(msg);
-                  const isProgress = /^⏳/.test(msg);
-                  // 도구 호출 감지 (stream-to-board.sh가 보내는 이모지 패턴)
-                  const isToolCall = /^(📖|📝|✏️|💻|🔍|📁|🤖|🔗|🌐|🔧)\s/.test(msg);
-                  const isText     = /^💬/.test(msg);
+              ) : (() => {
+                  // 연속 헛비트 축소: 연속된 "진행 중 (Xs 경과)" 항목은 마지막 하나만 표시
+                  const rawLogs = logExpanded ? logs : logs.slice(-8);
+                  const collapsedLogs: Array<LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number }> = [];
+                  let pendingHeartbeat: (LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number }) | null = null;
+                  let heartbeatCount = 0;
+                  for (const entry of rawLogs) {
+                    if (HEARTBEAT_RE.test(entry.message)) {
+                      pendingHeartbeat = { ...entry, _isHeartbeat: true };
+                      heartbeatCount++;
+                    } else {
+                      if (pendingHeartbeat) {
+                        collapsedLogs.push({ ...pendingHeartbeat, _collapsedCount: heartbeatCount });
+                        pendingHeartbeat = null;
+                        heartbeatCount = 0;
+                      }
+                      collapsedLogs.push(entry);
+                    }
+                  }
+                  if (pendingHeartbeat) collapsedLogs.push({ ...pendingHeartbeat, _collapsedCount: heartbeatCount });
 
-                  const color = isErr      ? 'text-red-400' :
-                                isWarn     ? 'text-amber-400' :
-                                isDone     ? 'text-emerald-400' :
-                                isStart    ? 'text-sky-400' :
-                                isProgress ? 'text-zinc-500' :
-                                isToolCall ? 'text-cyan-300' :
-                                isText     ? 'text-violet-300' :
-                                             'text-zinc-300';
+                  return collapsedLogs.map((entry, i) => {
+                    // 메시지에 박힌 중복 시각 제거 — UI 왼쪽 타임스탬프로 이미 표시됨
+                    const msg = entry.message.replace(/\s*\([^)]*\d{2}:\d{2}:\d{2}[^)]*\)\s*$/, '').trim();
+                    const isHeartbeat = !!entry._isHeartbeat;
+                    const isErr      = /error|fail|failed/i.test(msg);
+                    const isWarn     = /warn|warning/i.test(msg);
+                    const isStart    = /^⚙️/.test(msg);
+                    // ✅ 스타일 구분: task.status === 'done'이면 최종 완료(emerald), 아니면 서브스텝 완료(teal)
+                    const isCheckmark = /^✅/.test(msg);
+                    const isFinalDone = isCheckmark && isDone;
+                    const isSubDone   = isCheckmark && !isDone;
+                    const isProgress  = /^⏳/.test(msg) || isHeartbeat;
+                    // 도구 호출 감지 (stream-to-board.sh가 보내는 이모지 패턴)
+                    const isToolCall = /^(📖|📝|✏️|💻|🔍|📁|🤖|🔗|🌐|🔧)\s/.test(msg);
+                    const isText     = /^💬/.test(msg);
 
-                  // 시작/완료 이벤트는 구분선으로 강조
-                  const isEvent = isStart || isDone;
+                    const color = isErr       ? 'text-red-400' :
+                                  isWarn      ? 'text-amber-400' :
+                                  isFinalDone ? 'text-emerald-400' : // 최종 완료 = 진초록
+                                  isSubDone   ? 'text-teal-400' :    // 서브스텝 완료 = teal (구분)
+                                  isStart     ? 'text-sky-400' :
+                                  isProgress  ? 'text-zinc-600' :
+                                  isToolCall  ? 'text-cyan-300' :
+                                  isText      ? 'text-violet-300' :
+                                                'text-zinc-300';
 
-                  return (
-                    <div key={i} className={`flex gap-3 leading-relaxed
-                      ${isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : ''}
-                      ${isEvent ? 'border-t border-zinc-800 pt-1.5 mt-1' : ''}
-                      ${isProgress ? 'opacity-50' : ''}
-                    `}>
-                      <span className="text-zinc-600 shrink-0 tabular-nums w-[52px]">
-                        {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                      </span>
-                      <span className={`${color} break-all`}>{msg}</span>
-                    </div>
-                  );
-                })
-              )}
+                    // 시작/최종완료 이벤트는 구분선으로 강조 (서브스텝 완료는 강조 없음)
+                    const isEvent = isStart || isFinalDone;
+
+                    return (
+                      <div key={i} className={`flex gap-3 leading-relaxed
+                        ${isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : ''}
+                        ${isEvent ? 'border-t border-zinc-800 pt-1.5 mt-1' : ''}
+                        ${isProgress ? 'opacity-40' : ''}
+                      `}>
+                        <span className="text-zinc-600 shrink-0 tabular-nums w-[52px]">
+                          {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                        </span>
+                        <span className={`${color} break-all`}>
+                          {msg}
+                          {/* 축소된 헛비트 개수 표시 */}
+                          {isHeartbeat && entry._collapsedCount && entry._collapsedCount > 1
+                            ? <span className="text-zinc-700 ml-1.5 text-[10px]">×{entry._collapsedCount}</span>
+                            : null}
+                          {/* 서브스텝 완료 레이블 */}
+                          {isSubDone && <span className="text-teal-600/60 ml-1.5 text-[10px]">(단계 완료)</span>}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()
+              }
               {isLive && (
                 <div className="flex gap-3 mt-2 border-t border-zinc-800 pt-2">
                   <span className="text-zinc-700 w-[52px] shrink-0">···</span>
