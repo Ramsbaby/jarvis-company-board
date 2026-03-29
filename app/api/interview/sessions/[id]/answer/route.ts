@@ -9,6 +9,21 @@ function nanoid() {
   return `iv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// 마크다운 코드블록 우선, 없으면 raw JSON
+function extractJson(text: string): Record<string, unknown> {
+  // 1. ```json ... ``` 블록
+  const codeBlock = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (codeBlock) {
+    try { return JSON.parse(codeBlock[1]); } catch {}
+  }
+  // 2. raw { ... }
+  const raw = text.match(/\{[\s\S]*\}/);
+  if (raw) {
+    try { return JSON.parse(raw[0]); } catch {}
+  }
+  return {};
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { isOwner } = getRequestAuth(req);
   if (!isOwner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
@@ -59,9 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
 
           // JSON 파싱
-          let parsed: Record<string, unknown> = {};
-          const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { /* keep empty */ } }
+          const parsed = extractJson(fullText);
 
           const score = typeof parsed.score === 'number' ? parsed.score : null;
           const strengths = Array.isArray(parsed.strengths) ? parsed.strengths as string[] : [];
@@ -85,7 +98,50 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
           controller.close();
         } catch (err) {
-          console.error('[claude-relay] error:', err);
+          console.error('[claude-relay] error, falling back to Groq:', err);
+          // Groq fallback
+          try {
+            const apiKey = process.env.GROQ_API_KEY;
+            if (apiKey) {
+              const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'llama-3.3-70b-versatile',
+                  max_tokens: 1200,
+                  temperature: 0.3,
+                  response_format: { type: 'json_object' },
+                  messages: [
+                    { role: 'system', content: feedbackSystemPrompt },
+                    { role: 'user', content: feedbackUserPrompt },
+                  ],
+                }),
+              });
+              if (groqRes.ok) {
+                const groqData = await groqRes.json() as { choices: Array<{ message: { content: string } }> };
+                const groqText = groqData.choices?.[0]?.message?.content ?? '';
+                const groqParsed = extractJson(groqText);
+                const score = typeof groqParsed.score === 'number' ? groqParsed.score : null;
+                const strengths = Array.isArray(groqParsed.strengths) ? groqParsed.strengths as string[] : [];
+                const weaknesses = Array.isArray(groqParsed.weaknesses) ? groqParsed.weaknesses as string[] : [];
+                const betterAnswer = typeof groqParsed.better_answer === 'string' ? groqParsed.better_answer : '';
+                const missingKeywords = Array.isArray(groqParsed.missing_keywords) ? groqParsed.missing_keywords as string[] : [];
+                const nextQuestion = typeof groqParsed.next_question === 'string' ? groqParsed.next_question : null;
+                const feedbackId = nanoid();
+                db.prepare(
+                  `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+                ).run(feedbackId, id, groqText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+                if (nextQuestion) {
+                  db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
+                }
+                controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
+                controller.close();
+                return;
+              }
+            }
+          } catch (fallbackErr) {
+            console.error('[groq-fallback] error:', fallbackErr);
+          }
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null })}\n\n`));
           controller.close();
         }
@@ -131,11 +187,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
 
           // JSON 파싱 및 DB 저장
-          let parsed: Record<string, unknown> = {};
-          const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            try { parsed = JSON.parse(jsonMatch[0]); } catch { /* keep empty */ }
-          }
+          const parsed = extractJson(fullText);
 
           const score = typeof parsed.score === 'number' ? parsed.score : null;
           const strengths = Array.isArray(parsed.strengths) ? parsed.strengths : [];
