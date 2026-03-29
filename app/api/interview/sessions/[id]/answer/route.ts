@@ -41,7 +41,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const answerId = nanoid();
   db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'answer', ?)`).run(answerId, id, answer);
 
-  const feedbackSystemPrompt = getFeedbackSystemPrompt(session.company, session.category, session.difficulty);
+  // 이전 Q&A 대화 이력 (최근 3쌍) — 일관성 체크용
+  const prevMessages = db.prepare(
+    `SELECT role, content FROM interview_messages
+     WHERE session_id = ? AND role IN ('question', 'answer')
+     ORDER BY created_at ASC`
+  ).all(id) as { role: string; content: string }[];
+
+  let conversationHistory: string | undefined;
+  if (prevMessages.length >= 2) {
+    // Q&A 쌍으로 묶기 (최근 3쌍까지)
+    const pairs: string[] = [];
+    let i = 0;
+    while (i < prevMessages.length - 1 && pairs.length < 3) {
+      if (prevMessages[i].role === 'question' && prevMessages[i + 1].role === 'answer') {
+        pairs.push(`Q: ${prevMessages[i].content.slice(0, 200)}\nA: ${prevMessages[i + 1].content.slice(0, 300)}`);
+        i += 2;
+      } else {
+        i++;
+      }
+    }
+    if (pairs.length > 0) {
+      conversationHistory = pairs.join('\n\n---\n\n');
+    }
+  }
+
+  const feedbackSystemPrompt = getFeedbackSystemPrompt(session.company, session.category, session.difficulty, conversationHistory);
   const feedbackUserPrompt = `[면접 질문]\n${questionContent ?? '이전 질문'}\n\n[지원자 답변]\n${answer}\n\n위 답변을 평가하여 JSON 형식으로 출력하세요.`;
 
   // Claude Relay 우선 (CLAUDE_RELAY_URL이 설정된 경우)

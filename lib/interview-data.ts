@@ -89,7 +89,7 @@ const CANDIDATE_PROFILE = `
 `.trim();
 
 /** 답변 평가 전용 프롬프트 — 질문 생성 규칙 없이 JSON 평가에만 집중 */
-export function getFeedbackSystemPrompt(companyId: string, categoryId: string, difficulty: string): string {
+export function getFeedbackSystemPrompt(companyId: string, categoryId: string, difficulty: string, conversationHistory?: string): string {
   const companyNames: Record<string, string> = {
     kakaopay: '카카오페이 결제 플랫폼팀', kakao: '카카오', naver: '네이버',
     toss: '토스', line: '라인', coupang: '쿠팡', sk: 'SK D&D',
@@ -126,6 +126,10 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
 - 4단계 (극한): "그 복구 과정에서 또 장애가 나면 어떻게 됩니까? 무한 루프를 어떻게 방지합니까?"
 → next_question은 반드시 현재 답변보다 한 단계 더 깊은 레벨의 압박 질문이어야 합니다.` : '';
 
+  const historyBlock = conversationHistory
+    ? `\n\n[이전 대화 맥락 — 일관성 검증 필수]\n${conversationHistory}\n→ 지원자의 현재 답변이 위 이전 답변들과 논리적으로 모순되는 부분이 있으면 "contradiction" 필드에 구체적으로 기술하세요. 모순 없으면 null.`
+    : '';
+
   return `당신은 ${company} 면접관으로서 지원자의 기술 면접 답변을 평가합니다.
 
 [평가 맥락]
@@ -144,13 +148,15 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
   "weaknesses": ["부족한 점을 구체적으로"],
   "better_answer": "이렇게 답했으면 더 좋았을 구체적인 예시 답변 (3~5문장)",
   "missing_keywords": ["언급 안 한 핵심 키워드1", "키워드2"],
-  "next_question": "점수가 70 미만이면 weaknesses[0]를 집중 공략하는 압박 후속 질문(예: '방금 [약점]을 언급하셨는데 구체적으로 어떻게 해결하셨나요?'). 70 이상이면 연관 심화 주제 확장 질문. senior 난이도는 항상 압박 스타일."
+  "next_question": "점수가 70 미만이면 weaknesses[0]를 집중 공략하는 압박 후속 질문(예: '방금 [약점]을 언급하셨는데 구체적으로 어떻게 해결하셨나요?'). 70 이상이면 연관 심화 주제 확장 질문. senior 난이도는 항상 압박 스타일.",
+  "contradiction": "이전 Q1에서 Saga Choreography를 선택했는데 이번 답변에서 Orchestration이 더 낫다고 했습니다" 또는 null
 }
 
 [꼬리질문 생성 규칙]
 - 점수 < 70: weaknesses의 첫 번째 항목을 집중 공략하는 압박 꼬리질문. '방금 말씀하신 [약점]에 대해 더 구체적으로 설명해 주시겠어요?' 스타일로 생성.
 - 점수 >= 70: 답변에서 언급된 개념과 연관된 더 깊은 주제로 확장하는 심화 질문.
 - 난이도가 senior이면: 점수와 무관하게 항상 압박 스타일의 꼬리질문을 생성하세요.
+${historyBlock}
 
 JSON 외 다른 텍스트는 절대 출력하지 마세요.`;
 }

@@ -27,6 +27,54 @@ interface Session {
   total_score?: number | null;
 }
 
+function PrincipleCheckCard({ sessionId, feedbackIdx }: { sessionId: string; feedbackIdx: number }) {
+  const storageKey = `principle_${sessionId}_${feedbackIdx}`;
+  const [value, setValue] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem(storageKey) ?? '';
+  });
+  const [saved, setSaved] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return !!localStorage.getItem(storageKey);
+  });
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setValue(e.target.value);
+    setSaved(false);
+  }
+
+  function handleSave() {
+    if (!value.trim()) return;
+    localStorage.setItem(storageKey, value.trim());
+    setSaved(true);
+  }
+
+  return (
+    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold text-indigo-600">💡 원리 자가체크</p>
+        {saved && <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-semibold">✅ 정리됨</span>}
+      </div>
+      <textarea
+        value={value}
+        onChange={handleChange}
+        onBlur={handleSave}
+        placeholder="이 결정의 근본 원리가 뭔가? — 한 문장으로 정리해보세요"
+        rows={2}
+        className="w-full text-xs text-zinc-800 bg-white border border-indigo-200 rounded-lg px-3 py-2 resize-none outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 transition-all placeholder:text-zinc-400"
+      />
+      {!saved && value.trim() && (
+        <button
+          onClick={handleSave}
+          className="text-[11px] bg-indigo-600 text-white px-3 py-1 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+        >
+          저장
+        </button>
+      )}
+    </div>
+  );
+}
+
 function FeedbackCard({ msg }: { msg: Message }) {
   let strengths: string[] = [];
   let weaknesses: string[] = [];
@@ -34,6 +82,13 @@ function FeedbackCard({ msg }: { msg: Message }) {
   try { strengths = JSON.parse(msg.strengths ?? '[]'); } catch { /* empty */ }
   try { weaknesses = JSON.parse(msg.weaknesses ?? '[]'); } catch { /* empty */ }
   try { missingKeywords = JSON.parse(msg.missing_keywords ?? '[]'); } catch { /* empty */ }
+
+  // contradiction은 msg.content (raw LLM JSON)에서 추출
+  let contradiction: string | null = null;
+  try {
+    const raw = JSON.parse(msg.content ?? '{}');
+    if (typeof raw.contradiction === 'string') contradiction = raw.contradiction;
+  } catch { /* skip */ }
 
   const score = msg.score ?? 0;
   const hasDetail = strengths.length > 0 || weaknesses.length > 0 || missingKeywords.length > 0;
@@ -64,6 +119,12 @@ function FeedbackCard({ msg }: { msg: Message }) {
       </div>
       {open && (
         <div className="space-y-3 pt-1 border-t border-zinc-200">
+          {contradiction && (
+            <div className="bg-red-50 border border-red-300 rounded-lg p-2.5">
+              <p className="text-[11px] font-bold text-red-700 mb-1">⚠️ 이전 답변과 모순 감지</p>
+              <p className="text-xs text-red-700 leading-relaxed">{contradiction}</p>
+            </div>
+          )}
           {strengths.length > 0 && (
             <div>
               <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">✅ 잘한 점</p>
@@ -272,7 +333,9 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
       </header>
 
       <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 space-y-4">
-        {messages.map((msg, idx) => {
+        {(() => {
+          const feedbackMessages = messages.filter(m => m.role === 'feedback');
+          return messages.map((msg, idx) => {
           if (msg.role === 'question') return (
             <div key={msg.id ?? idx} className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">{company?.emoji}</div>
@@ -290,17 +353,22 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
               </div>
             </div>
           );
-          if (msg.role === 'feedback') return (
-            <div key={msg.id ?? idx} className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
-              <div className="max-w-[90%]">
-                <p className="text-[11px] font-semibold text-zinc-400 mb-1 ml-1">AI 피드백</p>
-                <FeedbackCard msg={msg} />
+          if (msg.role === 'feedback') {
+            const feedbackIdx = feedbackMessages.indexOf(msg);
+            return (
+              <div key={msg.id ?? idx} className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
+                <div className="max-w-[90%] space-y-2">
+                  <p className="text-[11px] font-semibold text-zinc-400 mb-1 ml-1">AI 피드백</p>
+                  <FeedbackCard msg={msg} />
+                  <PrincipleCheckCard sessionId={sessionId} feedbackIdx={feedbackIdx} />
+                </div>
               </div>
-            </div>
-          );
+            );
+          }
           return null;
-        })}
+        });
+        })()}
 
         {microComplete && (
           <div className="flex gap-3">
