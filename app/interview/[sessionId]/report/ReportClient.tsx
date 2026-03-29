@@ -53,6 +53,71 @@ function scoreBg(score: number | null): string {
   return 'bg-red-50 border-red-200';
 }
 
+// SVG arc gauge: semicircle from 180deg to 0deg (left to right)
+function ScoreGauge({ score }: { score: number }) {
+  const size = 120;
+  const cx = size / 2;
+  const cy = size / 2 + 10;
+  const r = 44;
+  const strokeWidth = 10;
+
+  // Arc math: semicircle (180deg sweep)
+  // Start: left (180deg), End: right (0deg)
+  const startAngle = Math.PI; // 180deg
+  const endAngle = 0;         // 0deg
+  const totalAngle = Math.PI; // 180 degrees
+
+  const scoreAngle = startAngle - (score / 100) * totalAngle;
+  const trackStart = { x: cx + r * Math.cos(startAngle), y: cy + r * Math.sin(startAngle) };
+  const trackEnd   = { x: cx + r * Math.cos(endAngle),   y: cy + r * Math.sin(endAngle) };
+
+  const fillEnd = { x: cx + r * Math.cos(scoreAngle), y: cy + r * Math.sin(scoreAngle) };
+  const largeArc = score > 50 ? 1 : 0;
+
+  // Color by zone
+  const gaugeColor = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const textColor  = score >= 80 ? '#059669' : score >= 60 ? '#d97706' : '#dc2626';
+
+  return (
+    <svg width={size} height={size / 2 + 20} viewBox={`0 0 ${size} ${size / 2 + 20}`}>
+      {/* Track */}
+      <path
+        d={`M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 0 1 ${trackEnd.x} ${trackEnd.y}`}
+        fill="none"
+        stroke="#e4e4e7"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      {/* Fill */}
+      {score > 0 && (
+        <path
+          d={`M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 ${largeArc} 1 ${fillEnd.x} ${fillEnd.y}`}
+          fill="none"
+          stroke={gaugeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      )}
+      {/* Score text */}
+      <text
+        x={cx}
+        y={cy + 4}
+        textAnchor="middle"
+        fontSize={22}
+        fontWeight="900"
+        fill={textColor}
+        fontFamily="inherit"
+      >
+        {score}
+      </text>
+      {/* Label */}
+      <text x={cx} y={cy + 18} textAnchor="middle" fontSize={9} fill="#a1a1aa" fontFamily="inherit">
+        / 100점
+      </text>
+    </svg>
+  );
+}
+
 export default function ReportClient({
   session,
   messages,
@@ -89,6 +154,7 @@ export default function ReportClient({
   const questions = messages.filter(m => m.role === 'question');
   const scores = feedbacks.map(f => f.score).filter((s): s is number => s != null);
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+  const avgScoreRounded = avgScore != null ? Math.round(avgScore) : null;
 
   // 합격 판정 계산
   const criteria = COMPANY_PASS_CRITERIA[session.company];
@@ -118,6 +184,9 @@ export default function ReportClient({
     f: feedbacks[i] ?? null,
     idx: i + 1,
   }));
+
+  // Quick action URL for retry
+  const retryUrl = `/interview?company=${session.company}&category=${session.category}&difficulty=${session.difficulty}`;
 
   return (
     <>
@@ -171,10 +240,14 @@ export default function ReportClient({
               </div>
             </div>
 
-            {/* 핵심 수치 */}
+            {/* 핵심 수치 — score gauge replaces plain number */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-zinc-50 rounded-xl p-3 text-center">
-                <p className={`text-3xl font-black tabular-nums ${scoreColor(avgScore != null ? Math.round(avgScore) : null)}`}>{avgScore != null ? Math.round(avgScore) : '-'}</p>
+              <div className="bg-zinc-50 rounded-xl p-3 flex flex-col items-center justify-center">
+                {avgScoreRounded != null ? (
+                  <ScoreGauge score={avgScoreRounded} />
+                ) : (
+                  <p className="text-3xl font-black text-zinc-400 tabular-nums">-</p>
+                )}
                 <p className="text-[11px] text-zinc-400 mt-0.5">평균 점수</p>
               </div>
               <div className="bg-zinc-50 rounded-xl p-3 text-center">
@@ -182,34 +255,35 @@ export default function ReportClient({
                 <p className="text-[11px] text-zinc-400 mt-0.5">문제 수</p>
               </div>
               <div className="bg-zinc-50 rounded-xl p-3 text-center">
-                <p className={`text-lg font-bold ${scoreColor(avgScore != null ? Math.round(avgScore) : null)} mt-1`}>{avgScore != null ? scoreLabel(Math.round(avgScore)) : '-'}</p>
+                <p className={`text-lg font-bold ${scoreColor(avgScoreRounded)} mt-1`}>{avgScoreRounded != null ? scoreLabel(avgScoreRounded) : '-'}</p>
                 <p className="text-[11px] text-zinc-400 mt-0.5">종합 평가</p>
               </div>
             </div>
           </div>
 
-          {/* 합격 판정 카드 */}
+          {/* 합격 판정 카드 — more prominent */}
           {criteria && avgScore != null && (
-            <div className={`rounded-xl border-2 p-5 mb-6 ${passed
-              ? 'border-emerald-300 bg-emerald-50'
-              : 'border-amber-300 bg-amber-50'}`}>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-2xl">{passed ? '🎯' : '📈'}</span>
-                <div>
-                  <p className={`font-bold text-lg ${passed ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    {passed
-                      ? `합격 가능권 (기준 ${passScore}점 → 현재 ${Math.round(avgScore)}점, +${Math.round(passGap)}점)`
-                      : `합격까지 ${Math.round(passGap)}점 부족 (기준 ${passScore}점)`}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-0.5">{criteria.description}</p>
-                </div>
+            <div className={`rounded-2xl border-2 p-6 ${passed
+              ? 'border-emerald-400 bg-emerald-50'
+              : 'border-amber-400 bg-amber-50'}`}>
+              <div className="flex flex-col items-center text-center gap-3">
+                <span className="text-5xl">{passed ? '🎯' : '❌'}</span>
+                <p className={`font-black text-2xl leading-tight ${passed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {passed ? '합격 가능권!' : '불합격 — 재도전 필요'}
+                </p>
+                <p className={`text-sm font-semibold ${passed ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {passed
+                    ? `기준 ${passScore}점 → 현재 ${Math.round(avgScore)}점 (+${Math.round(passGap)}점 초과)`
+                    : `기준 ${passScore}점까지 ${Math.round(passGap)}점 부족`}
+                </p>
+                <p className="text-sm text-gray-600">{criteria.description}</p>
               </div>
-              <div className="mt-3">
+              <div className="mt-4 bg-white bg-opacity-60 rounded-xl p-3">
                 <p className="text-xs font-semibold text-gray-500 mb-2">✅ 이 회사 합격 포인트</p>
                 <ul className="space-y-1">
-                  {criteria.tips.map((tip, i) => (
+                  {criteria.tips.map((tip: string, i: number) => (
                     <li key={i} className="text-sm text-gray-700 flex gap-2">
-                      <span className="text-emerald-500">•</span>{tip}
+                      <span className="text-emerald-500 shrink-0">•</span>{tip}
                     </li>
                   ))}
                 </ul>
@@ -275,15 +349,32 @@ export default function ReportClient({
 
           {/* 하단 액션 */}
           {!readOnly && (
-            <div className="flex gap-3 pb-8 print-hidden">
-              <Link href={`/interview/${session.id}`}
-                className="flex-1 py-3 rounded-xl border border-zinc-300 text-sm font-semibold text-zinc-600 text-center hover:bg-zinc-50 transition-colors">
-                세션 다시 보기
-              </Link>
-              <Link href="/interview"
-                className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-sm font-bold text-center hover:bg-indigo-700 transition-colors">
-                🎯 새 면접 시작
-              </Link>
+            <div className="space-y-3 pb-8 print-hidden">
+              <div className="flex gap-3">
+                <Link href={`/interview/${session.id}`}
+                  className="flex-1 py-3 rounded-xl border border-zinc-300 text-sm font-semibold text-zinc-600 text-center hover:bg-zinc-50 transition-colors">
+                  세션 다시 보기
+                </Link>
+                <Link href="/interview"
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-sm font-bold text-center hover:bg-indigo-700 transition-colors">
+                  🎯 새 면접 시작
+                </Link>
+              </div>
+              {/* Quick action buttons */}
+              <div className="flex gap-3">
+                <Link
+                  href={retryUrl}
+                  className="flex-1 py-3 rounded-xl border border-amber-300 bg-amber-50 text-sm font-semibold text-amber-800 text-center hover:bg-amber-100 transition-colors"
+                >
+                  🔄 같은 카테고리 재도전
+                </Link>
+                <Link
+                  href="/interview/notes"
+                  className="flex-1 py-3 rounded-xl border border-red-300 bg-red-50 text-sm font-semibold text-red-700 text-center hover:bg-red-100 transition-colors"
+                >
+                  📓 오답노트 보기
+                </Link>
+              </div>
             </div>
           )}
         </main>

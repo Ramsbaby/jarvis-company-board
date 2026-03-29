@@ -285,8 +285,20 @@ function ScoreHistoryChart({ sessions, onNavigate }: { sessions: InterviewSessio
 }
 
 function SessionHistory({ sessions }: { sessions: InterviewSession[] }) {
-  if (sessions.length === 0) return null;
   const now = new Date().getTime();
+
+  if (sessions.length === 0) {
+    return (
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold text-zinc-700">📋 최근 면접 이력</h2>
+        <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center space-y-3">
+          <p className="text-3xl">🚀</p>
+          <p className="text-sm font-semibold text-zinc-700">아직 면접 기록이 없습니다. 첫 세션을 시작해보세요! 🚀</p>
+          <p className="text-xs text-zinc-400">위의 퀵스타트 버튼을 눌러 바로 시작할 수 있습니다.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -344,14 +356,17 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleStart() {
+  async function handleStart(overrides?: { company: string; category: string; difficulty: string }) {
+    const co = overrides?.company ?? company;
+    const ca = overrides?.category ?? category;
+    const di = overrides?.difficulty ?? difficulty;
     setLoading(true);
     setError('');
     try {
       const result = await apiFetch<{ sessionId: string }>('/api/interview/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company, category, difficulty }),
+        body: JSON.stringify({ company: co, category: ca, difficulty: di }),
       });
       if (!result.ok) throw new Error(result.message);
       router.push(`/interview/${result.data.sessionId}`);
@@ -360,6 +375,13 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
       setLoading(false);
     }
   }
+
+  // Sort categories: priority=1 first
+  const sortedCategories = [...CATEGORIES].sort((a, b) => {
+    const pa = (a as { priority?: number }).priority ?? 99;
+    const pb = (b as { priority?: number }).priority ?? 99;
+    return pa - pb;
+  });
 
   return (
     <div className="bg-zinc-50 min-h-screen">
@@ -372,6 +394,25 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+
+        {/* Quick Start Banner */}
+        <div className="rounded-2xl p-5 space-y-3" style={{ background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🎯</span>
+            <div>
+              <p className="font-black text-yellow-900 text-base leading-tight">카카오페이 합격 추천 조합</p>
+              <p className="text-[11px] text-yellow-800 mt-0.5">분산 트랜잭션 · 시니어 난이도 — 핵심 출제 영역</p>
+            </div>
+          </div>
+          <button
+            onClick={() => handleStart({ company: 'kakaopay', category: 'distributed-tx', difficulty: 'senior' })}
+            disabled={loading}
+            className="w-full py-2.5 rounded-xl bg-yellow-900 text-yellow-50 font-bold text-sm hover:bg-yellow-950 disabled:opacity-50 transition-colors"
+          >
+            {loading ? '준비 중...' : '바로 시작 →'}
+          </button>
+        </div>
+
         {/* Step indicator */}
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((s) => (
@@ -409,19 +450,26 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
           <div className="space-y-4">
             <h2 className="text-base font-bold text-zinc-800">어떤 카테고리로 시작하시겠습니까?</h2>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CATEGORIES.map(cat => (
-                <button key={cat.id} onClick={() => setCategory(cat.id)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${category === cat.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
-                  <span className="text-xl shrink-0">{cat.emoji}</span>
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-800 flex items-center gap-1">
-                      {cat.name}
-                      {cat.priority === 1 && <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded font-bold">필수</span>}
+              {sortedCategories.map(cat => {
+                const isPriority = (cat as { priority?: number }).priority === 1;
+                return (
+                  <button key={cat.id} onClick={() => setCategory(cat.id)}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${category === cat.id ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50' : isPriority ? 'border-red-200 bg-red-50 hover:border-red-300' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
+                    <span className="text-xl shrink-0">{cat.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-zinc-800 flex items-center gap-1.5 flex-wrap">
+                        {cat.name}
+                        {isPriority && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
+                            🔥 필수
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-400">{cat.desc}</div>
                     </div>
-                    <div className="text-[11px] text-zinc-400">{cat.desc}</div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
             <div className="flex justify-between pt-2">
               <button onClick={() => setStep(1)} className="text-sm text-zinc-500 hover:text-zinc-700">← 뒤로</button>
@@ -447,11 +495,17 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
               <div>🏢 회사: <span className="font-semibold text-zinc-800">{COMPANIES.find(c => c.id === company)?.name}</span></div>
               <div>📂 카테고리: <span className="font-semibold text-zinc-800">{CATEGORIES.find(c => c.id === category)?.name}</span></div>
               <div>📊 난이도: <span className="font-semibold text-zinc-800">{DIFFICULTIES.find(d => d.id === difficulty)?.name}</span></div>
+              {difficulty === 'senior' && (
+                <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                  <span className="shrink-0">⚠️</span>
+                  <p className="text-xs text-amber-800 font-semibold">시니어 압박 면접 — 정답도 더 파고듭니다</p>
+                </div>
+              )}
             </div>
             {error && <p className="text-sm text-red-600">⚠️ {error}</p>}
             <div className="flex justify-between pt-2">
               <button onClick={() => setStep(2)} className="text-sm text-zinc-500 hover:text-zinc-700">← 뒤로</button>
-              <button onClick={handleStart} disabled={loading} className="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+              <button onClick={() => handleStart()} disabled={loading} className="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {loading ? '면접 준비 중...' : '🎯 면접 시작'}
               </button>
             </div>

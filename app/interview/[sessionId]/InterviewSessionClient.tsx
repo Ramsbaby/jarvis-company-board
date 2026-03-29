@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMPANIES, CATEGORIES } from '@/lib/interview-data';
@@ -100,6 +100,13 @@ function FeedbackCard({ msg }: { msg: Message }) {
   );
 }
 
+// Format seconds as MM:SS
+function formatElapsed(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 export default function InterviewSessionClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -108,6 +115,37 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
   const [streaming, setStreaming] = useState(false);
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Elapsed timer per question
+  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const questionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Draft auto-save (debounce)
+  const draftKey = `interview_draft_${sessionId}`;
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Restore draft on mount
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(draftKey) : null;
+    if (saved) setAnswer(saved);
+  }, [draftKey]);
+
+  // Debounced save on answer change
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        if (answer) {
+          localStorage.setItem(draftKey, answer);
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      }
+    }, 500);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [answer, draftKey]);
 
   useEffect(() => {
     fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' })
@@ -120,12 +158,29 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streaming]);
 
+  // Reset and start elapsed timer when the last question changes
   const lastQuestion = [...messages].reverse().find(m => m.role === 'question');
+  const lastQuestionId = lastQuestion?.id;
 
-  async function handleSubmit() {
-    if (!answer.trim() || streaming) return;
-    const answerText = answer.trim();
+  useEffect(() => {
+    setElapsedSecs(0);
+    if (questionTimerRef.current) clearInterval(questionTimerRef.current);
+    questionTimerRef.current = setInterval(() => {
+      setElapsedSecs(s => s + 1);
+    }, 1000);
+    return () => {
+      if (questionTimerRef.current) clearInterval(questionTimerRef.current);
+    };
+  }, [lastQuestionId]);
+
+  const feedbackCount = messages.filter(m => m.role === 'feedback').length;
+  const questionNumber = feedbackCount + 1;
+
+  const submitAnswer = useCallback(async (answerText: string) => {
+    if (!answerText.trim() || streaming) return;
     setAnswer('');
+    // Clear draft
+    if (typeof window !== 'undefined') localStorage.removeItem(draftKey);
     setStreaming(true);
 
     const tempAnswer: Message = { id: `temp_${Date.now()}`, session_id: sessionId, role: 'answer', content: answerText, created_at: new Date().toISOString() };
@@ -161,6 +216,14 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
       }
     } catch (e) { console.error(e); }
     finally { setStreaming(false); }
+  }, [streaming, sessionId, lastQuestion, draftKey]);
+
+  async function handleSubmit() {
+    await submitAnswer(answer.trim());
+  }
+
+  async function handleDontKnow() {
+    await submitAnswer('잘 모르겠습니다. 답변 예시와 함께 설명해 주시면 감사하겠습니다.');
   }
 
   async function handleEnd() {
@@ -176,6 +239,9 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
   const company = COMPANIES.find(c => c.id === session?.company);
   const category = CATEGORIES.find(c => c.id === session?.category);
 
+  const charCount = answer.length;
+  const charWarning = charCount > 0 && charCount < 50;
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-zinc-400 text-sm">로딩 중...</div>;
 
   return (
@@ -186,8 +252,12 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
           <span className="text-zinc-300">|</span>
           <span className="text-sm font-bold text-zinc-800">{company?.emoji} {company?.name}</span>
           <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full">{category?.name}</span>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-zinc-400">{messages.filter(m => m.role === 'feedback').length}문제 완료</span>
+          <div className="ml-auto flex items-center gap-3">
+            {/* Question counter */}
+            <span className="text-sm font-black text-indigo-600 tabular-nums">Q{questionNumber}</span>
+            {/* Elapsed timer */}
+            <span className="text-xs text-zinc-400 tabular-nums font-mono">{formatElapsed(elapsedSecs)}</span>
+            <span className="text-xs text-zinc-400">{feedbackCount}문제 완료</span>
             <button onClick={handleEnd} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors">종료</button>
           </div>
         </div>
@@ -228,7 +298,7 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
             <div className="max-w-[90%] bg-white border border-zinc-200 rounded-2xl rounded-tl-sm px-4 py-3">
-              <p className="text-[11px] font-semibold text-zinc-400 mb-2">AI 피드백 분석 중...</p>
+              <p className="text-[11px] font-semibold text-zinc-500 mb-2">🤔 면접관이 답변을 평가하고 있습니다...</p>
               <div className="flex gap-1 items-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -253,12 +323,31 @@ export default function InterviewSessionClient({ sessionId }: { sessionId: strin
                 className="flex-1 text-sm text-zinc-800 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 resize-none outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all disabled:opacity-50"
                 rows={4}
               />
-              <button onClick={handleSubmit} disabled={!answer.trim() || streaming}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors shrink-0">
-                {streaming ? '...' : '제출'}
-              </button>
+              <div className="flex flex-col gap-2 shrink-0">
+                <button onClick={handleSubmit} disabled={!answer.trim() || streaming}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors">
+                  {streaming ? '...' : '제출'}
+                </button>
+                <button
+                  onClick={handleDontKnow}
+                  disabled={streaming}
+                  className="px-3 py-2 rounded-xl bg-zinc-100 text-zinc-600 text-xs font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors whitespace-nowrap"
+                >
+                  모름 💬
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] text-zinc-400 mt-1">Cmd+Enter로 빠르게 제출</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-[11px] text-zinc-400">Cmd+Enter로 빠르게 제출</p>
+              <div className="flex items-center gap-2">
+                {charWarning ? (
+                  <span className="text-[11px] text-orange-500 font-semibold">너무 짧습니다 — 구체적으로 답변하세요</span>
+                ) : null}
+                <span className={`text-[11px] tabular-nums ${charWarning ? 'text-orange-500' : 'text-zinc-400'}`}>
+                  {charCount > 0 ? `${charCount}자` : ''}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}
