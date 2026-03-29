@@ -26,6 +26,148 @@ interface WeaknessReport {
   category_breakdown: CategoryBreakdown[];
 }
 
+// ── D-Day 배너 ─────────────────────────────────────────────────────────────
+const DDAY_KEY = 'kakaopay_interview_date';
+
+function DdayBanner() {
+  const [dday, setDday] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const saved = localStorage.getItem(DDAY_KEY);
+    if (!saved) return null;
+    return Math.ceil((new Date(saved).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  });
+  const [editing, setEditing] = useState(false);
+  const [inputDate, setInputDate] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem(DDAY_KEY) ?? '';
+  });
+
+  function handleSave() {
+    if (!inputDate) return;
+    localStorage.setItem(DDAY_KEY, inputDate);
+    const diff = Math.ceil((new Date(inputDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    setDday(diff);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 bg-white border border-indigo-200 rounded-xl px-3 py-1.5 ml-auto">
+        <span className="text-[11px] text-zinc-500 shrink-0">면접일</span>
+        <input
+          type="date"
+          value={inputDate}
+          onChange={e => setInputDate(e.target.value)}
+          className="text-[11px] border border-zinc-200 rounded px-2 py-0.5 w-32"
+        />
+        <button onClick={handleSave} className="text-[11px] bg-indigo-600 text-white px-2 py-0.5 rounded font-semibold">저장</button>
+        <button onClick={() => setEditing(false)} className="text-[11px] text-zinc-400">✕</button>
+      </div>
+    );
+  }
+
+  if (dday === null) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="text-[11px] text-zinc-400 hover:text-indigo-500 transition-colors ml-auto flex items-center gap-1"
+      >
+        📅 D-day 설정
+      </button>
+    );
+  }
+
+  const label = dday < 0 ? `D+${Math.abs(dday)}` : dday === 0 ? 'D-Day!' : `D-${dday}`;
+  const urgencyClass =
+    dday <= 3  ? 'bg-red-500 text-white' :
+    dday <= 7  ? 'bg-amber-500 text-white' :
+    dday <= 14 ? 'bg-orange-100 text-orange-700' :
+                 'bg-indigo-100 text-indigo-700';
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ml-auto ${urgencyClass}`}
+      title="클릭하여 날짜 수정"
+    >
+      카카오페이 {label}
+    </button>
+  );
+}
+
+// ── 오늘의 추천 카드 ──────────────────────────────────────────────────────
+const KEYWORD_TO_CATEGORY: Array<{ patterns: string[]; category: string }> = [
+  { patterns: ['SAGA', 'saga', '분산트랜잭션', '2PC', '보상트랜잭션', 'outbox', 'TCC', '분산 트랜잭션'], category: 'distributed-tx' },
+  { patterns: ['멱등', '이중결제', '정산', '결제정합성', '환불', '취소', '결제'], category: 'payment-arch' },
+  { patterns: ['동시성', '데드락', '락', 'race', '낙관적', '비관적', '경쟁조건'], category: 'concurrency' },
+  { patterns: ['kafka', 'Kafka', '컨슈머', '파티션', '오프셋', '메시지큐', 'consumer'], category: 'kafka' },
+  { patterns: ['캐시', '스케일', 'index', '인덱스', '아키텍처', 'DB', 'redis', 'Redis'], category: 'system-design' },
+];
+
+function mapKeywordToCategory(keyword: string): string {
+  const lower = keyword.toLowerCase();
+  for (const { patterns, category } of KEYWORD_TO_CATEGORY) {
+    if (patterns.some(p => lower.includes(p.toLowerCase()))) return category;
+  }
+  return 'distributed-tx';
+}
+
+interface TodayRecommendProps {
+  onStart: (overrides: { company: string; category: string; difficulty: string }) => void;
+  loading: boolean;
+}
+
+function TodayRecommendCard({ onStart, loading }: TodayRecommendProps) {
+  const [rec, setRec] = useState<{ keyword: string; category: string; count: number; severity: string } | null>(null);
+
+  useEffect(() => {
+    apiFetch<WeaknessReport>('/api/interview/weakness-report?company=kakaopay&limit=20')
+      .then(res => {
+        if (res.ok && res.data.top_weaknesses?.length > 0) {
+          const top = res.data.top_weaknesses.find(w => w.severity === 'high') ?? res.data.top_weaknesses[0];
+          setRec({
+            keyword: top.keyword,
+            category: mapKeywordToCategory(top.keyword),
+            count: top.miss_count,
+            severity: top.severity,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!rec) return null;
+
+  const catInfo = CATEGORIES.find(c => c.id === rec.category);
+
+  return (
+    <div className="rounded-2xl p-5 space-y-3 border-2 border-red-200" style={{ background: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)' }}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+            <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">🎯 오늘의 추천</span>
+            <span className="text-[10px] text-red-500 font-semibold">{rec.count}회 반복 약점</span>
+          </div>
+          <p className="font-black text-red-900 text-base leading-tight">
+            {catInfo?.emoji} {catInfo?.name ?? rec.category}
+          </p>
+          <p className="text-xs text-red-700 mt-1.5 leading-relaxed">
+            <strong className="bg-red-200 px-1 rounded">{rec.keyword}</strong> 집중 공략 — 시니어 압박 면접
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={() => onStart({ company: 'kakaopay', category: rec.category, difficulty: 'senior' })}
+        disabled={loading}
+        className="w-full py-2.5 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 disabled:opacity-50 transition-colors"
+      >
+        {loading ? '준비 중...' : '지금 바로 공략 →'}
+      </button>
+    </div>
+  );
+}
+
+// ── 반복 약점 위젯 ────────────────────────────────────────────────────────
 function WeaknessWidget({ company }: { company: string }) {
   const [report, setReport] = useState<WeaknessReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -390,12 +532,15 @@ export default function InterviewHomeClient({ sessions }: { sessions: InterviewS
           <Link href="/" className="text-zinc-400 hover:text-zinc-600 text-sm">← 보드</Link>
           <span className="text-zinc-300">|</span>
           <h1 className="text-sm font-bold text-zinc-800">🎯 면접 시뮬레이터</h1>
-          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold ml-auto">카카오페이 서류합격 대비</span>
+          <DdayBanner />
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
 
-        {/* Quick Start Banner */}
+        {/* 오늘의 추천 카드 — 반복 약점 기반 자동 추천 */}
+        <TodayRecommendCard onStart={handleStart} loading={loading} />
+
+        {/* Quick Start Banner — 카카오페이 고정 추천 */}
         <div className="rounded-2xl p-5 space-y-3" style={{ background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)' }}>
           <div className="flex items-center gap-2">
             <span className="text-xl">🎯</span>
