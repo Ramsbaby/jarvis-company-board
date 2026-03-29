@@ -976,9 +976,9 @@ export default function TaskDetailClient({
 
         {/* ── Ghost task warning ── */}
         {isGhostTask && (
-          <div className="bg-amber-900/30 border border-amber-600/50 rounded-lg p-3 flex items-start gap-2.5">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-200 leading-relaxed">
+            <p className="text-sm text-amber-800 leading-relaxed">
               <span className="font-semibold">유령 태스크:</span> 완료 처리되었으나 변경된 파일이 없습니다. 실제 작업이 수행되지 않았을 수 있습니다.
             </p>
           </div>
@@ -1008,31 +1008,40 @@ export default function TaskDetailClient({
           <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
             <button
               onClick={() => setSiblingsExpanded(v => !v)}
-              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-zinc-50 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-zinc-50 transition-colors border-b border-zinc-100"
             >
               {siblingsExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
-              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">같은 그룹 태스크 ({siblingTasks.length})</span>
+              <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">같은 그룹 태스크</span>
+              <span className="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500">{siblingTasks.length}</span>
             </button>
             {siblingsExpanded && (
-              <div className="px-4 pb-3 space-y-1.5">
+              <div className="p-2 space-y-1">
                 {siblingTasks.map(sibling => {
                   const isCurrent = sibling.id === task.id;
                   const pill = STATUS_PILL[sibling.status] ?? STATUS_PILL.awaiting_approval;
-                  return (
+                  return isCurrent ? (
+                    <div
+                      key={sibling.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                      <p className="flex-1 min-w-0 text-xs font-semibold text-indigo-800 leading-snug truncate">
+                        {sibling.title}
+                      </p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 font-semibold shrink-0 whitespace-nowrap">
+                        현재
+                      </span>
+                    </div>
+                  ) : (
                     <Link
                       key={sibling.id}
                       href={`/dev-tasks/${sibling.id}`}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
-                        isCurrent
-                          ? 'bg-blue-900/30 border border-blue-600/30'
-                          : 'hover:bg-zinc-50 border border-transparent'
-                      }`}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-transparent hover:bg-zinc-50 hover:border-zinc-200 transition-all group"
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium leading-snug truncate ${isCurrent ? 'text-blue-300' : 'text-zinc-700'}`}>
-                          {isCurrent && '▸ '}{sibling.title}
-                        </p>
-                      </div>
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 group-hover:bg-zinc-400 shrink-0 transition-colors" />
+                      <p className="flex-1 min-w-0 text-xs font-medium text-zinc-700 leading-snug truncate group-hover:text-zinc-900">
+                        {sibling.title}
+                      </p>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${pill.className}`}>
                         {pill.label}
                       </span>
@@ -1854,6 +1863,46 @@ export default function TaskDetailClient({
                   </div>
                 </div>
               )}
+
+              {/* Quality Review */}
+              {task.review && (() => {
+                const rv = (() => { try { return JSON.parse(task.review); } catch { return null; } })();
+                if (!rv) return null;
+                const scoreBg = rv.score >= 4 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : rv.score >= 3 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-red-100 text-red-800 border-red-200';
+                const riskBg = rv.risk === 'high' ? 'bg-red-500' : rv.risk === 'medium' ? 'bg-amber-500' : rv.risk === 'low' ? 'bg-blue-500' : 'bg-zinc-300';
+                return (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wider">품질 리뷰</p>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${scoreBg}`}>
+                          {rv.score}/5
+                        </span>
+                        <span className={`w-2 h-2 rounded-full ${riskBg}`} title={`Risk: ${rv.risk}`} />
+                      </div>
+                    </div>
+                    {rv.summary && <p className="text-sm text-zinc-700">{rv.summary}</p>}
+                    {rv.positives?.length > 0 && (
+                      <div className="space-y-1">
+                        {rv.positives.map((p: string, i: number) => (
+                          <p key={i} className="text-xs text-emerald-700 flex items-start gap-1">
+                            <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />{p}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {rv.issues?.length > 0 && (
+                      <div className="space-y-1">
+                        {rv.issues.map((issue: string, i: number) => (
+                          <p key={i} className="text-xs text-red-700 flex items-start gap-1">
+                            <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />{issue}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Changed files */}
               {changedFiles.length > 0 && (
