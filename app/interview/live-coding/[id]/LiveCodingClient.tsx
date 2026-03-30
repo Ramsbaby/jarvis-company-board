@@ -116,6 +116,14 @@ export default function LiveCodingClient({
   const [hintUsed, setHintUsed] = useState(false);
   const [loadingHint, setLoadingHint] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showError(msg: string) {
+    setErrorMsg(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setErrorMsg(null), 4000);
+  }
   const [activeTab, setActiveTab] = useState<'problem' | 'examples' | 'constraints' | 'solution'>('problem');
   // 모바일: 문제/코드 메인 탭
   const [mobileView, setMobileView] = useState<'problem' | 'code'>('problem');
@@ -157,9 +165,13 @@ export default function LiveCodingClient({
     setLoadingHint(true);
     try {
       const res = await fetch(`/api/interview/live-coding/${sessionId}/hint`);
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
+      if (!data.hint) throw new Error('힌트 데이터 없음');
       setHint(data.hint);
       setHintUsed(true);
+    } catch (e) {
+      showError('힌트를 불러오지 못했습니다. ' + (e instanceof Error ? e.message : ''));
     } finally {
       setLoadingHint(false);
     }
@@ -175,10 +187,15 @@ export default function LiveCodingClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, timeUsed: getElapsed(), hintUsed }),
       });
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
+      if (!data.feedback) throw new Error('피드백 데이터 없음');
       setFeedback(data.feedback);
-      setModelSolution(data.modelSolution);
-      if (isMobile) setMobileView('problem'); // 제출 후 피드백 보여주기
+      setModelSolution(data.modelSolution ?? null);
+      if (isMobile) setMobileView('problem');
+    } catch (e) {
+      showError('제출 처리 중 오류가 발생했습니다. ' + (e instanceof Error ? e.message : '다시 시도해 주세요.'));
+      setTimerRunning(true); // 타이머 재개 (재시도 가능하게)
     } finally {
       setSubmitting(false);
     }
@@ -274,6 +291,14 @@ export default function LiveCodingClient({
 
   return (
     <div className="bg-zinc-950 min-h-screen flex flex-col text-zinc-100">
+      {/* 에러 토스트 */}
+      {errorMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg">
+          <span>⚠️</span>
+          <span>{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="ml-1 text-red-200 hover:text-white text-xs">✕</button>
+        </div>
+      )}
       {/* ── Header ── */}
       <header className="sticky top-0 z-20 bg-zinc-900 border-b border-zinc-700/60 shadow-lg flex-shrink-0">
         <div className="max-w-[1400px] mx-auto px-3 py-2.5 flex items-center gap-2">

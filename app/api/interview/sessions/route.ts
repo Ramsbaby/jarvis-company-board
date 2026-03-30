@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
   const sessionId = nanoid();
-  db.prepare(`INSERT INTO interview_sessions (id, company, category, difficulty) VALUES (?, ?, ?, ?)`).run(sessionId, company, category, difficulty);
 
+  // LLM 호출 먼저 (실패 시 세션 자체를 생성하지 않음)
   const systemPrompt = getSystemPrompt(company, category, difficulty, focusKeywords);
   let firstQuestion: string;
   try {
@@ -41,11 +41,22 @@ export async function POST(req: NextRequest) {
       model: MODEL_QUALITY, systemPrompt, maxTokens: 400, temperature: 0.7,
     });
   } catch {
+    // LLM 실패 시 fallback 질문 사용 (세션은 계속 생성)
     firstQuestion = '지원자분의 현재 프로젝트에서 가장 기술적으로 어려웠던 부분을 설명해 주시겠습니까?';
   }
 
-  const msgId = nanoid();
-  db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(msgId, sessionId, firstQuestion);
+  // 트랜잭션으로 세션 + 첫 질문 원자적 삽입 (부분 저장 방지)
+  try {
+    const insertAll = db.transaction(() => {
+      db.prepare(`INSERT INTO interview_sessions (id, company, category, difficulty) VALUES (?, ?, ?, ?)`).run(sessionId, company, category, difficulty);
+      const msgId = nanoid();
+      db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(msgId, sessionId, firstQuestion);
+    });
+    insertAll();
+  } catch (err) {
+    console.error('[session/create] DB 저장 실패:', err);
+    return NextResponse.json({ error: '세션 생성 중 오류가 발생했습니다. 다시 시도해 주세요.' }, { status: 500 });
+  }
 
   return NextResponse.json({ sessionId, firstQuestion });
 }
