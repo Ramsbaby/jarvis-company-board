@@ -440,7 +440,7 @@ export default function LiveCodingClient({
 
               {/* 코드 뷰 (모바일) */}
               {mobileView === 'code' && !feedback && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-2">
+                <div className="flex flex-col p-3 gap-2">
                   {/* 에디터 툴바 */}
                   <div className="flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-1.5">
@@ -459,8 +459,8 @@ export default function LiveCodingClient({
                       <button onClick={() => setCode(problem.starterCode || BOILERPLATE)} className="text-[10px] px-2 py-1 rounded-lg bg-zinc-800 text-zinc-400 border border-zinc-700">↺</button>
                     </div>
                   </div>
-                  {/* 에디터 */}
-                  <div className="flex-1 rounded-xl overflow-hidden border border-zinc-700 min-h-0" style={{ minHeight: '320px' }}>
+                  {/* 에디터 — 높이 고정으로 제출 버튼 항상 보이게 */}
+                  <div className="rounded-xl overflow-hidden border border-zinc-700" style={{ height: 'calc(100dvh - 220px)' }}>
                     <MonacoEditor
                       height="100%"
                       language="java"
