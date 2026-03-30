@@ -29,7 +29,10 @@ export default async function LiveCodingPage({
   const problem = LIVE_CODING_PROBLEMS.find(p => p.id === lcSession.problem_id);
   if (!problem) notFound();
 
-  const existingFeedback = lcSession.feedback_json ? JSON.parse(lcSession.feedback_json) : null;
+  let existingFeedback = null;
+  if (lcSession.feedback_json) {
+    try { existingFeedback = JSON.parse(lcSession.feedback_json); } catch { /* 손상된 JSON 무시 */ }
+  }
 
   return (
     <LiveCodingClient
