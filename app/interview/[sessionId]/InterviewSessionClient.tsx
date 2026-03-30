@@ -175,7 +175,16 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
   const [answer, setAnswer] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** 에러 토스트 표시 (3초 후 자동 해제) */
+  function showError(msg: string) {
+    setErrorMsg(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setErrorMsg(null), 4000);
+  }
 
   // Elapsed timer per question
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -262,7 +271,8 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
         credentials: 'include',
         body: JSON.stringify({ answer: answerText, questionContent: lastQuestion?.content }),
       });
-      if (!res.body) throw new Error('No stream');
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+      if (!res.body) throw new Error('스트림 없음');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
@@ -276,14 +286,29 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
           if (!line.startsWith('data: ')) continue;
           try {
             const d = JSON.parse(line.slice(6));
-            if (d.done) {
-              const updated = await fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' }).then(r => r.json());
-              setMessages(updated.messages ?? []);
+            // 서버 측 에러 이벤트
+            if (d.error && !d.done) {
+              showError('피드백 생성 실패: ' + d.error);
+              continue;
             }
-          } catch { /* skip */ }
+            if (d.done) {
+              if (d.error) {
+                showError('피드백 저장 중 오류가 발생했습니다. 다시 시도해 주세요.');
+              }
+              // 증분 업데이트: 전체 리로드 대신 신규 메시지만 가져와 추가
+              const updated = await fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' }).then(r => r.json());
+              const newMessages: Message[] = updated.messages ?? [];
+              setMessages(newMessages);
+            }
+          } catch { /* skip malformed SSE */ }
         }
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('[submitAnswer]', e);
+      showError('피드백을 불러오지 못했습니다. 네트워크 상태를 확인하세요.');
+      // 임시 답변 메시지 제거 (에러 시)
+      setMessages(prev => prev.filter(m => !m.id.startsWith('temp_')));
+    }
     finally { setStreaming(false); }
   }, [streaming, sessionId, lastQuestion, draftKey]);
 
@@ -365,6 +390,15 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
           </div>
         </div>
       </header>
+
+      {/* 에러 토스트 */}
+      {errorMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-2">
+          <span>⚠️</span>
+          <span>{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="ml-1 text-red-200 hover:text-white text-xs">✕</button>
+        </div>
+      )}
 
       <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 space-y-4">
         {(() => {

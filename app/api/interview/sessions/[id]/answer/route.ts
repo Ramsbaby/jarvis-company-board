@@ -24,6 +24,39 @@ function extractJson(text: string): Record<string, unknown> {
   return {};
 }
 
+import type Database from 'better-sqlite3';
+
+/** interview_messages에 피드백 저장 후 interview_feedback 테이블에도 듀얼 라이트 */
+function saveFeedbackDual(
+  db: Database.Database,
+  sessionId: string,
+  fullText: string,
+  score: number | null,
+  strengths: string[],
+  weaknesses: string[],
+  betterAnswer: string | null,
+  missingKeywords: string[],
+  parseError = false,
+): string {
+  const feedbackId = nanoid();
+  db.prepare(
+    `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
+     VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
+  ).run(feedbackId, sessionId, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+
+  // interview_feedback 정규화 테이블에도 저장 (통계용)
+  if (score !== null) {
+    try {
+      db.prepare(
+        `INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, parse_error)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(nanoid(), sessionId, feedbackId, score, JSON.stringify(strengths), JSON.stringify(weaknesses), JSON.stringify(missingKeywords), betterAnswer, parseError ? 1 : 0);
+    } catch { /* 마이그레이션 전 구버전 무시 */ }
+  }
+
+  return feedbackId;
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { isOwner } = getRequestAuth(req);
   if (!isOwner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
@@ -108,12 +141,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords as string[] : [];
           const nextQuestion = typeof parsed.next_question === 'string' ? parsed.next_question : null;
 
-          // DB 저장
-          const feedbackId = nanoid();
-          db.prepare(
-            `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
-             VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
-          ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+          // DB 저장 (듀얼 라이트)
+          const parseError = Object.keys(parsed).length === 0;
+          saveFeedbackDual(db, id, fullText, score, strengths, weaknesses, betterAnswer, missingKeywords, parseError);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`)
@@ -152,10 +182,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 const betterAnswer = typeof groqParsed.better_answer === 'string' ? groqParsed.better_answer : '';
                 const missingKeywords = Array.isArray(groqParsed.missing_keywords) ? groqParsed.missing_keywords as string[] : [];
                 const nextQuestion = typeof groqParsed.next_question === 'string' ? groqParsed.next_question : null;
-                const feedbackId = nanoid();
-                db.prepare(
-                  `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
-                ).run(feedbackId, id, groqText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+                const groqParseError = Object.keys(groqParsed).length === 0;
+                saveFeedbackDual(db, id, groqText, score, strengths, weaknesses, betterAnswer, missingKeywords, groqParseError);
                 if (nextQuestion) {
                   db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
                 }
@@ -167,7 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           } catch (fallbackErr) {
             console.error('[groq-fallback] error:', fallbackErr);
           }
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null, error: 'LLM 호출 실패' })}\n\n`));
           controller.close();
         }
       }
@@ -221,12 +249,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const missingKeywords = Array.isArray(parsed.missing_keywords) ? parsed.missing_keywords : [];
           const nextQuestion = parsed.next_question ?? null;
 
-          // DB에 피드백 저장
-          const feedbackId = nanoid();
-          db.prepare(
-            `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords)
-             VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
-          ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+          // DB에 피드백 저장 (듀얼 라이트)
+          const parseError = Object.keys(parsed).length === 0;
+          saveFeedbackDual(db, id, fullText, score, strengths as string[], weaknesses as string[], betterAnswer as string | null, missingKeywords as string[], parseError);
 
           // 다음 질문 저장
           if (nextQuestion) {
@@ -237,7 +262,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
           controller.close();
         } catch {
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null, error: 'LLM 호출 실패' })}\n\n`));
           controller.close();
         }
       }
@@ -324,10 +349,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             }
           } catch { /* keep nulls */ }
 
-          const feedbackId = nanoid();
-          db.prepare(
-            `INSERT INTO interview_messages (id, session_id, role, content, score, strengths, weaknesses, better_answer, missing_keywords) VALUES (?, ?, 'feedback', ?, ?, ?, ?, ?, ?)`
-          ).run(feedbackId, id, fullText, score, JSON.stringify(strengths), JSON.stringify(weaknesses), betterAnswer, JSON.stringify(missingKeywords));
+          const parseError = score === null && strengths.length === 0 && weaknesses.length === 0;
+          saveFeedbackDual(db, id, fullText, score, strengths, weaknesses, betterAnswer, missingKeywords, parseError);
 
           if (nextQuestion) {
             db.prepare(`INSERT INTO interview_messages (id, session_id, role, content) VALUES (?, ?, 'question', ?)`).run(nanoid(), id, nextQuestion);
@@ -336,7 +359,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score, nextQuestion })}\n\n`));
           controller.close();
         } catch (err) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err) })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, score: null, nextQuestion: null, error: String(err) })}\n\n`));
           controller.close();
         }
       },

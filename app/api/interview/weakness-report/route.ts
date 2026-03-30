@@ -3,11 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 
-interface MessageRow {
+interface FeedbackRow {
   session_id: string;
   missing_keywords: string;
   score: number | null;
   created_at: string;
+  parse_error: number;
 }
 
 interface SessionRow {
@@ -21,6 +22,7 @@ interface SessionRow {
 /**
  * GET /api/interview/weakness-report?company=kakaopay&limit=20
  * 최근 세션들의 missing_keywords를 집계하여 반복 약점 리포트를 반환합니다.
+ * interview_feedback 정규화 테이블 우선 사용, 없으면 interview_messages fallback.
  */
 export async function GET(req: NextRequest) {
   const { isOwner } = getRequestAuth(req);
@@ -35,8 +37,8 @@ export async function GET(req: NextRequest) {
 
   // 최근 N개 세션 조회 (company 필터)
   const sessionQuery = category
-    ? `SELECT id, company, category, difficulty, created_at FROM interview_sessions WHERE company = ? AND category = ? ORDER BY created_at DESC LIMIT ?`
-    : `SELECT id, company, category, difficulty, created_at FROM interview_sessions WHERE company = ? ORDER BY created_at DESC LIMIT ?`;
+    ? `SELECT id, company, category, difficulty, created_at FROM interview_sessions WHERE company = ? AND category = ? AND status = 'completed' ORDER BY created_at DESC LIMIT ?`
+    : `SELECT id, company, category, difficulty, created_at FROM interview_sessions WHERE company = ? AND status = 'completed' ORDER BY created_at DESC LIMIT ?`;
 
   const sessions = category
     ? db.prepare(sessionQuery).all(company, category, limit) as SessionRow[]
@@ -47,30 +49,51 @@ export async function GET(req: NextRequest) {
       company,
       session_count: 0,
       top_weaknesses: [],
-      category_breakdown: {},
+      category_breakdown: [],
       recent_scores: [],
-      message: '세션 데이터가 없습니다.',
+      message: '완료된 세션 데이터가 없습니다.',
     });
   }
 
   const sessionIds = sessions.map(s => s.id);
-
-  // 각 세션의 feedback 메시지에서 missing_keywords + score 수집
   const placeholders = sessionIds.map(() => '?').join(',');
-  const messages = db.prepare(
-    `SELECT session_id, missing_keywords, score, created_at
-     FROM interview_messages
-     WHERE session_id IN (${placeholders}) AND role = 'feedback' AND missing_keywords IS NOT NULL`
-  ).all(...sessionIds) as MessageRow[];
+
+  // interview_feedback 테이블에서 조회 (정규화 버전 우선)
+  let messages: FeedbackRow[] = [];
+  try {
+    messages = db.prepare(
+      `SELECT f.session_id, f.missing_keywords, f.score, f.created_at, f.parse_error
+       FROM interview_feedback f
+       WHERE f.session_id IN (${placeholders})
+         AND f.missing_keywords IS NOT NULL
+         AND f.missing_keywords != '[]'`
+    ).all(...sessionIds) as FeedbackRow[];
+  } catch {
+    // interview_feedback 테이블 없을 경우 legacy fallback
+    messages = db.prepare(
+      `SELECT session_id, missing_keywords, score, created_at, 0 AS parse_error
+       FROM interview_messages
+       WHERE session_id IN (${placeholders}) AND role = 'feedback' AND missing_keywords IS NOT NULL`
+    ).all(...sessionIds) as FeedbackRow[];
+  }
+
+  // 파싱 실패 건수 집계 (로깅용)
+  const parseErrors = messages.filter(m => m.parse_error === 1).length;
+  if (parseErrors > 0) {
+    console.warn(`[weakness-report] parse_error 건수: ${parseErrors} / ${messages.length}`);
+  }
 
   // 키워드 빈도 집계
   const keywordMap: Map<string, { count: number; sessions: Set<string>; totalScore: number; scoreCount: number }> = new Map();
+  let skipCount = 0;
 
   for (const msg of messages) {
+    if (msg.parse_error) continue; // 파싱 실패 행은 통계에서 제외
     let keywords: string[] = [];
     try {
       keywords = JSON.parse(msg.missing_keywords || '[]');
     } catch {
+      skipCount++;
       continue;
     }
     for (const kw of keywords) {
@@ -87,6 +110,10 @@ export async function GET(req: NextRequest) {
         entry.scoreCount++;
       }
     }
+  }
+
+  if (skipCount > 0) {
+    console.warn(`[weakness-report] JSON 파싱 실패 건수: ${skipCount}`);
   }
 
   // 빈도 순 정렬
@@ -106,7 +133,7 @@ export async function GET(req: NextRequest) {
   // 카테고리별 평균 점수
   const categoryScores: Record<string, { total: number; count: number }> = {};
   for (const session of sessions) {
-    const sessionMsgs = messages.filter(m => m.session_id === session.id);
+    const sessionMsgs = messages.filter(m => m.session_id === session.id && !m.parse_error);
     const scores = sessionMsgs.map(m => m.score).filter(s => s !== null) as number[];
     if (scores.length > 0) {
       const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -122,11 +149,11 @@ export async function GET(req: NextRequest) {
     category: cat,
     session_count: data.count,
     avg_score: Math.round(data.total / data.count),
-  })).sort((a, b) => a.avg_score - b.avg_score); // 점수 낮은 카테고리 먼저
+  })).sort((a, b) => a.avg_score - b.avg_score);
 
-  // 최근 세션 점수 트렌드 (최근 10개)
+  // 최근 세션 점수 트렌드
   const recentScores = sessions.slice(0, 10).map(s => {
-    const sessionMsgs = messages.filter(m => m.session_id === s.id);
+    const sessionMsgs = messages.filter(m => m.session_id === s.id && !m.parse_error);
     const scores = sessionMsgs.map(m => m.score).filter(n => n !== null) as number[];
     return {
       session_id: s.id,
@@ -145,5 +172,6 @@ export async function GET(req: NextRequest) {
     category_breakdown: categoryBreakdown,
     recent_scores: recentScores,
     generated_at: new Date().toISOString(),
+    ...(parseErrors > 0 && { parse_error_count: parseErrors }),
   });
 }

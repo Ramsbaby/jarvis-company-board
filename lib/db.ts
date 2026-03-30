@@ -331,6 +331,43 @@ export function getDb(): Database.Database {
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at TEXT
 )`); } catch { /* already exists */ }
+
+    // ── interview_feedback 정규화 테이블 ─────────────────────────────────
+    // interview_messages의 피드백 컬럼(희소)을 별도 테이블로 분리
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS interview_feedback (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
+        message_id TEXT NOT NULL REFERENCES interview_messages(id) ON DELETE CASCADE,
+        score INTEGER NOT NULL,
+        strengths TEXT NOT NULL DEFAULT '[]',
+        weaknesses TEXT NOT NULL DEFAULT '[]',
+        missing_keywords TEXT NOT NULL DEFAULT '[]',
+        better_answer TEXT,
+        parse_error INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_interview_feedback_session ON interview_feedback(session_id);
+      CREATE INDEX IF NOT EXISTS idx_interview_feedback_message ON interview_feedback(message_id);
+      CREATE INDEX IF NOT EXISTS idx_interview_feedback_score ON interview_feedback(score);
+    `);
+
+    // 기존 interview_messages 피드백 행을 interview_feedback으로 마이그레이션 (중복 방지)
+    _db!.exec(`
+      INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, created_at)
+      SELECT
+        'mig_' || id,
+        session_id,
+        id,
+        COALESCE(score, 0),
+        COALESCE(strengths, '[]'),
+        COALESCE(weaknesses, '[]'),
+        COALESCE(missing_keywords, '[]'),
+        better_answer,
+        created_at
+      FROM interview_messages
+      WHERE role = 'feedback' AND score IS NOT NULL
+    `);
   }
   return _db;
 }
