@@ -70,7 +70,6 @@ export const CATEGORIES = [
   { id: 'cs-basics', name: 'CS 기초', emoji: '📚', desc: 'OS·네트워크·DB ACID·자료구조', priority: 3 },
   { id: 'system-design', name: '시스템 디자인', emoji: '🏗️', desc: 'MSA, 대용량 아키텍처, 고가용성', priority: 3 },
   { id: 'behavioral', name: '행동 면접 (STAR)', emoji: '🧠', desc: '갈등·기술부채·성장 스토리', priority: 3 },
-  { id: 'live-coding', name: '라이브 코딩', emoji: '💻', desc: 'Java 알고리즘 구현 (1차 대비)', priority: 1 },
 ] as const;
 
 export const DIFFICULTIES = [
@@ -321,3 +320,313 @@ ${CANDIDATE_PROFILE}
 - 질문은 구체적이고 시나리오 기반이어야 합니다.
 - 지원자의 SK D&D IoT 플랫폼 경험과 연결지어 질문할 수 있습니다.${focusBlock}`;
 }
+
+export interface LiveCodingProblem {
+  id: string;
+  title: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags: string[];
+  description: string;
+  examples: Array<{ input: string; output: string; explanation?: string }>;
+  constraints: string[];
+  hint: string;
+  modelSolution: string;
+}
+
+export const LIVE_CODING_PROBLEMS: LiveCodingProblem[] = [
+  {
+    id: 'lc-001',
+    title: '거스름돈 최소 화폐',
+    difficulty: 'easy',
+    tags: ['그리디', '배열'],
+    description: `편의점 계산대에서 거스름돈을 줄 때, 최소 개수의 화폐(지폐+동전)로 거슬러 주는 프로그램을 작성하세요.
+
+화폐 종류: 50000, 10000, 5000, 1000, 500, 100, 50, 10원
+
+정수 amount가 주어질 때, 각 화폐 종류별 필요 개수를 Map으로 반환하세요. (개수가 0인 항목은 제외)`,
+    examples: [
+      { input: 'amount = 37860', output: '{10000=3, 5000=1, 1000=2, 500=1, 100=3, 50=1, 10=1}', explanation: '10000×3 + 5000×1 + 1000×2 + 500×1 + 100×3 + 50×1 + 10×1 = 37860' },
+      { input: 'amount = 1234', output: '{1000=1, 100=2, 10=3, 나머지=4}', explanation: '실제로는 10원짜리 없이 처리 필요' },
+    ],
+    constraints: ['0 ≤ amount ≤ 1,000,000', '10원 단위로만 거슬러줌'],
+    hint: '화폐를 큰 것부터 순서대로 처리하세요. amount / 화폐단위 = 개수, amount % 화폐단위 = 나머지.',
+    modelSolution: `import java.util.*;
+
+public class Solution {
+    public Map<Integer, Integer> getChange(int amount) {
+        int[] coins = {50000, 10000, 5000, 1000, 500, 100, 50, 10};
+        Map<Integer, Integer> result = new LinkedHashMap<>();
+
+        for (int coin : coins) {
+            if (amount >= coin) {
+                result.put(coin, amount / coin);
+                amount %= coin;
+            }
+        }
+        return result;
+    }
+}`,
+  },
+  {
+    id: 'lc-002',
+    title: '중복 결제 감지',
+    difficulty: 'medium',
+    tags: ['HashMap', '문자열'],
+    description: `결제 시스템에서 동일 사용자가 같은 금액을 짧은 시간 내에 중복 결제하는 경우를 탐지해야 합니다.
+
+결제 내역 리스트가 주어집니다. 각 결제는 "userId,amount,timestamp(초)" 형식의 문자열입니다.
+동일 userId + amount 조합이 60초 이내에 2회 이상 발생하면 중복으로 판단합니다.
+
+중복 결제로 판단된 userId 목록을 반환하세요. (중복 없이, 알파벳 순)`,
+    examples: [
+      {
+        input: `payments = ["user1,1000,100", "user1,1000,150", "user2,2000,200", "user1,1000,500"]`,
+        output: `["user1"]`,
+        explanation: 'user1이 100초와 150초에 같은 금액 1000원 결제 → 50초 차이로 중복. 500초는 100초 기준 400초 차이라 별도 판단.'
+      }
+    ],
+    constraints: ['1 ≤ payments.length ≤ 10,000', 'timestamp는 증가 순서로 입력됨', '같은 사용자의 동일 금액은 마지막 결제 시간 기준으로 갱신'],
+    hint: 'HashMap<String, Long> lastPayment = new HashMap<>() 에서 key를 "userId_amount"로 조합하세요.',
+    modelSolution: `import java.util.*;
+
+public class Solution {
+    public List<String> detectDuplicate(String[] payments) {
+        Map<String, Long> lastTime = new HashMap<>();
+        Set<String> duplicates = new HashSet<>();
+
+        for (String p : payments) {
+            String[] parts = p.split(",");
+            String userId = parts[0];
+            String amount = parts[1];
+            long timestamp = Long.parseLong(parts[2]);
+            String key = userId + "_" + amount;
+
+            if (lastTime.containsKey(key)) {
+                if (timestamp - lastTime.get(key) <= 60) {
+                    duplicates.add(userId);
+                }
+            }
+            lastTime.put(key, timestamp);
+        }
+
+        List<String> result = new ArrayList<>(duplicates);
+        Collections.sort(result);
+        return result;
+    }
+}`,
+  },
+  {
+    id: 'lc-003',
+    title: '괄호 유효성 검사',
+    difficulty: 'easy',
+    tags: ['스택', '문자열'],
+    description: `주어진 문자열이 올바른 괄호 조합인지 검사하세요.
+
+괄호 종류: '(', ')', '{', '}', '[', ']'
+
+규칙:
+- 열린 괄호는 반드시 같은 종류의 닫힌 괄호로 닫혀야 합니다.
+- 열린 괄호는 올바른 순서로 닫혀야 합니다.`,
+    examples: [
+      { input: 's = "()"', output: 'true' },
+      { input: 's = "()[]{}"', output: 'true' },
+      { input: 's = "(]"', output: 'false' },
+      { input: 's = "([)]"', output: 'false' },
+      { input: 's = "{[]}"', output: 'true' },
+    ],
+    constraints: ['1 ≤ s.length ≤ 10,000', 's는 괄호 문자만 포함'],
+    hint: 'Stack을 사용하세요. 열린 괄호는 push, 닫힌 괄호는 stack.peek()과 매칭 확인 후 pop.',
+    modelSolution: `import java.util.*;
+
+public class Solution {
+    public boolean isValid(String s) {
+        Deque<Character> stack = new ArrayDeque<>();
+        Map<Character, Character> map = Map.of(')', '(', '}', '{', ']', '[');
+
+        for (char c : s.toCharArray()) {
+            if (map.containsValue(c)) {
+                stack.push(c);
+            } else {
+                if (stack.isEmpty() || stack.peek() != map.get(c)) return false;
+                stack.pop();
+            }
+        }
+        return stack.isEmpty();
+    }
+}`,
+  },
+  {
+    id: 'lc-004',
+    title: '이상 거래 탐지 (슬라이딩 윈도우)',
+    difficulty: 'medium',
+    tags: ['슬라이딩 윈도우', '투포인터'],
+    description: `카카오페이 이상 거래 탐지 시스템을 구현합니다.
+
+연속된 k개의 거래 금액 합이 threshold를 초과하는 경우, 해당 구간의 시작 인덱스를 모두 반환하세요.
+
+int[] transactions, int k, int threshold 가 주어집니다.`,
+    examples: [
+      {
+        input: 'transactions = [100, 200, 300, 400, 500, 100], k = 3, threshold = 800',
+        output: '[1, 2, 3]',
+        explanation: '[200,300,400]=900>800, [300,400,500]=1200>800, [400,500,100]=1000>800'
+      },
+      {
+        input: 'transactions = [100, 100, 100], k = 2, threshold = 300',
+        output: '[]',
+        explanation: '모든 구간 합 ≤ 300'
+      }
+    ],
+    constraints: ['1 ≤ transactions.length ≤ 100,000', '1 ≤ k ≤ transactions.length', '각 거래 금액 > 0'],
+    hint: '첫 k개의 합을 구한 후, 슬라이딩 윈도우로 이전 첫 원소를 빼고 새 원소를 더하세요. O(n) 가능.',
+    modelSolution: `import java.util.*;
+
+public class Solution {
+    public List<Integer> detectAbnormal(int[] transactions, int k, int threshold) {
+        List<Integer> result = new ArrayList<>();
+        long windowSum = 0;
+
+        for (int i = 0; i < k; i++) windowSum += transactions[i];
+        if (windowSum > threshold) result.add(0);
+
+        for (int i = k; i < transactions.length; i++) {
+            windowSum += transactions[i] - transactions[i - k];
+            if (windowSum > threshold) result.add(i - k + 1);
+        }
+        return result;
+    }
+}`,
+  },
+  {
+    id: 'lc-005',
+    title: 'LRU 캐시 구현',
+    difficulty: 'hard',
+    tags: ['자료구조', 'LinkedHashMap'],
+    description: `LRU(Least Recently Used) 캐시를 구현하세요. 이 문제는 카카오 계열 면접에서 자주 출제됩니다.
+
+LRUCache 클래스를 구현합니다:
+- LRUCache(int capacity): 최대 용량으로 초기화
+- int get(int key): key가 존재하면 값 반환, 없으면 -1
+- void put(int key, int value): key-value 삽입. 용량 초과 시 가장 오래 사용되지 않은 항목 제거
+
+get과 put 모두 O(1) 평균 복잡도여야 합니다.`,
+    examples: [
+      {
+        input: `LRUCache cache = new LRUCache(2);
+cache.put(1, 1);   // cache: {1=1}
+cache.put(2, 2);   // cache: {1=1, 2=2}
+cache.get(1);      // return 1, cache: {2=2, 1=1}
+cache.put(3, 3);   // evict key 2, cache: {1=1, 3=3}
+cache.get(2);      // return -1 (not found)
+cache.get(3);      // return 3`,
+        output: '1, -1, 3',
+      }
+    ],
+    constraints: ['1 ≤ capacity ≤ 3000', '0 ≤ key, value ≤ 10,000', 'get/put 최대 100,000회 호출'],
+    hint: 'Java의 LinkedHashMap(capacity, 0.75f, true)을 활용하면 accessOrder=true로 LRU 동작을 구현할 수 있습니다. removeEldestEntry를 override하세요.',
+    modelSolution: `import java.util.*;
+
+public class LRUCache {
+    private final int capacity;
+    private final LinkedHashMap<Integer, Integer> cache;
+
+    public LRUCache(int capacity) {
+        this.capacity = capacity;
+        this.cache = new LinkedHashMap<>(capacity, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Integer, Integer> eldest) {
+                return size() > capacity;
+            }
+        };
+    }
+
+    public int get(int key) {
+        return cache.getOrDefault(key, -1);
+    }
+
+    public void put(int key, int value) {
+        cache.put(key, value);
+    }
+}`,
+  },
+  {
+    id: 'lc-006',
+    title: '문자열 압축',
+    difficulty: 'easy',
+    tags: ['문자열', '구현'],
+    description: `문자열을 런렝스 인코딩(RLE)으로 압축하세요.
+
+연속된 같은 문자가 있을 경우 "문자+개수" 형식으로 압축합니다.
+단, 개수가 1인 경우 숫자를 생략합니다.
+
+압축 결과가 원본보다 길다면 원본을 그대로 반환합니다.`,
+    examples: [
+      { input: 's = "aabcccdddd"', output: '"a2bc3d4"' },
+      { input: 's = "abcd"', output: '"abcd"', explanation: 'a1b1c1d1 = 8글자 > 4글자이므로 원본 반환' },
+      { input: 's = "aaabbbccc"', output: '"a3b3c3"' },
+      { input: 's = ""', output: '""' },
+    ],
+    constraints: ['0 ≤ s.length ≤ 10,000', 's는 소문자 알파벳만 포함'],
+    hint: 'StringBuilder를 사용하고, 현재 문자와 이전 문자를 비교하며 count를 관리하세요. 마지막 문자 처리를 잊지 마세요.',
+    modelSolution: `public class Solution {
+    public String compress(String s) {
+        if (s.isEmpty()) return s;
+
+        StringBuilder sb = new StringBuilder();
+        int count = 1;
+
+        for (int i = 1; i <= s.length(); i++) {
+            if (i < s.length() && s.charAt(i) == s.charAt(i - 1)) {
+                count++;
+            } else {
+                sb.append(s.charAt(i - 1));
+                if (count > 1) sb.append(count);
+                count = 1;
+            }
+        }
+
+        return sb.length() < s.length() ? sb.toString() : s;
+    }
+}`,
+  },
+  {
+    id: 'lc-007',
+    title: '결제 금액 상위 K개',
+    difficulty: 'medium',
+    tags: ['우선순위 큐', 'HashMap'],
+    description: `결제 내역에서 사용자별 총 결제 금액을 구하고, 상위 K명의 userId를 반환하세요.
+
+결제 내역은 "userId amount" 형식의 문자열 배열입니다.
+동일 금액이면 userId 알파벳 역순으로 정렬합니다.`,
+    examples: [
+      {
+        input: `transactions = ["alice 100", "bob 200", "alice 150", "charlie 300", "bob 50"], k = 2`,
+        output: `["charlie", "alice"]`,
+        explanation: 'charlie=300, alice=250, bob=250. alice와 bob 동점 시 알파벳 역순이므로 bob보다 alice가 앞.'
+      }
+    ],
+    constraints: ['1 ≤ transactions.length ≤ 100,000', '1 ≤ k ≤ 고유 userId 수'],
+    hint: 'HashMap으로 총합 계산 → PriorityQueue(최대 힙)로 상위 K개 추출. Comparator 설계 시 동점 처리 주의.',
+    modelSolution: `import java.util.*;
+
+public class Solution {
+    public List<String> topKSpenders(String[] transactions, int k) {
+        Map<String, Long> totals = new HashMap<>();
+        for (String t : transactions) {
+            String[] parts = t.split(" ");
+            totals.merge(parts[0], Long.parseLong(parts[1]), Long::sum);
+        }
+
+        PriorityQueue<Map.Entry<String, Long>> pq = new PriorityQueue<>((a, b) -> {
+            int cmp = Long.compare(b.getValue(), a.getValue());
+            return cmp != 0 ? cmp : b.getKey().compareTo(a.getKey()); // 동점: 역알파벳
+        });
+        pq.addAll(totals.entrySet());
+
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < k && !pq.isEmpty(); i++) result.add(pq.poll().getKey());
+        return result;
+    }
+}`,
+  },
+];

@@ -211,9 +211,15 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
   useEffect(() => {
     fetch(`/api/interview/sessions/${sessionId}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(data => { setSession(data.session); setMessages(data.messages ?? []); setLoading(false); })
+      .then(data => {
+        if (data.session?.category === 'live-coding') {
+          router.replace('/interview');
+          return;
+        }
+        setSession(data.session); setMessages(data.messages ?? []); setLoading(false);
+      })
       .catch(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
