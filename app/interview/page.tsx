@@ -14,6 +14,7 @@ interface InterviewSession {
   total_score: number | null;
   created_at: string;
   completed_at: string | null;
+  last_activity_at: string; // 마지막 답변 시각 (없으면 created_at)
 }
 
 export default async function InterviewPage() {
@@ -25,8 +26,13 @@ export default async function InterviewPage() {
 
   const db = getDb();
   const sessions = db.prepare(
-    `SELECT id, company, category, difficulty, status, total_score, created_at, completed_at
-     FROM interview_sessions ORDER BY created_at DESC LIMIT 30`
+    `SELECT s.id, s.company, s.category, s.difficulty, s.status, s.total_score, s.created_at, s.completed_at,
+            COALESCE(
+              (SELECT MAX(m.created_at) FROM interview_messages m WHERE m.session_id = s.id AND m.role = 'answer'),
+              s.created_at
+            ) AS last_activity_at
+     FROM interview_sessions s
+     ORDER BY last_activity_at DESC LIMIT 30`
   ).all() as InterviewSession[];
 
   return <InterviewHomeClient sessions={sessions} />;

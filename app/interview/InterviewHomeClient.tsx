@@ -259,6 +259,7 @@ interface InterviewSession {
   total_score: number | null;
   created_at: string;
   completed_at: string | null;
+  last_activity_at: string;
 }
 
 function scoreColor(score: number | null): string {
@@ -489,7 +490,7 @@ function SessionHistory({ sessions, onDelete }: { sessions: InterviewSession[]; 
                     <span className="text-[11px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded-full">{category?.name}</span>
                     <span className="text-[11px] text-zinc-400">{difficulty?.emoji} {difficulty?.name}</span>
                   </div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">{relativeTime(s.created_at, now)}</div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5">{relativeTime(s.last_activity_at ?? s.created_at, now)}</div>
                 </div>
                 <div className="shrink-0 text-right">
                   {isCompleted ? (
