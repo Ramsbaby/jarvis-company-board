@@ -295,6 +295,34 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
     await submitAnswer('잘 모르겠습니다. 답변 예시와 함께 설명해 주시면 감사하겠습니다.');
   }
 
+  // ── 베스트 답변 미리보기 ──
+  const [bestAnswer, setBestAnswer] = useState<{ answer: string; keyPoints: string[]; whyGood: string } | null>(null);
+  const [loadingBest, setLoadingBest] = useState(false);
+  const [showBest, setShowBest] = useState(false);
+
+  async function handleBestAnswer() {
+    if (!lastQuestion) return;
+    if (bestAnswer) { setShowBest(v => !v); return; }
+    setLoadingBest(true);
+    try {
+      const res = await fetch('/api/interview/best-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          question: lastQuestion.content,
+          company: session?.company,
+          category: session?.category,
+        }),
+      });
+      const data = await res.json();
+      setBestAnswer(data);
+      setShowBest(true);
+    } finally {
+      setLoadingBest(false);
+    }
+  }
+
   async function handleEnd() {
     const scores = messages.filter(m => m.role === 'feedback' && m.score != null).map(m => m.score as number);
     const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
@@ -409,6 +437,32 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
 
       {session?.status !== 'completed' && !microComplete && (
         <div className="sticky bottom-0 bg-white border-t border-zinc-200">
+          {/* ── 베스트 답변 패널 ── */}
+          {showBest && bestAnswer && (
+            <div className="max-w-3xl mx-auto px-4 pt-3">
+              <div className="bg-indigo-950 border border-indigo-700 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black text-indigo-300 uppercase tracking-wider">🏆 베스트 답변 — 면접관 감탄 수준</p>
+                  <button onClick={() => setShowBest(false)} className="text-indigo-500 hover:text-indigo-300 text-xs">✕ 닫기</button>
+                </div>
+                <p className="text-xs text-indigo-100 leading-relaxed whitespace-pre-wrap">{bestAnswer.answer}</p>
+                {bestAnswer.keyPoints.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">핵심 포인트</p>
+                    {bestAnswer.keyPoints.map((kp, i) => (
+                      <p key={i} className="text-xs text-indigo-200 flex gap-2">
+                        <span className="text-indigo-500 shrink-0 font-bold">{i + 1}.</span>{kp}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {bestAnswer.whyGood && (
+                  <p className="text-[11px] text-indigo-400 border-t border-indigo-800 pt-2">💡 {bestAnswer.whyGood}</p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="max-w-3xl mx-auto px-4 py-3">
             <div className="flex gap-2 items-end">
               <textarea
@@ -426,6 +480,16 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                   {streaming ? '...' : '제출'}
                 </button>
                 <button
+                  onClick={handleBestAnswer}
+                  disabled={loadingBest || streaming}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 transition-colors whitespace-nowrap ${
+                    showBest ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'
+                  }`}
+                  title="이 질문의 베스트 답변 보기"
+                >
+                  {loadingBest ? '...' : '🏆 베스트'}
+                </button>
+                <button
                   onClick={handleDontKnow}
                   disabled={streaming}
                   className="px-3 py-2 rounded-xl bg-zinc-100 text-zinc-600 text-xs font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors whitespace-nowrap"
@@ -435,7 +499,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
               </div>
             </div>
             <div className="flex items-center justify-between mt-1">
-              <p className="text-[11px] text-zinc-400">Cmd+Enter로 빠르게 제출</p>
+              <p className="text-[11px] text-zinc-400">Cmd+Enter 제출 · 🏆 베스트로 모범 답안 확인</p>
               <div className="flex items-center gap-2">
                 {charWarning ? (
                   <span className="text-[11px] text-orange-500 font-semibold">너무 짧습니다 — 구체적으로 답변하세요</span>
