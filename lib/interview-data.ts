@@ -221,7 +221,7 @@ export function getFeedbackSystemPrompt(companyId: string, categoryId: string, d
   "score": 50,
   "strengths": ["잘한 점을 구체적으로"],
   "weaknesses": ["부족한 점을 구체적으로"],
-  "better_answer": "이렇게 답했으면 더 좋았을 구체적인 예시 답변 (3~5문장)",
+  "better_answer": "면접관 앞에서 실제로 말하듯 자연스러운 구어체 한국어로 작성한 모범 예시 답변 (3~5문장 산문. 불릿·번호 목록 금지)",
   "missing_keywords": ["언급 안 한 핵심 키워드1", "키워드2"],
   "next_question": "점수가 70 미만이면 weaknesses[0]를 집중 공략하는 압박 후속 질문(예: '방금 [약점]을 언급하셨는데 구체적으로 어떻게 해결하셨나요?'). 70 이상이면 연관 심화 주제 확장 질문. senior 난이도는 항상 압박 스타일.",
   "contradiction": "이전 Q1에서 Saga Choreography를 선택했는데 이번 답변에서 Orchestration이 더 낫다고 했습니다" 또는 null

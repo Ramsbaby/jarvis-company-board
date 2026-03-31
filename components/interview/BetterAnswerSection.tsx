@@ -1,16 +1,7 @@
 'use client';
 import { useState } from 'react';
 
-/** better_answer 텍스트를 번호형 팁 배열로 분해 */
-export function parseTips(text: string): string[] {
-  const sentences = text
-    .split(/(?<=[.!?])\s+|\n+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 10);
-  return sentences.length >= 2 ? sentences : [text];
-}
-
-/** 점수 구간별 모범 답안 표시 — 항상 접힘, 클릭 시 번호형 팁 펼침 */
+/** 점수 구간별 모범 답안 표시 — 항상 접힘, 클릭 시 구어체 단락으로 펼침 */
 export function BetterAnswerSection({
   betterAnswer,
   score,
@@ -21,33 +12,35 @@ export function BetterAnswerSection({
   missingKeywords?: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const tips = parseTips(betterAnswer);
 
   const config = score < 60
     ? {
         label: '📖 모범 답안',
         sublabel: '이렇게 답했어야 합니다',
-        btnText: open ? '접기 ▲' : `모범 답안 보기 (${tips.length}가지 팁) ▼`,
+        btnText: open ? '접기 ▲' : '모범 답안 보기 ▼',
         containerCls: 'bg-red-50 border border-red-200 rounded-xl p-3',
         headerCls: 'text-red-700',
-        tipNumCls: 'bg-red-500 text-white',
+        badgeCls: 'bg-red-100 text-red-700 border border-red-300',
+        proseCls: 'text-red-900',
       }
     : score < 80
     ? {
         label: '💡 모범 답안',
         sublabel: '펼쳐서 확인하세요',
-        btnText: open ? '접기 ▲' : `모범 답안 보기 (${tips.length}가지 팁) ▼`,
+        btnText: open ? '접기 ▲' : '모범 답안 보기 ▼',
         containerCls: 'bg-amber-50 border border-amber-200 rounded-xl p-3',
         headerCls: 'text-amber-700',
-        tipNumCls: 'bg-amber-500 text-white',
+        badgeCls: 'bg-amber-100 text-amber-700 border border-amber-300',
+        proseCls: 'text-amber-900',
       }
     : {
         label: '✨ 더 발전시키려면',
         sublabel: '추가 심화 포인트',
-        btnText: open ? '접기 ▲' : '심화 팁 보기 ▼',
+        btnText: open ? '접기 ▲' : '심화 답안 보기 ▼',
         containerCls: 'bg-indigo-50 border border-indigo-100 rounded-xl p-3',
         headerCls: 'text-indigo-700',
-        tipNumCls: 'bg-indigo-500 text-white',
+        badgeCls: 'bg-indigo-100 text-indigo-700 border border-indigo-300',
+        proseCls: 'text-indigo-900',
       };
 
   return (
@@ -65,19 +58,25 @@ export function BetterAnswerSection({
         </button>
       </div>
       {open && (
-        <ol className="space-y-2 mt-2">
-          {tips.map((tip, i) => {
-            const highlighted = missingKeywords.some(kw => tip.includes(kw));
-            return (
-              <li key={i} className={`flex gap-2 items-start text-xs text-zinc-800 leading-relaxed ${highlighted ? 'font-medium' : ''}`}>
-                <span className={`shrink-0 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center mt-0.5 ${config.tipNumCls}`}>
-                  {i + 1}
-                </span>
-                <span>{tip}</span>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="mt-2 space-y-2">
+          {/* 구어체 답변 단락 */}
+          <p className={`text-xs leading-relaxed whitespace-pre-wrap ${config.proseCls}`}>
+            {betterAnswer}
+          </p>
+          {/* 내 답변에서 빠진 키워드 뱃지 */}
+          {missingKeywords.length > 0 && (
+            <div className="pt-1 border-t border-current border-opacity-10">
+              <span className="text-[10px] text-zinc-400 mr-1">놓친 키워드</span>
+              <span className="flex flex-wrap gap-1 mt-1">
+                {missingKeywords.map((kw, i) => (
+                  <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${config.badgeCls}`}>
+                    {kw}
+                  </span>
+                ))}
+              </span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

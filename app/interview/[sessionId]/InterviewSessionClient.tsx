@@ -481,13 +481,15 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                 </div>
                 <p className="text-xs text-indigo-100 leading-relaxed whitespace-pre-wrap">{bestAnswer.answer}</p>
                 {bestAnswer.keyPoints.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">핵심 포인트</p>
-                    {bestAnswer.keyPoints.map((kp, i) => (
-                      <p key={i} className="text-xs text-indigo-200 flex gap-2">
-                        <span className="text-indigo-500 shrink-0 font-bold">{i + 1}.</span>{kp}
-                      </p>
-                    ))}
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">핵심 키워드</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {bestAnswer.keyPoints.map((kp, i) => (
+                        <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-600">
+                          {kp}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {bestAnswer.whyGood && (
