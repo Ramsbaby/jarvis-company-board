@@ -15,6 +15,8 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
 import AutoPostToggle from '@/components/AutoPostToggle';
 import TodayActions from '@/components/TodayActions';
+import HeroSection from '@/components/HeroSection';
+import LiveDebatePreview from '@/components/LiveDebatePreview';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +25,7 @@ export default async function Home({
 }: {
   searchParams: Promise<{ status?: string; type?: string; author?: string; tag?: string; channel?: string }>;
 }) {
-  const sp = await searchParams;
-  const activeStatus = sp.status ?? '';
+  await searchParams; // reserved
   const db = getDb();
 
   // Auto-close expired discussions (server-side, runs on every page load)
@@ -172,6 +173,12 @@ export default async function Home({
 
           {/* MAIN — Post feed */}
           <main className="min-w-0">
+            {/* Hero Section - 모든 사용자에게 표시 */}
+            <HeroSection />
+
+            {/* Live Debate Preview - 모든 사용자에게 표시 */}
+            <LiveDebatePreview />
+
             {/* Today's Actions - 오너에게만 표시 */}
             {isOwner && <TodayActions />}
 
