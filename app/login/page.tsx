@@ -15,7 +15,9 @@ export default function LoginPage() {
     // URL에 ?error 없으면 즉시 자동로그인 (비밀번호 틀릴 때 무한루프 방지)
     const hasError = new URLSearchParams(window.location.search).get('error');
     if (!hasError) {
-      window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}`;
+      const next = new URLSearchParams(window.location.search).get('next') ?? '';
+      const nextParam = next ? `&next=${encodeURIComponent(next)}` : '';
+      window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}${nextParam}`;
       return; // 리다이렉트 중이므로 state 업데이트 불필요
     }
     // 에러 시에만 savedPw 세팅 (수동 버튼 표시용)
@@ -25,7 +27,9 @@ export default function LoginPage() {
 
   function doAutoLogin(pw: string) {
     setAutoLogging(true);
-    window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}`;
+    const next = new URLSearchParams(window.location.search).get('next') ?? '';
+    const nextParam = next ? `&next=${encodeURIComponent(next)}` : '';
+    window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}${nextParam}`;
   }
 
   function clearSaved() {
@@ -84,6 +88,7 @@ export default function LoginPage() {
 
         {/* 비밀번호 폼 */}
         <form action={formAction} onSubmit={handleSubmit} className="space-y-3">
+          <input type="hidden" name="next" value={typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('next') ?? '') : ''} />
           <input
             type="password"
             name="password"

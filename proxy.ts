@@ -136,8 +136,10 @@ export async function proxy(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Redirect to login — preserve original URL as ?next= for post-login redirect
   const loginUrl = req.nextUrl.clone();
   loginUrl.pathname = '/login';
+  loginUrl.searchParams.set('next', pathname);
   return NextResponse.redirect(loginUrl);
 }
 
