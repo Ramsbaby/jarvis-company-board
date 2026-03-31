@@ -91,13 +91,23 @@ function ScoreGauge({ score }: { score: number }) {
       />
       {/* Fill */}
       {score > 0 && (
-        <path
-          d={`M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 ${largeArc} 1 ${fillEnd.x} ${fillEnd.y}`}
-          fill="none"
-          stroke={gaugeColor}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
+        score >= 100 ? (
+          <path
+            d={`M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 1 1 ${trackEnd.x - 0.001} ${trackEnd.y}`}
+            fill="none"
+            stroke={gaugeColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+          />
+        ) : (
+          <path
+            d={`M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 ${largeArc} 1 ${fillEnd.x} ${fillEnd.y}`}
+            fill="none"
+            stroke={gaugeColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+          />
+        )
       )}
       {/* Score text */}
       <text
@@ -144,7 +154,11 @@ export default function ReportClient({
     if (!result.ok) return;
     const fullUrl = `${window.location.origin}${result.data.url}`;
     setShareUrl(fullUrl);
-    await navigator.clipboard.writeText(fullUrl).catch(() => {});
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+    } catch {
+      window.prompt('URL을 직접 복사하세요:', fullUrl);
+    }
     setCopying(true);
     setTimeout(() => setCopying(false), 2000);
   };
@@ -154,6 +168,7 @@ export default function ReportClient({
   const difficulty = DIFFICULTIES.find(d => d.id === session.difficulty);
 
   const feedbacks = messages.filter(m => m.role === 'feedback');
+  const answers = messages.filter(m => m.role === 'answer');
   const questions = messages.filter(m => m.role === 'question');
   const scores = feedbacks.map(f => f.score).filter((s): s is number => s != null);
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
@@ -182,8 +197,9 @@ export default function ReportClient({
   }
 
   // Q&A 페어링 (question[i] + answer[i] + feedback[i])
-  const pairs: Array<{ q: Message; f: Message | null; idx: number }> = questions.map((q, i) => ({
+  const pairs: Array<{ q: Message; a: Message | null; f: Message | null; idx: number }> = questions.map((q, i) => ({
     q,
+    a: answers[i] ?? null,
     f: feedbacks[i] ?? null,
     idx: i + 1,
   }));
@@ -351,7 +367,7 @@ export default function ReportClient({
           {/* Q&A 타임라인 */}
           <div className="space-y-3">
             <p className="text-sm font-bold text-zinc-700">📝 문제별 점수</p>
-            {pairs.map(({ q, f, idx }) => (
+            {pairs.map(({ q, a, f, idx }) => (
               <div key={q.id} className={`border rounded-xl p-4 space-y-2 ${scoreBg(f?.score ?? null)}`}>
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-[11px] font-semibold text-zinc-500">Q{idx}</p>
@@ -360,6 +376,12 @@ export default function ReportClient({
                   )}
                 </div>
                 <p className="text-xs text-zinc-700 leading-relaxed line-clamp-3">{q.content}</p>
+                {a && (
+                  <div className="bg-white rounded-lg p-2.5 border border-zinc-200">
+                    <p className="text-[10px] font-semibold text-zinc-400 mb-1">내 답변</p>
+                    <p className="text-xs text-zinc-700 leading-relaxed line-clamp-4 whitespace-pre-wrap">{a.content}</p>
+                  </div>
+                )}
                 {f?.better_answer && (
                   <BetterAnswerSection
                     betterAnswer={f.better_answer}

@@ -273,6 +273,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
   const lastQuestionId = lastQuestion?.id;
 
   useEffect(() => {
+    if (!lastQuestionId) return;
     setElapsedSecs(0);
     // Bug 1 fix: 질문 변경 시 베스트 답변 캐시 초기화
     setBestAnswer(null);
@@ -410,6 +411,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
 
   const charCount = answer.length;
   const charWarning = charCount > 0 && charCount < 50;
+  const charTooShort = charCount > 0 && charCount < 20;
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-zinc-400 text-sm">로딩 중...</div>;
 
@@ -531,7 +533,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                   <p className="text-xs font-black text-indigo-300 uppercase tracking-wider">🏆 베스트 답변 — 면접관 감탄 수준</p>
                   <button onClick={() => setShowBest(false)} className="text-indigo-500 hover:text-indigo-300 text-xs">✕ 닫기</button>
                 </div>
-                <p className="text-xs text-indigo-100 leading-relaxed whitespace-pre-wrap">{bestAnswer.answer}</p>
+                <p className="text-xs text-indigo-100 leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto">{bestAnswer.answer}</p>
                 {bestAnswer.keyPoints.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">핵심 키워드</p>
@@ -563,7 +565,7 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
                 rows={4}
               />
               <div className="flex flex-col gap-2 shrink-0">
-                <button onClick={handleSubmit} disabled={!answer.trim() || streaming}
+                <button onClick={handleSubmit} disabled={!answer.trim() || streaming || charTooShort}
                   className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors">
                   {streaming ? '...' : '제출'}
                 </button>

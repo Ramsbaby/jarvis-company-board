@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { COMPANIES, CATEGORIES, DIFFICULTIES } from '@/lib/interview-data';
 import { apiFetch } from '@/lib/api-fetch';
@@ -119,6 +119,7 @@ interface TodayRecommendProps {
 
 function TodayRecommendCard({ onStart, loading }: TodayRecommendProps) {
   const [rec, setRec] = useState<{ keyword: string; category: string; count: number; severity: string } | null>(null);
+  const [recLoading, setRecLoading] = useState(true);
 
   useEffect(() => {
     apiFetch<WeaknessReport>('/api/interview/weakness-report?company=kakaopay&limit=20')
@@ -133,10 +134,20 @@ function TodayRecommendCard({ onStart, loading }: TodayRecommendProps) {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setRecLoading(false));
   }, []);
 
-  if (!rec) return null;
+  if (!rec) {
+    if (!recLoading) return null;
+    return (
+      <div className="rounded-2xl p-5 space-y-3 border-2 border-zinc-100 bg-white animate-pulse">
+        <div className="h-3 bg-zinc-100 rounded w-1/3" />
+        <div className="h-5 bg-zinc-100 rounded w-2/3 mt-2" />
+        <div className="h-9 bg-zinc-100 rounded-xl mt-3" />
+      </div>
+    );
+  }
 
   const catInfo = CATEGORIES.find(c => c.id === rec.category);
 
@@ -402,10 +413,10 @@ function ScoreHistoryChart({ sessions, onNavigate }: { sessions: InterviewSessio
       <h2 className="text-sm font-bold text-zinc-700">📈 점수 추이 (최근 {recentSessions.length}회)</h2>
       <div className="bg-white border border-zinc-200 rounded-xl p-4 overflow-x-auto">
         <svg width={svgWidth} height={chartHeight + 30} className="block">
-          {/* 70점 기준선 */}
+          {/* 75점 기준선 */}
           <line
-            x1={0} y1={(1 - 70 / maxScore) * chartHeight}
-            x2={svgWidth} y2={(1 - 70 / maxScore) * chartHeight}
+            x1={0} y1={(1 - 75 / maxScore) * chartHeight}
+            x2={svgWidth} y2={(1 - 75 / maxScore) * chartHeight}
             stroke="#fbbf24" strokeDasharray="4,4" strokeWidth={1}
           />
           {recentSessions.map((s, i) => {
@@ -429,7 +440,7 @@ function ScoreHistoryChart({ sessions, onNavigate }: { sessions: InterviewSessio
             );
           })}
         </svg>
-        <p className="text-[10px] text-amber-500 mt-1">— 70점 기준선</p>
+        <p className="text-[10px] text-amber-500 mt-1">— 75점 기준선</p>
       </div>
     </div>
   );
@@ -560,15 +571,29 @@ function SectionDivider({ label, action }: { label: string; action?: React.React
 
 export default function InterviewHomeClient({ sessions: initialSessions }: { sessions: InterviewSession[] }) {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [company, setCompany] = useState('');
-  const [category, setCategory] = useState('');
-  const [difficulty, setDifficulty] = useState('mid');
+  const searchParams = useSearchParams();
+  const [step, setStep] = useState<1 | 2 | 3>(() => {
+    const c = searchParams?.get('company');
+    const cat = searchParams?.get('category');
+    if (c && cat) return 3;
+    if (c) return 2;
+    return 1;
+  });
+  const [company, setCompany] = useState(() => searchParams?.get('company') ?? '');
+  const [category, setCategory] = useState(() => searchParams?.get('category') ?? '');
+  const [difficulty, setDifficulty] = useState(() => searchParams?.get('difficulty') ?? 'mid');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showCustom, setShowCustom] = useState(false);
+  const [showCustom, setShowCustom] = useState(() => !!(searchParams?.get('company')));
   // 삭제 후 즉시 UI 반영을 위한 로컬 세션 상태
   const [sessions, setSessions] = useState<InterviewSession[]>(initialSessions);
+
+  const primaryCompany = useMemo(() => {
+    if (sessions.length === 0) return 'kakaopay';
+    const counts: Record<string, number> = {};
+    sessions.forEach(s => { counts[s.company] = (counts[s.company] ?? 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'kakaopay';
+  }, [sessions]);
 
   function handleDeleteSession(id: string) {
     setSessions(prev => prev.filter(s => s.id !== id));
@@ -639,13 +664,19 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
 
             <button
               onClick={async () => {
-                const res = await fetch('/api/interview/live-coding', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({}),
-                });
-                const data = await res.json() as { sessionId: string };
-                router.push(`/interview/live-coding/${data.sessionId}`);
+                setLoading(true);
+                try {
+                  const result = await apiFetch<{ sessionId: string }>('/api/interview/live-coding', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                  });
+                  if (!result.ok) throw new Error(result.message);
+                  router.push(`/interview/live-coding/${result.data.sessionId}`);
+                } catch {
+                  setError('라이브코딩 세션 생성 실패. 다시 시도해 주세요.');
+                  setLoading(false);
+                }
               }}
               disabled={loading}
               className="flex flex-col gap-3 px-4 py-4 rounded-2xl border-2 border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 disabled:opacity-50 transition-all text-left"
@@ -808,13 +839,13 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
         <section className="space-y-4">
           <SectionDivider label="내 성과" />
           <ScoreHistoryChart sessions={sessions} onNavigate={(id) => router.push(`/interview/${id}/report`)} />
-          <WeaknessWidget company="kakaopay" />
+          <WeaknessWidget company={primaryCompany} />
         </section>
 
         {/* ═══════════════ 심층 분석 ═══════════════ */}
         <section className="space-y-4">
           <SectionDivider label="심층 분석" />
-          <TendencyWidget company="kakaopay" />
+          <TendencyWidget company={primaryCompany} />
         </section>
 
         {/* ═══════════════ 면접 이력 ═══════════════ */}
