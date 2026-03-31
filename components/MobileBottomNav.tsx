@@ -35,11 +35,11 @@ function MobileBottomNavInner({ isOwner }: { isOwner: boolean }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [moreOpen]);
 
-  // 탭 구성: 오너/게스트 공통 4개 + 더보기
+  // 탭 구성: 오너/게스트 공통 + 더보기
   const tabs = [
     { href: '/',              label: '홈',     icon: '🏠' },
     { href: '/?status=open',  label: '토론중', icon: '💬' },
-    { href: '/dev-tasks',     label: '태스크', icon: '⚙' },
+    ...(isOwner ? [{ href: '/dev-tasks', label: '태스크', icon: '⚙' }] : []),
     { href: '/leaderboard',   label: '순위',   icon: '🏆' },
   ];
 

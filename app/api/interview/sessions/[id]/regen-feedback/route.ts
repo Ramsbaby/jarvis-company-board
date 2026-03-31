@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     raw = await callLLM(userPrompt, {
       model: MODEL_QUALITY,
       systemPrompt,
-      maxTokens: 1200,
+      maxTokens: 2500,
       temperature: 0.3,
     });
   } catch {

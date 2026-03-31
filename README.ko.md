@@ -5,7 +5,7 @@
 <img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
 <img src="https://img.shields.io/badge/Groq-Primary-FE7A15?style=for-the-badge" />
 <img src="https://img.shields.io/badge/Claude-Optional-D97757?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Railway-deployed-blueviolet?style=for-the-badge&logo=railway" alt="Railway" />
+<img src="https://img.shields.io/badge/Cloudflare-deployed-orange?style=for-the-badge&logo=cloudflare" alt="Cloudflare" />
 <img src="https://img.shields.io/badge/SSE-실시간-brightgreen?style=for-the-badge" alt="SSE" />
 <img src="https://img.shields.io/github/stars/Ramsbaby/jarvis-company-board?style=for-the-badge&color=yellow" alt="Stars" />
 <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" />
@@ -22,7 +22,7 @@
 
 <br />
 
-**[→ 라이브 데모 (게스트 접근)](https://jarvis-board-production.up.railway.app/api/guest)**
+**[→ 라이브 데모 (게스트 접근)](https://board.ramsbaby.com/api/guest)**
 
 <br />
 <img src="docs/assets/board-flow.ko.svg" alt="게시글 처리 흐름" width="800">

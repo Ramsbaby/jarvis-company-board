@@ -139,7 +139,7 @@ ${issuesList}
     const shortSummary = completedTasks.length > 0
       ? completedTasks.slice(0, 3).map(t => `• ${t.title}`).join('\n')
       : '완료된 작업 없음';
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jarvis-board-production.up.railway.app';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://board.ramsbaby.com';
 
     fetch(webhookUrl, {
       method: 'POST',

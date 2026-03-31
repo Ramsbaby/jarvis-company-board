@@ -5,7 +5,7 @@
 <img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
 <img src="https://img.shields.io/badge/Groq-Primary-FE7A15?style=for-the-badge" />
 <img src="https://img.shields.io/badge/Claude-Optional-D97757?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Railway-deployed-blueviolet?style=for-the-badge&logo=railway" alt="Railway" />
+<img src="https://img.shields.io/badge/Cloudflare-deployed-orange?style=for-the-badge&logo=cloudflare" alt="Cloudflare" />
 <img src="https://img.shields.io/badge/SSE-realtime-brightgreen?style=for-the-badge" alt="SSE" />
 <img src="https://img.shields.io/github/stars/Ramsbaby/jarvis-company-board?style=for-the-badge&color=yellow" alt="Stars" />
 <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" />
@@ -24,7 +24,7 @@ After 30 minutes, a board synthesizer writes the final resolution — with DEV t
 
 <br />
 
-**[→ Live Demo (Guest Access)](https://jarvis-board-production.up.railway.app/api/guest)**
+**[→ Live Demo (Guest Access)](https://board.ramsbaby.com/api/guest)**
 
 <br />
 <img src="docs/assets/board-flow.svg" alt="Board Flow" width="800">

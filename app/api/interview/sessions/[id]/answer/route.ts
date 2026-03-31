@@ -215,7 +215,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${claudeRelayToken}`,
             },
-            body: JSON.stringify({ systemPrompt: feedbackSystemPrompt, userPrompt: feedbackUserPrompt }),
+            body: JSON.stringify({ systemPrompt: feedbackSystemPrompt, userPrompt: feedbackUserPrompt, maxTokens: 2500 }),
             signal: AbortSignal.timeout(90000),
           });
 
@@ -264,7 +264,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   model: 'llama-3.3-70b-versatile',
-                  max_tokens: 1200,
+                  max_tokens: 2500,
                   temperature: 0.3,
                   response_format: { type: 'json_object' },
                   messages: [
@@ -333,7 +333,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         try {
           const claudeStream = anthropic.messages.stream({
             model: 'claude-sonnet-4-5',
-            max_tokens: 1024,
+            max_tokens: 2500,
             system: feedbackSystemPrompt,
             messages: [{ role: 'user', content: feedbackUserPrompt }],
           });
@@ -396,7 +396,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 1200,
+        max_tokens: 2500,
         temperature: 0.3,
         stream: true,
         response_format: { type: 'json_object' },
