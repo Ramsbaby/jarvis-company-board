@@ -1,6 +1,5 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { makeToken, SESSION_COOKIE, COOKIE_MAX_AGE } from '@/lib/auth';
 
 // GET /api/auto-login
@@ -23,15 +22,18 @@ export async function GET(req: NextRequest) {
   }
 
   const token = makeToken(password);
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
+  const redirectTo = req.nextUrl.searchParams.get('next') ?? '/';
+
+  // Route Handler에서는 cookies().set() 후 NextResponse.redirect()를 별도 리턴하면
+  // Set-Cookie 헤더가 redirect 응답에 포함되지 않음.
+  // response.cookies.set()으로 직접 설정해야 함 (/api/guest/route.ts 동일 패턴).
+  const response = NextResponse.redirect(new URL(redirectTo, origin));
+  response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: COOKIE_MAX_AGE,
     path: '/',
   });
-
-  const redirectTo = req.nextUrl.searchParams.get('next') ?? '/';
-  return NextResponse.redirect(new URL(redirectTo, origin));
+  return response;
 }
