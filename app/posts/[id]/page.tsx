@@ -24,6 +24,7 @@ import DevTaskTimeline from '@/components/DevTaskTimeline';
 import PeerVotePanel from '@/components/sidebar/PeerVotePanel';
 import ForceCloseButton from '@/components/ForceCloseButton';
 import ExtendDiscussionButton from '@/components/ExtendDiscussionButton';
+import DecisionTracker from '@/components/DecisionTracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -198,6 +199,14 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
       </header>
+
+      {post.type === 'urgent' && post.status !== 'resolved' && (
+        <div className="bg-red-600 px-4 py-2.5 flex items-center justify-center gap-2.5">
+          <span className="text-white text-base animate-bounce">⚡</span>
+          <span className="text-white font-bold text-sm">긴급 패스트트랙 활성화</span>
+          <span className="text-red-200 text-xs font-medium">— 처리 속도 5배 적용 중 · 토론 윈도우 10분</span>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-5 items-start">
@@ -409,6 +418,8 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {comments.length > 0 && (
                 <DiscussionTimeline comments={renderComments} postId={id} />
               )}
+              {/* 결의안 실행 추적 */}
+              <DecisionTracker postId={id} />
               {/* 인사고과 결과 — 마감된 토론은 메인에 시상식으로 표시, 활성 토론에서만 사이드바 유지 */}
               {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />

@@ -687,6 +687,11 @@ export default function PostComments({
                 ⭐ 베스트
               </span>
             )}
+            {c.comment_type === 'round3' && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-orange-50 border border-orange-300 text-orange-700 text-[10px] font-semibold">
+                🔄 R3
+              </span>
+            )}
             <span className="text-gray-400 text-xs">{timeAgo(c.created_at)}</span>
           </div>
 
@@ -1075,17 +1080,30 @@ export default function PostComments({
           {viewTab === 'ai' ? '🤖 AI 의견이 없습니다' : '👤 팀원 의견이 없습니다'}
         </div>
       )}
-      {rootComments.map((c) => (
-        <div key={c.id}>
-          {renderComment(c, false)}
-          {/* Replies — visually nested 1 level deep */}
-          {(replyMap[c.id] ?? []).length > 0 && (
-            <div className="ml-6 border-l-2 border-zinc-100 pl-3 space-y-2 mt-1">
-              {(replyMap[c.id] ?? []).map((reply) => renderComment(reply, true))}
-            </div>
-          )}
-        </div>
-      ))}
+      {rootComments.map((c, idx) => {
+        const isFirstRound3 = c.comment_type === 'round3' &&
+          (idx === 0 || rootComments[idx - 1]?.comment_type !== 'round3');
+        return (
+          <div key={c.id}>
+            {isFirstRound3 && (
+              <div className="flex items-center gap-3 my-5 text-xs">
+                <div className="flex-1 border-t-2 border-orange-200" />
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-300 text-orange-700 font-semibold">
+                  🔄 라운드 3 — 집중 토론
+                </span>
+                <div className="flex-1 border-t-2 border-orange-200" />
+              </div>
+            )}
+            {renderComment(c, false)}
+            {/* Replies — visually nested 1 level deep */}
+            {(replyMap[c.id] ?? []).length > 0 && (
+              <div className="ml-6 border-l-2 border-zinc-100 pl-3 space-y-2 mt-1">
+                {(replyMap[c.id] ?? []).map((reply) => renderComment(reply, true))}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {/* #21 Typing indicators */}
       {typingAgents.length > 0 && (

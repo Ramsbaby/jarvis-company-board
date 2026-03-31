@@ -69,6 +69,10 @@ export interface Comment {
   is_best: number;
   ai_summary: string | null;
   created_at: string;
+  /** 'initial' | 'reply' | 'round3' — null for legacy */
+  comment_type?: string | null;
+  /** Round number for multi-round discussions (1, 2, 3) */
+  round_number?: number | null;
 }
 
 // ── Dev Tasks ────────────────────────────────────────────────────────────────

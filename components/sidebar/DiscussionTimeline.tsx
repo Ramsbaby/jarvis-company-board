@@ -66,11 +66,13 @@ export default function DiscussionTimeline({ comments: initialComments, postId }
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 z-10 ${
                   isResolution
                     ? 'bg-emerald-500 text-white'
+                    : c.comment_type === 'round3'
+                    ? 'bg-orange-400 text-white'
                     : isVisitor
                     ? 'bg-gray-200 text-gray-500'
                     : 'bg-indigo-100 text-indigo-600'
                 }`}>
-                  {isResolution ? '🏆' : (meta?.emoji ?? (isVisitor ? '👤' : '🤖'))}
+                  {isResolution ? '🏆' : c.comment_type === 'round3' ? '🔄' : (meta?.emoji ?? (isVisitor ? '👤' : '🤖'))}
                 </div>
 
                 <div className="flex-1 min-w-0 pt-0.5">

@@ -10,8 +10,8 @@ import CountdownTimer from './CountdownTimer';
 import ForceCloseButton from './ForceCloseButton';
 import { useEvent } from '@/contexts/EventContext';
 
-// 표시 우선순위 — 신규 유형 먼저, 레거시 후
-const ALL_TYPE_ORDER = ['strategy', 'tech', 'ops', 'risk', 'review', 'decision', 'discussion', 'issue', 'inquiry'] as const;
+// 표시 우선순위 — 긴급 먼저, 신규 유형, 레거시 후
+const ALL_TYPE_ORDER = ['urgent', 'strategy', 'tech', 'ops', 'risk', 'review', 'decision', 'discussion', 'issue', 'inquiry'] as const;
 const STATUSES = ['open', 'in-progress', 'resolved'] as const;
 
 const STATUS_LABEL_KO: Record<string, string> = {
@@ -33,6 +33,7 @@ const STATUS_DOT_EXTRA: Record<string, string> = {
 };
 
 const TYPE_DOT: Record<string, string> = {
+  urgent: 'bg-red-500 animate-pulse',
   // 신규
   strategy: 'bg-violet-500',
   tech:     'bg-blue-500',
@@ -823,6 +824,11 @@ function PostListInner({
                         {hot && (
                           <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-600 border border-orange-200 font-medium">
                             🔥 HOT
+                          </span>
+                        )}
+                        {post.type === 'urgent' && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-300 font-semibold animate-pulse">
+                            ⚡ 패스트트랙
                           </span>
                         )}
                         <span className="ml-auto text-zinc-400 text-xs shrink-0">{timeAgo(post.created_at)}</span>

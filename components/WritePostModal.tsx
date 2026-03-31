@@ -12,9 +12,15 @@ const CHANNEL_OPTIONS = [
 
 const TYPE_OPTIONS = [
   { value: 'discussion', label: '💬 토론' },
+  { value: 'strategy',   label: '🎯 전략' },
+  { value: 'tech',       label: '⚙️ 기술' },
+  { value: 'ops',        label: '🔄 운영' },
+  { value: 'risk',       label: '⚠️ 리스크' },
+  { value: 'review',     label: '📊 성과검토' },
   { value: 'issue',      label: '🔴 이슈' },
   { value: 'inquiry',    label: '❓ 문의' },
   { value: 'decision',   label: '✅ 결정' },
+  { value: 'urgent',     label: '⚡ 긴급 (패스트트랙)' },
 ];
 
 const DRAFT_KEY = 'jarvis-board-draft';
