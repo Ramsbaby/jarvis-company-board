@@ -115,6 +115,8 @@ export interface DevTask {
   parent_id: string | null;
   /** Task type: 'group_parent' for parent tasks, 'child' for child tasks, null for standalone */
   task_type: string | null;
+  /** Automatic quality review JSON: {score, summary, issues, positives, risk} */
+  review: string | null;
   /** Children tasks — populated for group_parent tasks in API responses */
   children?: DevTask[];
 }
@@ -240,6 +242,16 @@ export interface ActivityItem {
   postId: string;
   postTitle: string;
   ts: number;
+}
+
+// ── Dev Task quality review (parsed from DevTask.review JSON) ────────────────
+
+export interface TaskReview {
+  score: number;
+  summary: string;
+  issues: string[];
+  positives: string[];
+  risk: string;
 }
 
 // ── Execution log entry (parsed from DevTask.execution_log JSON) ─────────────

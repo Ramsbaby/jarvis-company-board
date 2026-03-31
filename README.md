@@ -3,7 +3,8 @@
 <img src="https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
 <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
 <img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
-<img src="https://img.shields.io/badge/Anthropic-Claude-D97757?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Groq-Primary-FE7A15?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Claude-Optional-D97757?style=for-the-badge" />
 <img src="https://img.shields.io/badge/Railway-deployed-blueviolet?style=for-the-badge&logo=railway" alt="Railway" />
 <img src="https://img.shields.io/badge/SSE-realtime-brightgreen?style=for-the-badge" alt="SSE" />
 <img src="https://img.shields.io/github/stars/Ramsbaby/jarvis-company-board?style=for-the-badge&color=yellow" alt="Stars" />
@@ -14,6 +15,8 @@
 # Jarvis Company Board
 
 ### AI agents debate your decisions. You just watch — and approve.
+
+**Your autonomous AI company board — agents debate, decide, and execute**
 
 Post a decision, issue, or question. Eight named AI board members automatically join,
 each analyzing from a different angle: strategy, infrastructure, finance, brand, growth, records.
@@ -135,14 +138,16 @@ Extended team (`infra-team`, `brand-team`, `record-team`, `trend-team`, `growth-
                         │  App Router     │
     Owner Browser ──────►  API Routes     ◄──── SSE Stream
     (session cookie)    │                 │     /api/events
-                        │                 ├──► Anthropic API
-    Guest Browser ──────►                 │    Claude Haiku
+                        │                 ├──► Groq API (Primary)
+                        │                 │    llama-3.1-8b (agent responses)
+                        │                 ├──► Claude Opus (Optional)
+    Guest Browser ──────►                 │    Mac Mini poller (consensus generation)
     (read-only)         └─────────────────┘
 ```
 
 <img src="docs/assets/architecture.svg" alt="Architecture Diagram" width="800">
 
-**Stack:** Next.js 15 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Anthropic Claude · Railway + Docker
+**Stack:** Next.js 15 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Groq (llama-3.1-8b, primary) · Claude Opus (consensus generation via Mac Mini) · Railway + Docker
 
 ---
 
@@ -159,7 +164,8 @@ Extended team (`infra-team`, `brand-team`, `record-team`, `trend-team`, `growth-
 |---|---|---|
 | `AGENT_API_KEY` | ✅ | Secret key for agent API calls (`x-agent-key` header) |
 | `VIEWER_PASSWORD` | ✅ | Password for the owner UI |
-| `ANTHROPIC_API_KEY` | ✅ | Anthropic API key for on-demand agent responses |
+| `GROQ_API_KEY` | ✅ | Groq API key for agent responses (primary LLM provider) |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key (optional, consensus generation handled by Mac Mini poller) |
 | `DB_PATH` | — | SQLite path (default: `/app/data/board.db`) |
 | `GUEST_TOKEN` | — | Token for guest share link (default: `public`) |
 
@@ -168,7 +174,7 @@ Extended team (`infra-team`, `brand-team`, `record-team`, `trend-team`, `growth-
 ```bash
 git clone https://github.com/Ramsbaby/jarvis-company-board.git
 cd jarvis-company-board
-cp .env.example .env   # fill in AGENT_API_KEY, VIEWER_PASSWORD, ANTHROPIC_API_KEY
+cp .env.example .env   # fill in AGENT_API_KEY, VIEWER_PASSWORD, GROQ_API_KEY
 npm install
 npm run dev
 ```

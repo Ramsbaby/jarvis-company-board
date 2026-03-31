@@ -203,6 +203,63 @@ export async function GET(req: NextRequest) {
       dev_queue: [],
       scorecard: { teams: {} }
     };
+  } else {
+    // sysMetrics가 있어도 개별 필드가 누락될 수 있으므로 방어적으로 처리
+    // 특히 Railway 환경에서 일부 필드가 null일 수 있음
+    const diskInfo = (sysMetrics.disk as Record<string, unknown>) || {};
+    const healthInfo = (sysMetrics.health as Record<string, unknown>) || {};
+    const discordStatsInfo = (sysMetrics.discord_stats as Record<string, unknown>) || {};
+    const ragStatsInfo = (sysMetrics.rag_stats as Record<string, unknown>) || {};
+    const cronStatsInfo = (sysMetrics.cron_stats as Record<string, unknown>) || {};
+
+    sysMetrics = {
+      synced_at: sysMetrics.synced_at || new Date().toISOString(),
+      disk: {
+        used_pct: diskInfo.used_pct ?? 0,
+        free_gb: diskInfo.free_gb ?? 0,
+        total_gb: diskInfo.total_gb ?? 0
+      },
+      health: {
+        discord_bot: healthInfo.discord_bot || 'unknown',
+        memory_mb: healthInfo.memory_mb ?? 0,
+        crash_count: healthInfo.crash_count ?? 0,
+        last_check: healthInfo.last_check || ''
+      },
+      discord_stats: {
+        claudeCount: discordStatsInfo.claudeCount ?? 0,
+        totalHuman: discordStatsInfo.totalHuman ?? 0,
+        avgElapsed: discordStatsInfo.avgElapsed ?? 0,
+        restartCount: discordStatsInfo.restartCount ?? 0,
+        botErrors: discordStatsInfo.botErrors ?? 0,
+        lastHealth: (() => {
+          const lh = (discordStatsInfo.lastHealth as Record<string, unknown>) || {};
+          return {
+            silenceSec: (lh.silenceSec as number) ?? 0,
+            memMB: (lh.memMB as number) ?? 0,
+            wsPing: (lh.wsPing as number) ?? 0,
+            uptimeSec: (lh.uptimeSec as number) ?? 0
+          };
+        })(),
+        channelActivity: Array.isArray(discordStatsInfo.channelActivity) ? discordStatsInfo.channelActivity : []
+      },
+      rag_stats: {
+        dbSize: ragStatsInfo.dbSize || 'N/A',
+        stuck: ragStatsInfo.stuck ?? false,
+        inboxCount: ragStatsInfo.inboxCount ?? 0,
+        chunks: ragStatsInfo.chunks ?? 0
+      },
+      launch_agents: Array.isArray(sysMetrics.launch_agents) ? sysMetrics.launch_agents : [],
+      circuit_breakers: Array.isArray(sysMetrics.circuit_breakers) ? sysMetrics.circuit_breakers : [],
+      cron_stats: {
+        rate: cronStatsInfo.rate ?? 100,
+        recentFailed: Array.isArray(cronStatsInfo.recentFailed) ? cronStatsInfo.recentFailed : [],
+        taskStatus: cronStatsInfo.taskStatus || {}
+      },
+      decisions_today: Array.isArray(sysMetrics.decisions_today) ? sysMetrics.decisions_today : [],
+      dev_queue: Array.isArray(sysMetrics.dev_queue) ? sysMetrics.dev_queue : [],
+      scorecard: sysMetrics.scorecard || { teams: {} },
+      dev_daemon: sysMetrics.dev_daemon || null
+    };
   }
 
   // ── 1. System health ──

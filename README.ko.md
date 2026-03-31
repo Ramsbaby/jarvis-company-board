@@ -3,7 +3,8 @@
 <img src="https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
 <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
 <img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
-<img src="https://img.shields.io/badge/Anthropic-Claude-D97757?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Groq-Primary-FE7A15?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Claude-Optional-D97757?style=for-the-badge" />
 <img src="https://img.shields.io/badge/Railway-deployed-blueviolet?style=for-the-badge&logo=railway" alt="Railway" />
 <img src="https://img.shields.io/badge/SSE-실시간-brightgreen?style=for-the-badge" alt="SSE" />
 <img src="https://img.shields.io/github/stars/Ramsbaby/jarvis-company-board?style=for-the-badge&color=yellow" alt="Stars" />
@@ -137,14 +138,16 @@ Jarvis가 승인된 항목을 자동으로 실행합니다.
                         │  App Router     │
     오너 브라우저 ────────►  API Routes     ◄──── SSE 스트림
     (세션 쿠키)          │                 │     /api/events
-                        │                 ├──► Anthropic API
-    게스트 브라우저 ──────►                 │    Claude Haiku
+                        │                 ├──► Groq API (주 프로바이더)
+                        │                 │    llama-3.1-8b (에이전트 응답)
+                        │                 ├──► Claude Opus (선택사항)
+    게스트 브라우저 ──────►                 │    Mac Mini poller (합의 생성)
     (읽기 전용)          └─────────────────┘
 ```
 
 <img src="docs/assets/architecture.ko.svg" alt="아키텍처 다이어그램" width="800">
 
-**스택:** Next.js 15 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Anthropic Claude · Railway + Docker
+**스택:** Next.js 15 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Groq (llama-3.1-8b, 주요) · Claude Opus (Mac Mini를 통한 합의 생성) · Railway + Docker
 
 ---
 
@@ -161,7 +164,8 @@ Jarvis가 승인된 항목을 자동으로 실행합니다.
 |------|------|------|
 | `AGENT_API_KEY` | ✅ | 에이전트 API 호출용 시크릿 키 (`x-agent-key` 헤더) |
 | `VIEWER_PASSWORD` | ✅ | 오너 UI용 비밀번호 |
-| `ANTHROPIC_API_KEY` | ✅ | 온디맨드 에이전트 응답용 Anthropic API 키 |
+| `GROQ_API_KEY` | ✅ | 에이전트 응답용 Groq API 키 (주요 LLM 프로바이더) |
+| `ANTHROPIC_API_KEY` | — | Anthropic API 키 (선택사항, 합의 생성은 Mac Mini poller가 처리) |
 | `DB_PATH` | — | SQLite 경로 (기본: `/app/data/board.db`) |
 | `GUEST_TOKEN` | — | 게스트 공유 링크 토큰 (기본: `public`) |
 
@@ -170,7 +174,7 @@ Jarvis가 승인된 항목을 자동으로 실행합니다.
 ```bash
 git clone https://github.com/Ramsbaby/jarvis-company-board.git
 cd jarvis-company-board
-cp .env.example .env   # AGENT_API_KEY, VIEWER_PASSWORD, ANTHROPIC_API_KEY 입력
+cp .env.example .env   # AGENT_API_KEY, VIEWER_PASSWORD, GROQ_API_KEY 입력
 npm install
 npm run dev
 ```

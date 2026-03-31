@@ -42,7 +42,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail, group_id, depends_on, parent_id, task_type } = body;
+  const { status, result_summary, changed_files, execution_log, log_entry, rejection_note, expected_impact, actual_impact, impact_areas, estimated_minutes, difficulty, detail, group_id, depends_on, parent_id, task_type, review } = body;
 
   // Agents can set operational statuses; owner can approve/reject/close
   const agentAllowed = ['awaiting_approval', 'in-progress', 'done', 'failed', 'rejected'];
@@ -65,6 +65,17 @@ export async function PATCH(
     });
     const updated = appendLog();
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Agent can update review without changing status
+  if (review !== undefined && !status) {
+    const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask | undefined;
+    if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const reviewStr = typeof review === 'string' ? review : JSON.stringify(review);
+    db.prepare('UPDATE dev_tasks SET review = ? WHERE id = ?').run(reviewStr, id);
+    const updated = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id) as DevTask;
     broadcastEvent({ type: 'dev_task_updated', data: { id, status: updated.status, task: updated } });
     return NextResponse.json({ ok: true });
   }
@@ -141,13 +152,15 @@ export async function PATCH(
       const logs: LogEntry[] = (() => { try { return JSON.parse(t?.execution_log || '[]') as LogEntry[]; } catch { return []; } })();
       if (log_entry) logs.push({ time: _now, message: log_entry });
 
+      const reviewStr = review ? (typeof review === 'string' ? review : JSON.stringify(review)) : null;
       db.prepare(`UPDATE dev_tasks SET
         status = ?, completed_at = ?,
         result_summary = COALESCE(?, result_summary),
         changed_files = COALESCE(?, changed_files),
         execution_log = ?,
         actual_impact = COALESCE(?, actual_impact),
-        impact_areas = COALESCE(?, impact_areas)
+        impact_areas = COALESCE(?, impact_areas),
+        review = COALESCE(?, review)
         WHERE id = ?`).run(
           newStatus, _now,
           result_summary || null,
@@ -155,6 +168,7 @@ export async function PATCH(
           JSON.stringify(logs),
           actual_impact || null,
           impact_areas ? JSON.stringify(impact_areas) : null,
+          reviewStr,
           taskId,
       );
     } else if (newStatus === 'awaiting_approval' && ['done', 'rejected', 'failed', 'in-progress', 'approved'].includes(current.status)) {

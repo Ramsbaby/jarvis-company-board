@@ -764,6 +764,45 @@ export default function TaskDetailClient({
   const lastActivitySecs = lastLogTime ? Math.floor((Date.now() - lastLogTime.getTime()) / 1000) : null;
   const isStale = lastActivitySecs !== null && lastActivitySecs > 60 && isLive;
 
+  // Step group extraction — splits logs at ✅ boundaries to build progress strip
+  const completedSteps = (() => {
+    const steps: { label: string; startTime: string; endTime: string; durationSecs: number; stepNum: number }[] = [];
+    let groupEntries: LogEntry[] = [];
+    let groupStart: string | null = null;
+    let n = 0;
+
+    const getLabel = (entries: LogEntry[], fallback: number): string => {
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const m = entries[i].message;
+        if (HEARTBEAT_RE.test(m)) continue;
+        if (/^⚙️|^✅|^⏳/.test(m)) continue;
+        // Strip leading emoji/punctuation, take first 32 chars
+        const clean = m.replace(/^[\s\S]{0,3}?\s/, '').trim();
+        if (clean.length > 2) return clean.slice(0, 32);
+      }
+      return `단계 ${fallback}`;
+    };
+
+    for (const entry of logs) {
+      if (/^⚙️/.test(entry.message)) {
+        groupStart = entry.time;
+        groupEntries = [entry];
+      } else if (/^✅/.test(entry.message) && groupStart) {
+        groupEntries.push(entry);
+        n++;
+        const startMs = new Date(groupStart).getTime();
+        const endMs = new Date(entry.time).getTime();
+        const dur = (!isNaN(startMs) && !isNaN(endMs)) ? Math.max(0, Math.floor((endMs - startMs) / 1000)) : 0;
+        steps.push({ label: getLabel(groupEntries, n), startTime: groupStart, endTime: entry.time, durationSecs: dur, stepNum: n });
+        groupStart = entry.time;
+        groupEntries = [];
+      } else {
+        groupEntries.push(entry);
+      }
+    }
+    return steps;
+  })();
+
   // Completion durations
   const completionDuration = task.started_at && task.completed_at
     ? Math.round((new Date(task.completed_at).getTime() - new Date(task.started_at).getTime()) / 60000)
@@ -1717,7 +1756,11 @@ export default function TaskDetailClient({
                     LIVE
                   </span>
                 )}
-                {/* Current phase indicator */}
+                {completedSteps.length > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 font-medium">
+                    {completedSteps.length}단계 완료
+                  </span>
+                )}
                 {isLive && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 font-medium">
                     {phaseIcons[currentPhase]} {phaseNames[currentPhase]}
@@ -1725,7 +1768,6 @@ export default function TaskDetailClient({
                 )}
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                {/* Last activity */}
                 {lastActivitySecs !== null && (
                   <span className={`text-[10px] tabular-nums ${isStale ? 'text-amber-400' : 'text-zinc-500'}`}>
                     {lastActivitySecs < 60 ? `${lastActivitySecs}s 전 활동` : `${Math.floor(lastActivitySecs / 60)}m 전 활동`}
@@ -1743,16 +1785,54 @@ export default function TaskDetailClient({
               </div>
             </div>
 
+            {/* Step progress strip — shows each completed ✅ step with label + duration */}
+            {completedSteps.length > 0 && (
+              <div className="px-4 py-2.5 border-b border-zinc-800/60 bg-zinc-950/40">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  {completedSteps.map((step, i) => {
+                    const dur = step.durationSecs < 60
+                      ? `${step.durationSecs}s`
+                      : `${Math.floor(step.durationSecs / 60)}m ${String(step.durationSecs % 60).padStart(2, '0')}s`;
+                    return (
+                      <div key={i} className="flex items-center gap-1 shrink-0">
+                        <div
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/40"
+                          title={`단계 ${step.stepNum}: ${step.label} (${dur})`}
+                        >
+                          <span className="w-4 h-4 rounded-full bg-emerald-800/50 border border-emerald-700/50 flex items-center justify-center text-[9px] font-bold text-emerald-400 shrink-0">
+                            {step.stepNum}
+                          </span>
+                          <span className="text-[10px] text-emerald-300 max-w-[88px] truncate leading-none">{step.label}</span>
+                          <span className="text-[9px] text-emerald-700 leading-none tabular-nums">{dur}</span>
+                        </div>
+                        {(i < completedSteps.length - 1 || isLive) && (
+                          <span className="text-zinc-700 text-xs shrink-0 mx-0.5">›</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {isLive && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-700/40 bg-zinc-800/20 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-pulse shrink-0" />
+                      <span className="text-[10px] text-zinc-500">진행 중</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Log entries — tail -f style */}
             <div className="p-4 font-mono text-xs max-h-[480px] overflow-y-auto space-y-0.5">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
               ) : (() => {
-                  // 연속 헛비트 축소: 연속된 "진행 중 (Xs 경과)" 항목은 마지막 하나만 표시
                   const rawLogs = logExpanded ? logs : logs.slice(-8);
-                  const collapsedLogs: Array<LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number }> = [];
+                  const collapsedLogs: Array<LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number; _stepNum?: number }> = [];
                   let pendingHeartbeat: (LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number }) | null = null;
                   let heartbeatCount = 0;
+                  // Track which step number ✅ entries in the visible window correspond to
+                  let visibleStepIdx = logExpanded ? 0 : logs.slice(0, logs.length - 8).filter(e => /^✅/.test(e.message)).length;
+
                   for (const entry of rawLogs) {
                     if (HEARTBEAT_RE.test(entry.message)) {
                       pendingHeartbeat = { ...entry, _isHeartbeat: true };
@@ -1763,57 +1843,82 @@ export default function TaskDetailClient({
                         pendingHeartbeat = null;
                         heartbeatCount = 0;
                       }
-                      collapsedLogs.push(entry);
+                      const enriched: LogEntry & { _stepNum?: number } = { ...entry };
+                      if (/^✅/.test(entry.message)) {
+                        enriched._stepNum = ++visibleStepIdx;
+                      }
+                      collapsedLogs.push(enriched);
                     }
                   }
                   if (pendingHeartbeat) collapsedLogs.push({ ...pendingHeartbeat, _collapsedCount: heartbeatCount });
 
                   return collapsedLogs.map((entry, i) => {
-                    // 메시지에 박힌 중복 시각 제거 — UI 왼쪽 타임스탬프로 이미 표시됨
                     const msg = entry.message.replace(/\s*\([^)]*\d{2}:\d{2}:\d{2}[^)]*\)\s*$/, '').trim();
                     const isHeartbeat = !!entry._isHeartbeat;
                     const isErr      = /error|fail|failed/i.test(msg);
                     const isWarn     = /warn|warning/i.test(msg);
                     const isStart    = /^⚙️/.test(msg);
-                    // ✅ 스타일 구분: task.status === 'done'이면 최종 완료(emerald), 아니면 서브스텝 완료(teal)
                     const isCheckmark = /^✅/.test(msg);
                     const isFinalDone = isCheckmark && isDone;
                     const isSubDone   = isCheckmark && !isDone;
                     const isProgress  = /^⏳/.test(msg) || isHeartbeat;
-                    // 도구 호출 감지 (stream-to-board.sh가 보내는 이모지 패턴)
                     const isToolCall = /^(📖|📝|✏️|💻|🔍|📁|🤖|🔗|🌐|🔧)\s/.test(msg);
                     const isText     = /^💬/.test(msg);
 
                     const color = isErr       ? 'text-red-400' :
                                   isWarn      ? 'text-amber-400' :
-                                  isFinalDone ? 'text-emerald-400' : // 최종 완료 = 진초록
-                                  isSubDone   ? 'text-teal-400' :    // 서브스텝 완료 = teal (구분)
+                                  isFinalDone ? 'text-emerald-400' :
+                                  isSubDone   ? 'text-emerald-500' :
                                   isStart     ? 'text-sky-400' :
-                                  isProgress  ? 'text-zinc-600' :
+                                  isProgress  ? 'text-zinc-500' :
                                   isToolCall  ? 'text-cyan-300' :
                                   isText      ? 'text-violet-300' :
                                                 'text-zinc-300';
 
-                    // 시작/최종완료 이벤트는 구분선으로 강조 (서브스텝 완료는 강조 없음)
                     const isEvent = isStart || isFinalDone;
+                    const stepNum = entry._stepNum;
+                    const matchingStep = stepNum ? completedSteps.find(s => s.stepNum === stepNum) : null;
+                    const durStr = matchingStep
+                      ? (matchingStep.durationSecs < 60
+                          ? `${matchingStep.durationSecs}s`
+                          : `${Math.floor(matchingStep.durationSecs / 60)}m ${String(matchingStep.durationSecs % 60).padStart(2, '0')}s`)
+                      : null;
 
                     return (
-                      <div key={i} className={`flex gap-3 leading-relaxed
-                        ${isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : ''}
-                        ${isEvent ? 'border-t border-zinc-800 pt-1.5 mt-1' : ''}
-                        ${isProgress ? 'opacity-40' : ''}
-                      `}>
+                      <div
+                        key={i}
+                        className={[
+                          'flex gap-3 leading-relaxed',
+                          isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : '',
+                          isEvent    ? 'border-t border-zinc-800 pt-1.5 mt-1'   : '',
+                          isSubDone  ? 'border-t border-zinc-800/50 pt-1.5 mt-1' : '',
+                          isProgress ? 'opacity-50' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
                         <span className="text-zinc-600 shrink-0 tabular-nums w-[52px]">
                           {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                         </span>
-                        <span className={`${color} break-all`}>
-                          {msg}
-                          {/* 축소된 헛비트 개수 표시 */}
-                          {isHeartbeat && entry._collapsedCount && entry._collapsedCount > 1
-                            ? <span className="text-zinc-700 ml-1.5 text-[10px]">×{entry._collapsedCount}</span>
-                            : null}
-                          {/* 서브스텝 완료 레이블 */}
-                          {isSubDone && <span className="text-teal-600/60 ml-1.5 text-[10px]">(단계 완료)</span>}
+                        <span className={`${color} break-all flex-1 min-w-0`}>
+                          {isSubDone ? (
+                            <span className="flex items-center gap-2 flex-wrap">
+                              <span>✅ 단계 {stepNum} 완료</span>
+                              {matchingStep && !matchingStep.label.startsWith('단계 ') && (
+                                <span className="text-[10px] text-emerald-800/90 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-900/50 max-w-[160px] truncate">
+                                  {matchingStep.label}
+                                </span>
+                              )}
+                              {durStr && (
+                                <span className="text-[10px] text-zinc-600 tabular-nums">{durStr}</span>
+                              )}
+                            </span>
+                          ) : (
+                            <>
+                              {msg}
+                              {isHeartbeat && entry._collapsedCount && entry._collapsedCount > 1
+                                ? <span className="text-zinc-700 ml-1.5 text-[10px]">×{entry._collapsedCount}</span>
+                                : null}
+                            </>
+                          )}
                         </span>
                       </div>
                     );
