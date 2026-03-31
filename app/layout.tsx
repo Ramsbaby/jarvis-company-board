@@ -41,6 +41,12 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
         />
+        {/* beforeinstallprompt를 React 마운트 전에 캡처 — 타이밍 이슈 방지 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__pwaPrompt=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaPrompt=e;window.dispatchEvent(new Event('pwa-prompt-ready'));});`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col"><SwRegister /><EventProvider>{children}</EventProvider></body>
     </html>

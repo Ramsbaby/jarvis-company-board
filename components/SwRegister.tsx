@@ -8,9 +8,15 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+declare global {
+  interface Window {
+    __pwaPrompt: BeforeInstallPromptEvent | null;
+  }
+}
+
 function isIOS() {
   if (typeof navigator === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as Window & { MSStream?: unknown }).MSStream;
 }
 
 function isInStandaloneMode() {
@@ -19,10 +25,12 @@ function isInStandaloneMode() {
     ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
 }
 
+const DISMISS_MS = 3 * 24 * 60 * 60 * 1000; // 3일 쿨다운 (기존 7일)
+
 export default function SwRegister() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const [dismissed, setDismissed] = useState(() => {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const dismissedUntil = localStorage.getItem('pwa-banner-dismissed');
     return !!(dismissedUntil && Date.now() < Number(dismissedUntil));
@@ -37,13 +45,27 @@ export default function SwRegister() {
     // 이미 앱으로 설치된 경우 배너 숨김
     if (isInStandaloneMode()) return;
 
-    // Android Chrome: beforeinstallprompt 캐치
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e as BeforeInstallPromptEvent);
+    // 쿨다운이 활성화돼 있으면 리스너 등록 불필요
+    const dismissedUntil = localStorage.getItem('pwa-banner-dismissed');
+    if (dismissedUntil && Date.now() < Number(dismissedUntil)) return;
+
+    // layout.tsx에서 이미 캡처된 프롬프트 읽기 (타이밍 이슈 방지)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.__pwaPrompt) setInstallPrompt(window.__pwaPrompt);
+
+    // 이후 발사되는 이벤트도 캐치
+    const onReady = () => {
+       
+      if (window.__pwaPrompt) setInstallPrompt(window.__pwaPrompt);
     };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener('pwa-prompt-ready', onReady);
+
+    // iOS는 beforeinstallprompt 없으므로 바로 배너 표시
+    if (isIOS()) {
+      setInstallPrompt(null); // iOS는 null이어도 배너 표시됨 (showBanner 조건 참고)
+    }
+
+    return () => window.removeEventListener('pwa-prompt-ready', onReady);
   }, []);
 
   const handleInstall = async () => {
@@ -56,12 +78,13 @@ export default function SwRegister() {
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
       setInstallPrompt(null);
+      window.__pwaPrompt = null;
     }
   };
 
   const handleDismiss = () => {
     setDismissed(true);
-    localStorage.setItem('pwa-banner-dismissed', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    localStorage.setItem('pwa-banner-dismissed', String(Date.now() + DISMISS_MS));
   };
 
   // 배너 표시 조건
