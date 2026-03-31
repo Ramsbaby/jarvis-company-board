@@ -75,10 +75,13 @@ function PrincipleCheckCard({ sessionId, feedbackIdx }: { sessionId: string; fee
   );
 }
 
-function FeedbackCard({ msg, sessionId, onRegenSuccess }: {
+function FeedbackCard({ msg, sessionId, onRegenSuccess, questionContent, company, category }: {
   msg: Message;
   sessionId: string;
   onRegenSuccess: (updated: Message) => void;
+  questionContent?: string;
+  company?: string;
+  category?: string;
 }) {
   let strengths: string[] = [];
   let weaknesses: string[] = [];
@@ -88,6 +91,30 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess }: {
   try { missingKeywords = JSON.parse(msg.missing_keywords ?? '[]'); } catch { /* empty */ }
 
   const [regenLoading, setRegenLoading] = useState(false);
+
+  // 피드백 카드 내 베스트 답변
+  const [cardBest, setCardBest] = useState<{ answer: string; keyPoints: string[]; whyGood: string } | null>(null);
+  const [cardBestLoading, setCardBestLoading] = useState(false);
+  const [showCardBest, setShowCardBest] = useState(false);
+
+  async function handleCardBest() {
+    if (!questionContent) return;
+    if (cardBest) { setShowCardBest(v => !v); return; }
+    setCardBestLoading(true);
+    try {
+      const res = await fetch('/api/interview/best-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ question: questionContent, company, category }),
+      });
+      const data = await res.json() as { answer: string; keyPoints: string[]; whyGood: string };
+      setCardBest(data);
+      setShowCardBest(true);
+    } finally {
+      setCardBestLoading(false);
+    }
+  }
 
   async function handleRegen() {
     setRegenLoading(true);
@@ -185,13 +212,47 @@ function FeedbackCard({ msg, sessionId, onRegenSuccess }: {
           )}
         </div>
       )}
-      {/* 모범 답안 — 점수 구간별 자동 분기 */}
+      {/* 모범 답안 (DB 저장분) — 점수 구간별 자동 분기 */}
       {msg.better_answer && (
         <BetterAnswerSection
           betterAnswer={msg.better_answer}
           score={score}
           missingKeywords={missingKeywords}
         />
+      )}
+
+      {/* 자비스 베스트 답변 — 카드 내 on-demand 조회 */}
+      {questionContent && (
+        <div className="space-y-2">
+          <button
+            onClick={handleCardBest}
+            disabled={cardBestLoading}
+            className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40 ${
+              showCardBest
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'
+            }`}
+          >
+            <span>🏆</span>
+            <span>{cardBestLoading ? '자비스 답변 생성 중…' : showCardBest ? '베스트 답변 접기' : '자비스 베스트 답변 보기'}</span>
+          </button>
+          {showCardBest && cardBest && (
+            <div className="bg-indigo-950 border border-indigo-700 rounded-xl p-3 space-y-2">
+              <p className="text-[10px] font-black text-indigo-300 uppercase tracking-wider">🏆 자비스 베스트 답변</p>
+              <p className="text-xs text-indigo-100 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">{cardBest.answer}</p>
+              {cardBest.keyPoints.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {cardBest.keyPoints.map((kp, i) => (
+                    <span key={i} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-indigo-800 text-indigo-200 border border-indigo-600">{kp}</span>
+                  ))}
+                </div>
+              )}
+              {cardBest.whyGood && (
+                <p className="text-[10px] text-indigo-400 border-t border-indigo-800 pt-1.5">💡 {cardBest.whyGood}</p>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -497,15 +558,20 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
           );
           if (msg.role === 'feedback') {
             const feedbackIdx = feedbackMessages.indexOf(msg);
+            const questionMessages = messages.filter(m => m.role === 'question');
+            const pairedQuestion = questionMessages[feedbackIdx];
             return (
               <div key={msg.id ?? idx} className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
+                <div className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-sm shrink-0">🤖</div>
                 <div className="max-w-[90%] space-y-2">
-                  <p className="text-[11px] font-semibold text-zinc-400 mb-1 ml-1">AI 피드백</p>
+                  <p className="text-[11px] font-semibold text-indigo-500 mb-1 ml-1">자비스 피드백</p>
                   <FeedbackCard
                     msg={msg}
                     sessionId={sessionId}
                     onRegenSuccess={(updated) => setMessages(prev => prev.map(m => m.id === updated.id ? updated : m))}
+                    questionContent={pairedQuestion?.content}
+                    company={session?.company}
+                    category={session?.category}
                   />
                   <PrincipleCheckCard sessionId={sessionId} feedbackIdx={feedbackIdx} />
                 </div>
@@ -533,9 +599,9 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
         )}
         {streaming && (
           <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-sm shrink-0">📊</div>
+            <div className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-sm shrink-0">🤖</div>
             <div className="max-w-[90%] bg-white border border-zinc-200 rounded-2xl rounded-tl-sm px-4 py-3">
-              <p className="text-[11px] font-semibold text-zinc-500 mb-2">🤔 면접관이 답변을 평가하고 있습니다...</p>
+              <p className="text-[11px] font-semibold text-indigo-500 mb-2">🤔 자비스가 답변을 평가하고 있습니다...</p>
               <div className="flex gap-1 items-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
