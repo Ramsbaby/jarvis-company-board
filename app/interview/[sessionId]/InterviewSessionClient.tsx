@@ -274,6 +274,9 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
 
   useEffect(() => {
     setElapsedSecs(0);
+    // Bug 1 fix: 질문 변경 시 베스트 답변 캐시 초기화
+    setBestAnswer(null);
+    setShowBest(false);
     if (questionTimerRef.current) clearInterval(questionTimerRef.current);
     questionTimerRef.current = setInterval(() => {
       setElapsedSecs(s => s + 1);
@@ -385,10 +388,20 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
   async function handleEnd() {
     const scores = messages.filter(m => m.role === 'feedback' && m.score != null).map(m => m.score as number);
     const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-    await fetch(`/api/interview/sessions/${sessionId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ status: 'completed', total_score: avg }),
-    });
+    // Bug 2 fix: PATCH 실패 시 에러 토스트, 이동 차단
+    try {
+      const res = await fetch(`/api/interview/sessions/${sessionId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ status: 'completed', total_score: avg }),
+      });
+      if (!res.ok) {
+        showError(`세션 저장 실패 (${res.status}) — 다시 시도해 주세요.`);
+        return;
+      }
+    } catch {
+      showError('네트워크 오류로 세션을 저장하지 못했습니다.');
+      return;
+    }
     router.push(`/interview/${sessionId}/report`);
   }
 
@@ -420,7 +433,8 @@ export default function InterviewSessionClient({ sessionId, mode }: { sessionId:
             {/* Elapsed timer */}
             <span className="text-xs text-zinc-400 tabular-nums font-mono">{formatElapsed(elapsedSecs)}</span>
             <span className="text-xs text-zinc-400">{feedbackCount}문제 완료</span>
-            <button onClick={handleEnd} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors">종료</button>
+            {/* Bug 3 fix: streaming 중 종료 버튼 비활성화 */}
+            <button onClick={handleEnd} disabled={streaming} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-40 transition-colors">종료</button>
           </div>
         </div>
       </header>
