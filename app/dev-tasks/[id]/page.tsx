@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import type { DevTask } from '@/lib/types';
@@ -28,7 +28,7 @@ export default async function DevTaskDetailPage({ params }: { params: Promise<{ 
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   // Dev tasks are internal operational data — guests are not allowed
-  if (!isOwner) notFound();
+  if (!isOwner) redirect('/login?next=/dev-tasks');
 
   // Fetch source post metadata if source is board:xxx
   let sourcePost: SourcePost | null = null;

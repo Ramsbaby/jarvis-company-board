@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import { LIVE_CODING_PROBLEMS } from '@/lib/live-coding-problems';
 import LiveCodingClient from './LiveCodingClient';
@@ -16,7 +16,7 @@ export default async function LiveCodingPage({
   const session = cookieStore.get('jarvis-session')?.value;
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
-  if (!isOwner) notFound();
+  if (!isOwner) redirect('/login?next=/interview');
 
   const db = getDb();
   const lcSession = db.prepare(`SELECT * FROM live_coding_sessions WHERE id = ?`).get(id) as {

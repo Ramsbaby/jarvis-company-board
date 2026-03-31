@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import ReportClient from './ReportClient';
 
@@ -33,7 +33,7 @@ export default async function ReportPage({ params }: { params: Promise<{ session
   const session = cookieStore.get('jarvis-session')?.value;
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
-  if (!isOwner) notFound();
+  if (!isOwner) redirect('/login?next=/interview');
 
   const { sessionId } = await params;
   const db = getDb();

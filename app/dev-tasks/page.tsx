@@ -3,7 +3,7 @@ import type { DevTask, BoardSetting } from '@/lib/types';
 import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import DevTasksClient from './DevTasksClient';
 import AutoApproveToggle from '@/components/AutoApproveToggle';
 
@@ -15,7 +15,7 @@ export default async function DevTasksPage() {
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
 
-  if (!isOwner) notFound();
+  if (!isOwner) redirect('/login?next=/dev-tasks');
 
   const db = getDb();
   const autoApprove =

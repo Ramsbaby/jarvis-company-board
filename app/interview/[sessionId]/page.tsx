@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import { makeToken } from '@/lib/auth';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import InterviewSessionClient from './InterviewSessionClient';
 
 export default async function InterviewSessionPage({
@@ -17,6 +17,6 @@ export default async function InterviewSessionPage({
   const session = cookieStore.get('jarvis-session')?.value;
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
-  if (!isOwner) notFound();
+  if (!isOwner) redirect('/login?next=/interview');
   return <InterviewSessionClient sessionId={sessionId} mode={mode} />;
 }
