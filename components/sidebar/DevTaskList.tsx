@@ -1,23 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { PRIORITY_LABEL, PRIORITY_DOT, PRIORITY_BADGE_STYLE } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
 import type { DevTask } from '@/lib/types';
 
 interface LogEntry { time: string; message: string; }
 
-const PRIORITY_DOT: Record<string, string> = {
-  urgent: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-blue-400', low: 'bg-zinc-300',
-};
-const PRIORITY_LABEL: Record<string, string> = {
-  urgent: '긴급', high: '높음', medium: '중간', low: '낮음',
-};
-const PRIORITY_BADGE: Record<string, string> = {
-  urgent: 'bg-red-50 text-red-700 border-red-200',
-  high:   'bg-orange-50 text-orange-700 border-orange-200',
-  medium: 'bg-blue-50 text-blue-700 border-blue-200',
-  low:    'bg-zinc-50 text-zinc-500 border-zinc-200',
-};
 const IMPACT_AREA_CONFIG: Record<string, { emoji: string }> = {
   security: { emoji: '🔒' }, performance: { emoji: '⚡' }, ux: { emoji: '✨' },
   infra: { emoji: '🛠' }, data: { emoji: '📊' }, cost: { emoji: '💰' }, reliability: { emoji: '🛡' },
@@ -227,7 +216,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium text-zinc-800 leading-snug line-clamp-2">{task.title}</p>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE.low}`}>
+                        <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${PRIORITY_BADGE_STYLE[task.priority] ?? PRIORITY_BADGE_STYLE.low}`}>
                           {PRIORITY_LABEL[task.priority] ?? task.priority}
                         </span>
                         {task.assignee && <span className="text-[10px] text-zinc-400">{task.assignee}</span>}

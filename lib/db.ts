@@ -184,6 +184,8 @@ export function getDb(): Database.Database {
     // quality review (jarvis-coder 자동 품질 리뷰 JSON)
     try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN review TEXT'); } catch { /* already exists */ }
     try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_completed ON dev_tasks(completed_at DESC)'); } catch { /* already exists */ }
+    // peer_votes: score_detail — 전체 댓글 룰 기반 점수 breakdown (JSON)
+    try { _db!.exec('ALTER TABLE peer_votes ADD COLUMN score_detail TEXT'); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (

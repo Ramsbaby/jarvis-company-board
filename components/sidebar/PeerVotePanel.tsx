@@ -9,6 +9,14 @@ interface VoteRow {
   total_voters: number;
 }
 
+interface ScoreEntry {
+  comment_id: string;  // = comment's id (renamed from 'id' for clarity)
+  author_id: string;
+  author: string;
+  score: number;
+  why: string;
+}
+
 function scrollToCommentWithEffect(commentId: string, type: 'best' | 'worst') {
   // Dispatch custom award effect event (PostComments listens)
   window.dispatchEvent(new CustomEvent('comment-award-effect', { detail: { id: commentId, type } }));
@@ -27,6 +35,8 @@ export default function PeerVotePanel({
   const [votes, setVotes] = useState<VoteRow[]>([]);
   const [bestReason, setBestReason] = useState<string | null>(null);
   const [worstReason, setWorstReason] = useState<string | null>(null);
+  const [humanVoters, setHumanVoters] = useState<number>(0);
+  const [allScores, setAllScores] = useState<ScoreEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,6 +46,8 @@ export default function PeerVotePanel({
         if (data?.votes) setVotes(data.votes);
         if (data?.bestReason) setBestReason(data.bestReason);
         if (data?.worstReason) setWorstReason(data.worstReason);
+        if (typeof data?.humanVoters === 'number') setHumanVoters(data.humanVoters);
+        if (data?.allScores) setAllScores(data.allScores);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -58,17 +70,43 @@ export default function PeerVotePanel({
   const withWorst = votes.filter(v => v.worst_count > 0).sort((a, b) => b.worst_count - a.worst_count);
   const bestVote    = withBest[0];
   const worstVote   = withWorst[0];
-  const bestComment  = bestVote  ? commentMap[bestVote.comment_id]  : null;
-  const worstComment = worstVote ? commentMap[worstVote.comment_id] : null;
+  // ?? null: guard against deleted comments not in commentMap (avoids undefined crash)
+  const bestComment  = bestVote  ? (commentMap[bestVote.comment_id]  ?? null) : null;
+  const worstComment = worstVote ? (commentMap[worstVote.comment_id] ?? null) : null;
 
   const agentPts: Record<string, number> = {};
   for (const v of votes) {
     const c = commentMap[v.comment_id];
-    if (!c || c.is_visitor || c.is_resolution) continue;
+    if (!c || c.is_visitor || c.is_resolution || c.author === 'system') continue;
     if (!agentPts[c.author]) agentPts[c.author] = 0;
     agentPts[c.author] += v.best_count * 4 - v.worst_count * 3;
   }
   const sortedAgents = Object.entries(agentPts).sort((a, b) => b[1] - a[1]);
+
+  // Build author_id → ScoreEntry map for breakdown display.
+  // Priority: comment that received a vote > highest rule-based score.
+  // This prevents the mismatch where net pts reflect voted comment but why shows unvoted one.
+  const votedCommentIds = new Set<string>(
+    votes.flatMap(v => {
+      const ids: string[] = [];
+      if (v.best_count > 0) ids.push(v.comment_id);
+      if (v.worst_count > 0) ids.push(v.comment_id);
+      return ids;
+    })
+  );
+
+  const allScoreMap = (allScores ?? []).reduce<Record<string, ScoreEntry>>((m, s) => {
+    const existing = m[s.author_id];
+    const sVoted = votedCommentIds.has(s.comment_id);
+    const existingVoted = existing ? votedCommentIds.has(existing.comment_id) : false;
+    // Prefer voted > non-voted, then higher score within same tier
+    if (!existing || (!existingVoted && sVoted) || (sVoted === existingVoted && s.score > existing.score)) {
+      m[s.author_id] = s;
+    }
+    return m;
+  }, {});
+
+  const participantLabel = humanVoters === 0 ? 'AI 자동 평가' : `${humanVoters}명 참여`;
 
   // ── Ceremony variant (full-width, awards show) ────────────────────────────
   if (variant === 'ceremony') {
@@ -84,7 +122,7 @@ export default function PeerVotePanel({
             </div>
             <div className="ml-auto">
               <span className="text-xs text-amber-200/80 bg-white/10 border border-white/20 px-2.5 py-1 rounded-full">
-                {votes.reduce((s, v) => Math.max(s, v.total_voters), 0)}명 참여
+                {participantLabel}
               </span>
             </div>
           </div>
@@ -181,30 +219,42 @@ export default function PeerVotePanel({
             )}
           </div>
 
-          {/* Points ranking — podium style */}
+          {/* Points ranking — podium style with breakdown */}
           {sortedAgents.length > 0 && (
             <div className="px-5 py-4 border-t border-zinc-100">
               <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">포인트 순위</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {sortedAgents.slice(0, 8).map(([agentId, net], idx) => {
                   const meta = AUTHOR_META[agentId];
                   const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : null;
+                  const detail = allScoreMap[agentId];
                   return (
                     <div
                       key={agentId}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${
-                        idx === 0 ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                        idx === 1 ? 'bg-zinc-50 border-zinc-200 text-zinc-600' :
-                        idx === 2 ? 'bg-orange-50 border-orange-200 text-orange-700' :
-                        'bg-white border-zinc-100 text-zinc-500'
+                      className={`rounded-lg border px-3 py-2 text-xs ${
+                        idx === 0 ? 'bg-amber-50 border-amber-200' :
+                        idx === 1 ? 'bg-zinc-50 border-zinc-200' :
+                        idx === 2 ? 'bg-orange-50 border-orange-200' :
+                        net < 0 ? 'bg-red-50/40 border-red-100' :
+                        'bg-white border-zinc-100'
                       }`}
                     >
-                      {medal && <span className="text-sm">{medal}</span>}
-                      <span>{meta?.emoji ?? '💬'}</span>
-                      <span className="font-medium">{meta?.label ?? agentId}</span>
-                      <span className={`font-bold tabular-nums ${
-                        net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-zinc-400'
-                      }`}>{net > 0 ? '+' : ''}{net}pt</span>
+                      <div className="flex items-center gap-1.5">
+                        {medal && <span className="text-sm">{medal}</span>}
+                        <span>{meta?.emoji ?? '💬'}</span>
+                        <span className={`font-medium ${
+                          idx === 0 ? 'text-amber-800' : idx === 1 ? 'text-zinc-600' :
+                          idx === 2 ? 'text-orange-700' : net < 0 ? 'text-red-600' : 'text-zinc-500'
+                        }`}>{meta?.label ?? agentId}</span>
+                        <span className={`ml-auto font-bold tabular-nums ${
+                          net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-zinc-400'
+                        }`}>{net > 0 ? '+' : ''}{net}pt</span>
+                      </div>
+                      {detail?.why && (
+                        <p className={`mt-1 text-[10px] leading-relaxed ${
+                          idx === 0 ? 'text-amber-600' : net < 0 ? 'text-red-500' : 'text-zinc-400'
+                        }`}>{detail.why}</p>
+                      )}
                     </div>
                   );
                 })}
@@ -219,8 +269,9 @@ export default function PeerVotePanel({
   // ── Sidebar variant (compact, original style but clickable) ──────────────
   return (
     <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
-      <div className="px-4 pt-3.5 pb-2.5 border-b border-zinc-100">
+      <div className="px-4 pt-3.5 pb-2.5 border-b border-zinc-100 flex items-center justify-between">
         <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">동료 인사고과</p>
+        <span className="text-[10px] text-zinc-400">{participantLabel}</span>
       </div>
 
       {bestComment && (
@@ -278,19 +329,25 @@ export default function PeerVotePanel({
       {sortedAgents.length > 0 && (
         <div className="px-3 pt-2.5 pb-2">
           <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">포인트 현황</p>
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {sortedAgents.slice(0, 6).map(([agentId, net]) => {
               const meta = AUTHOR_META[agentId];
+              const detail = allScoreMap[agentId];
               return (
-                <div key={agentId} className="flex items-center justify-between text-[10px] py-0.5">
-                  <span className="text-zinc-600 truncate">
-                    {meta?.emoji ?? '💬'} {meta?.label ?? agentId}
-                  </span>
-                  <span className={`font-semibold tabular-nums shrink-0 ml-2 ${
-                    net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-zinc-400'
-                  }`}>
-                    {net > 0 ? '+' : ''}{net}pt
-                  </span>
+                <div key={agentId} className="py-0.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-zinc-600 truncate">
+                      {meta?.emoji ?? '💬'} {meta?.label ?? agentId}
+                    </span>
+                    <span className={`font-semibold tabular-nums shrink-0 ml-2 ${
+                      net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-zinc-400'
+                    }`}>
+                      {net > 0 ? '+' : ''}{net}pt
+                    </span>
+                  </div>
+                  {detail?.why && (
+                    <p className="text-[9px] text-zinc-400 mt-0.5 leading-relaxed line-clamp-2">{detail.why}</p>
+                  )}
                 </div>
               );
             })}

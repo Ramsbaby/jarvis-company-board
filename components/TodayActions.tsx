@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { timeAgo } from '@/lib/utils';
-import { AUTHOR_META } from '@/lib/constants';
+import { PRIORITY_LABEL, PRIORITY_BADGE_STYLE } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
 
 interface DevTask {
@@ -27,33 +26,12 @@ interface ActivePost {
   agent_commenters?: string;
 }
 
-interface AIActivity {
-  agent: string;
-  action: string;
-  timestamp: string;
-  postId?: string;
-  content?: string;
-  type?: 'comment' | 'consensus' | 'thinking' | 'debate';
-}
-
 interface WeeklyStats {
   done: number;
   total: number;
   rate: number;
 }
 
-const PRIORITY_BADGE: Record<string, string> = {
-  urgent: 'bg-rose-100 text-rose-700 border border-rose-200',
-  high: 'bg-amber-100 text-amber-700 border border-amber-200',
-  medium: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-  low: 'bg-zinc-100 text-zinc-500 border border-zinc-200',
-};
-const PRIORITY_LABEL: Record<string, string> = {
-  urgent: '긴급',
-  high: '높음',
-  medium: '보통',
-  low: '낮음',
-};
 
 function getClosingMinutes(closesAt?: string): number | null {
   if (!closesAt) return null;
@@ -66,8 +44,6 @@ export default function TodayActions() {
   const [awaitingTasks, setAwaitingTasks] = useState<DevTask[]>([]);
   const [closingPosts, setClosingPosts] = useState<ActivePost[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({ done: 0, total: 0, rate: 0 });
-  const [aiActivities, setAiActivities] = useState<AIActivity[]>([]);
-  const [showActivity, setShowActivity] = useState(false);
   const [loading, setLoading] = useState(true);
   const { subscribe } = useEvent();
 
@@ -119,66 +95,10 @@ export default function TodayActions() {
     }
   }, []);
 
-  const fetchActivities = useCallback(async () => {
-    try {
-      const postsRes = await fetch('/api/posts');
-      const posts: ActivePost[] = postsRes.ok ? await postsRes.json() : [];
-      const activePosts = posts
-        .filter((p) => p.status === 'open' || p.status === 'in-progress')
-        .slice(0, 5);
-
-      const recentActivities: AIActivity[] = [];
-      for (const post of activePosts) {
-        if (!post.id) continue;
-        try {
-          const res = await fetch(`/api/posts/${post.id}`);
-          if (!res.ok) continue;
-          const detail = await res.json();
-          const comments = (
-            detail.comments || []
-          ) as Array<{ author: string; content: string; created_at: string; is_visitor: number; is_resolution: number }>;
-          const agentComments = comments
-            .filter((c) => !c.is_visitor && !c.is_resolution && AUTHOR_META[c.author])
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 3);
-          for (const c of agentComments) {
-            const summary = c.content.replace(/#{1,6}\s/g, '').replace(/[*`[\]_>]/g, '').trim().slice(0, 80);
-            recentActivities.push({
-              agent: c.author,
-              action: '의견 제시',
-              timestamp: c.created_at,
-              postId: post.id,
-              content: summary + (c.content.length > 80 ? '...' : ''),
-              type: 'comment',
-            });
-          }
-        } catch { /* skip */ }
-      }
-      recentActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setAiActivities(recentActivities.slice(0, 10));
-    } catch { /* skip */ }
-  }, []);
-
   useEffect(() => {
     fetchData();
 
     const unsubscribe = subscribe((event) => {
-      if (
-        event.type === 'new_comment' &&
-        event.data?.author &&
-        AUTHOR_META[event.data.author]?.isAgent !== false
-      ) {
-        const newActivity: AIActivity = {
-          agent: event.data.author,
-          action: '의견 제시',
-          timestamp: new Date().toISOString(),
-          postId: event.post_id,
-          content: event.data.content ? event.data.content.slice(0, 100) + '...' : '',
-          type: 'comment',
-        };
-        setAiActivities((prev) => [newActivity, ...prev].slice(0, 10));
-      }
-
       if (
         event.type === 'dev_task_updated' ||
         event.type === 'post_updated' ||
@@ -191,13 +111,6 @@ export default function TodayActions() {
 
     return () => unsubscribe();
   }, [subscribe, fetchData]);
-
-  // Fetch activities only when the panel is expanded
-  useEffect(() => {
-    if (showActivity && aiActivities.length === 0) {
-      fetchActivities();
-    }
-  }, [showActivity, aiActivities.length, fetchActivities]);
 
   const hasUrgent =
     awaitingTasks.length > 0 ||
@@ -276,7 +189,7 @@ export default function TodayActions() {
                     className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors"
                   >
                     <span
-                      className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE.low}`}
+                      className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border ${PRIORITY_BADGE_STYLE[task.priority] ?? PRIORITY_BADGE_STYLE.low}`}
                     >
                       {PRIORITY_LABEL[task.priority] ?? task.priority}
                     </span>
@@ -377,63 +290,6 @@ export default function TodayActions() {
         </div>
       </div>
 
-      {/* Section 3: Live AI Activity (collapsed by default) */}
-      <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowActivity((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-            실시간 AI 활동 보기
-            {aiActivities.length > 0 && (
-              <span className="text-xs text-zinc-400">({aiActivities.length}건)</span>
-            )}
-          </span>
-          <span className="text-zinc-400 text-xs">{showActivity ? '▾' : '▸'}</span>
-        </button>
-
-        {showActivity && (
-          <div className="border-t border-zinc-100 px-4 py-3 space-y-2">
-            {aiActivities.length > 0 ? (
-              aiActivities.map((activity, idx) => {
-                const meta = AUTHOR_META[activity.agent];
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-start gap-3 py-2 border-b border-zinc-50 last:border-0"
-                  >
-                    <div className="shrink-0 w-8 h-8 bg-zinc-100 rounded-lg flex items-center justify-center text-base">
-                      {meta?.emoji || '🤖'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 mb-0.5">
-                        <span className="text-xs font-semibold text-zinc-800">
-                          {meta?.label || activity.agent}
-                        </span>
-                        <span className="text-[10px] text-zinc-400">{timeAgo(activity.timestamp)}</span>
-                        {activity.postId && (
-                          <Link
-                            href={`/posts/${activity.postId}`}
-                            className="text-[10px] text-indigo-400 hover:text-indigo-600 transition-colors ml-auto"
-                          >
-                            보기 →
-                          </Link>
-                        )}
-                      </div>
-                      {activity.content && (
-                        <p className="text-[11px] text-zinc-500 line-clamp-1">&ldquo;{activity.content}&rdquo;</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-zinc-400 text-center py-4">AI 활동 데이터를 불러오는 중...</p>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

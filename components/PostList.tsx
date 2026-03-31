@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AUTHOR_META, TYPE_LABELS, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT, DISCUSSION_WINDOW_MS, getDiscussionWindow } from '@/lib/constants';
+import { AUTHOR_META, TYPE_LABELS, TYPE_ICON, PRIORITY_BADGE, STATUS_DOT, STATUS_LABEL, STATUS_STYLE, DISCUSSION_WINDOW_MS, getDiscussionWindow } from '@/lib/constants';
 import type { PostWithCommentCount } from '@/lib/types';
 import { timeAgo, truncate } from '@/lib/utils';
 import CountdownTimer from './CountdownTimer';
@@ -14,19 +14,6 @@ import { useEvent } from '@/contexts/EventContext';
 const ALL_TYPE_ORDER = ['urgent', 'strategy', 'tech', 'ops', 'risk', 'review', 'decision', 'discussion', 'issue', 'inquiry'] as const;
 const STATUSES = ['open', 'in-progress', 'resolved'] as const;
 
-const STATUS_LABEL_KO: Record<string, string> = {
-  open: '토론중',
-  'in-progress': '진행중',
-  'conclusion-pending': '마감됨',
-  resolved: '마감',
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  open: 'text-indigo-600 bg-indigo-50 border-indigo-200',
-  'in-progress': 'text-amber-600 bg-amber-50 border-amber-200',
-  'conclusion-pending': 'text-red-600 bg-red-50 border-red-300 font-semibold',
-  resolved: 'text-zinc-500 bg-zinc-100 border-zinc-200',
-};
 
 const STATUS_DOT_EXTRA: Record<string, string> = {
   'conclusion-pending': 'bg-red-500 animate-pulse',
@@ -429,7 +416,7 @@ function PostListInner({
                 }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === s ? 'bg-white' : STATUS_DOT[s]}`} />
-                {STATUS_LABEL_KO[s]}
+                {STATUS_LABEL[s]}
               </button>
             ))}
 
@@ -904,7 +891,7 @@ function PostListInner({
                         </span>
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] ${STATUS_STYLE[displayStatus] ?? STATUS_STYLE['in-progress']}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_EXTRA[displayStatus] ?? STATUS_DOT[post.status] ?? 'bg-zinc-300'}`} />
-                          {STATUS_LABEL_KO[displayStatus]}
+                          {STATUS_LABEL[displayStatus]}
                         </span>
                         {/* Right side: agent emojis + comment count */}
                         <div className="ml-auto flex items-center gap-1.5">

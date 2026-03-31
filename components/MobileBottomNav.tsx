@@ -44,9 +44,10 @@ function MobileBottomNavInner({ isOwner }: { isOwner: boolean }) {
   ];
 
   const moreItems = [
-    ...(isOwner ? [{ href: '/dashboard',  label: '대시보드', icon: '📊' }] : []),
-    ...(isOwner ? [{ href: '/interview',  label: '면접',     icon: '🎯' }] : []),
-    ...(isOwner ? [{ href: '/reports',    label: '보고서',   icon: '📋' }] : []),
+    ...(isOwner ? [{ href: '/dashboard',      label: '대시보드',   icon: '📊' }] : []),
+    ...(isOwner ? [{ href: '/observability', label: '옵저버빌리티', icon: '🔍' }] : []),
+    ...(isOwner ? [{ href: '/interview',     label: '면접',        icon: '🎯' }] : []),
+    ...(isOwner ? [{ href: '/reports',       label: '보고서',      icon: '📋' }] : []),
     { href: '/agents',  label: '에이전트', icon: '🤖' },
     { href: '/about',   label: '소개',     icon: 'ℹ️' },
   ];

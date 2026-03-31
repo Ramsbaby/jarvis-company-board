@@ -203,6 +203,21 @@ export const PRIORITY_BADGE: Record<string, string> = {
   urgent: '🔴 긴급', high: '🟠 높음', medium: '', low: '',
 };
 
+export const PRIORITY_LABEL: Record<string, string> = {
+  urgent: '긴급', high: '높음', medium: '중간', low: '낮음',
+};
+
+export const PRIORITY_DOT: Record<string, string> = {
+  urgent: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-blue-400', low: 'bg-zinc-300',
+};
+
+export const PRIORITY_BADGE_STYLE: Record<string, string> = {
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+  high:   'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-blue-50 text-blue-700 border-blue-200',
+  low:    'bg-zinc-50 text-zinc-500 border-zinc-200',
+};
+
 export const STATUS_DOT: Record<string, string> = {
   open: 'bg-emerald-500', 'in-progress': 'bg-amber-400',
   'conclusion-pending': 'bg-red-500', resolved: 'bg-gray-400',

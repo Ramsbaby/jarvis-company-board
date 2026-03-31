@@ -32,6 +32,7 @@ export async function POST(
   const body = await req.json() as {
     voter_id?: string;
     votes?: Array<{ comment_id: string; vote_type: 'best' | 'worst'; reason?: string }>;
+    score_detail?: unknown;  // JSON array — full per-comment breakdown from rule-based scorer
   };
 
   const { voter_id, votes } = body;
@@ -53,12 +54,12 @@ export async function POST(
     }
   }
 
-  // Check minimum 3 distinct non-visitor authors — owner votes bypass this check
+  // Check minimum 3 distinct non-visitor, non-system authors — owner votes bypass this check
   if (!isOwnerVote) {
     const participantRow = db.prepare(
       `SELECT COUNT(DISTINCT author) as cnt
        FROM comments
-       WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0`,
+       WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0 AND author != 'system'`,
     ).get(post_id) as { cnt: number };
     if (participantRow.cnt < 3) {
       // 204: too few participants — no content, caller should not retry
@@ -87,14 +88,24 @@ export async function POST(
     }
   }
 
+  // Serialize score_detail — cap at 50KB, guard against circular references
+  let scoreDetailJson: string | null = null;
+  if (body.score_detail) {
+    try {
+      const serialized = JSON.stringify(body.score_detail);
+      if (serialized.length <= 50_000) scoreDetailJson = serialized;
+    } catch { /* circular ref or non-serializable — ignore */ }
+  }
+
   // Insert / update votes in a transaction
   const insertVote = db.prepare(`
-    INSERT INTO peer_votes (id, post_id, comment_id, voter_id, vote_type, reason, is_owner_vote)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO peer_votes (id, post_id, comment_id, voter_id, vote_type, reason, is_owner_vote, score_detail)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(post_id, voter_id, vote_type) DO UPDATE SET
       comment_id = excluded.comment_id,
       reason = excluded.reason,
-      is_owner_vote = excluded.is_owner_vote
+      is_owner_vote = excluded.is_owner_vote,
+      score_detail = COALESCE(excluded.score_detail, peer_votes.score_detail)
   `);
 
   const insertScore = db.prepare(`
@@ -124,7 +135,9 @@ export async function POST(
 
     for (const v of votes) {
       const existing = existingVoteStmt.get(post_id, voter_id, v.vote_type) as IdRow | undefined;
-      insertVote.run(nanoid(), post_id, v.comment_id, voter_id, v.vote_type, v.reason ?? null, isOwnerVote ? 1 : 0);
+      // Only attach score_detail to the best vote (one record per post is enough)
+      const detailForThisVote = (v.vote_type === 'best') ? scoreDetailJson : null;
+      insertVote.run(nanoid(), post_id, v.comment_id, voter_id, v.vote_type, v.reason ?? null, isOwnerVote ? 1 : 0, detailForThisVote);
 
       if (existing) {
         updated++;
@@ -147,7 +160,7 @@ export async function POST(
     if (isFirstVoteForPost) {
       const commenters = db.prepare(
         `SELECT DISTINCT author FROM comments
-         WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0`,
+         WHERE post_id = ? AND is_visitor = 0 AND is_resolution = 0 AND author != 'system'`,
       ).all(post_id) as Array<{ author: string }>;
 
       for (const { author } of commenters) {
@@ -206,6 +219,13 @@ export async function GET(
     total_voters: number;
   }>;
 
+  // Human voter count — exclude automated scorer bots (voter_id ends with '-scorer')
+  const humanVoterRow = db.prepare(
+    `SELECT COUNT(DISTINCT voter_id) AS cnt FROM peer_votes
+     WHERE post_id = ? AND voter_id NOT LIKE '%-scorer'`
+  ).get(post_id) as { cnt: number };
+  const humanVoters = humanVoterRow.cnt;
+
   // Get top voted best comment's most recent reason
   const topBestComment = rows.filter(r => r.best_count > 0).sort((a, b) => b.best_count - a.best_count)[0];
   const topWorstComment = rows.filter(r => r.worst_count > 0).sort((a, b) => b.worst_count - a.worst_count)[0];
@@ -222,10 +242,21 @@ export async function GET(
       ).get(post_id, topWorstComment.comment_id) as { reason: string | null } | undefined)?.reason ?? null
     : null;
 
+  // score_detail — full per-comment breakdown from rule-based scorer
+  type ScoreEntry = { comment_id: string; author_id: string; author: string; score: number; why: string };
+  const scoreDetailRow = db.prepare(
+    `SELECT score_detail FROM peer_votes WHERE post_id = ? AND score_detail IS NOT NULL LIMIT 1`
+  ).get(post_id) as { score_detail: string | null } | undefined;
+
+  let allScores: ScoreEntry[] | null = null;
+  if (scoreDetailRow?.score_detail) {
+    try { allScores = JSON.parse(scoreDetailRow.score_detail) as ScoreEntry[]; } catch { allScores = null; }
+  }
+
   // Owner votes: return which comments the owner voted on (for UI state)
   const ownerVotes = db.prepare(
     `SELECT comment_id, vote_type FROM peer_votes WHERE post_id = ? AND voter_id = 'owner'`
   ).all(post_id) as Array<{ comment_id: string; vote_type: string }>;
 
-  return NextResponse.json({ votes: rows, bestReason, worstReason, ownerVotes });
+  return NextResponse.json({ votes: rows, bestReason, worstReason, ownerVotes, humanVoters, allScores });
 }
