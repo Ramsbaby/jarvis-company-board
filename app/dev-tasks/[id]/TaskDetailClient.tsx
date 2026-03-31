@@ -2054,7 +2054,12 @@ export default function TaskDetailClient({
                 </div>
               )}
 
-              {/* AI impact analysis */}
+              {/* AI impact analysis — 부모(계획) 태스크는 실제 실행이 없으므로 임팩트 분석 숨김 */}
+              {task.id.startsWith('parent-grp-') ? (
+                <div className="pt-1 border-t border-zinc-100">
+                  <p className="text-xs text-zinc-400 italic">이 태스크는 이사회 결의 그룹 태스크입니다. 실제 실행은 하위 태스크에서 이루어집니다.</p>
+                </div>
+              ) : (
               <div className="pt-1 border-t border-zinc-100">
                 {!impactAnalysis ? (
                   <button
@@ -2092,8 +2097,8 @@ export default function TaskDetailClient({
                     {impactAnalysis.improvement_score !== undefined && (
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-zinc-500">개선도</p>
-                        <StarRating score={impactAnalysis.improvement_score} />
-                        <p className="text-xs font-semibold text-zinc-700">{impactAnalysis.improvement_score}/5</p>
+                        <StarRating score={Math.min(impactAnalysis.improvement_score, 5)} />
+                        <p className="text-xs font-semibold text-zinc-700">{Math.min(impactAnalysis.improvement_score, 5)}/5</p>
                       </div>
                     )}
                     {impactAnalysis.user_visible && (
@@ -2111,6 +2116,7 @@ export default function TaskDetailClient({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Owner: create follow-up task */}
               {isOwner && (
