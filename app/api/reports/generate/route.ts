@@ -27,23 +27,28 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
+  // Normalize to YYYY-MM-DD for DATE() comparisons
+  // (DB stores ISO 8601 like 2026-03-31T08:37Z; space-delimited strings fail string compare)
+  const dateStart = periodStart.slice(0, 10);
+  const dateEnd = periodEnd.slice(0, 10);
+
   // 1. Collect completed dev tasks in period
   const completedTasks = db.prepare(`
     SELECT id, title, detail, priority, completed_at
     FROM dev_tasks
     WHERE status = 'done'
-      AND completed_at >= ? AND completed_at <= ?
+      AND DATE(completed_at) >= ? AND DATE(completed_at) <= ?
     ORDER BY completed_at DESC
-  `).all(periodStart, periodEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'> & { completed_at: string }>;
+  `).all(dateStart, dateEnd) as Array<Pick<DevTask, 'id' | 'title' | 'detail' | 'priority'> & { completed_at: string }>;
 
   // 2. Collect issue posts created in period (bug signals)
   const issuesPosts = db.prepare(`
     SELECT id, title, content, status, created_at
     FROM posts
     WHERE type = 'issue'
-      AND created_at >= ? AND created_at <= ?
+      AND DATE(created_at) >= ? AND DATE(created_at) <= ?
     ORDER BY created_at DESC
-  `).all(periodStart, periodEnd) as Pick<Post, 'id' | 'title' | 'content' | 'status' | 'created_at'>[];
+  `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'content' | 'status' | 'created_at'>[];
 
   // 3. Collect resolved posts in period (decisions made)
   const resolvedPosts = db.prepare(`
@@ -51,10 +56,10 @@ export async function POST(req: NextRequest) {
     FROM posts
     WHERE status = 'resolved'
       AND type != 'report'
-      AND resolved_at >= ? AND resolved_at <= ?
+      AND DATE(resolved_at) >= ? AND DATE(resolved_at) <= ?
     ORDER BY resolved_at DESC
     LIMIT 10
-  `).all(periodStart, periodEnd) as Pick<Post, 'id' | 'title' | 'type' | 'resolved_at'>[];
+  `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'type' | 'resolved_at'>[];
 
   // 4. Generate report with Claude Haiku
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
