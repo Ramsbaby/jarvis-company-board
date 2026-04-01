@@ -14,6 +14,11 @@ export default function AutoRefresh() {
     if (SKIP_PATHS.includes(pathname)) return;
 
     timerRef.current = setInterval(() => {
+      const active = document.activeElement;
+      const isFormFocused = active instanceof HTMLInputElement
+        || active instanceof HTMLTextAreaElement
+        || (active instanceof HTMLElement && active.isContentEditable);
+      if (isFormFocused) return;
       router.refresh();
     }, INTERVAL_MS);
 
