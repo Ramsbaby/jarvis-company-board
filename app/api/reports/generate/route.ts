@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const groqApiKey = process.env.GROQ_API_KEY;
-  if (!groqApiKey) return NextResponse.json({ error: 'GROQ_API_KEY not set' }, { status: 503 });
+  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicApiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 503 });
 
   const body = await req.json();
   const reportType: 'daily' | 'weekly' | 'monthly' = body.type ?? 'daily';
@@ -76,39 +76,56 @@ export async function POST(req: NextRequest) {
     ? issuesPosts.map(i => `- ${i.title} (${i.status === 'resolved' ? '해결됨' : '처리 중'})`).join('\n')
     : '없음';
 
-  const prompt = `당신은 자비스 AI 시스템의 보고 담당입니다. 아래 데이터를 바탕으로 이정우 대표(비개발자)가 읽을 ${typeLabel} 보고서를 작성하세요.
+  const resolvedList = resolvedPosts.length > 0
+    ? resolvedPosts.map(p => `- ${p.title}`).join('\n')
+    : '없음';
 
-핵심 관점: "자비스가 실제로 개선되었는가? 버그/문제는 없는가? 믿을 수 있는가?"
+  const prompt = `당신은 Jarvis — 이정우 대표의 AI 집사입니다. 아래 ${typeLabel} 데이터를 바탕으로 대표님께 드릴 업무 보고서를 작성하세요.
+
+⚠️ 언어 규칙: 반드시 한국어로만 작성하세요. 중국어·한자·일본어 절대 금지. 영어 기술 용어도 쉬운 한국어로 바꾸세요.
 
 기간: ${periodLabel}
 
-완료된 개발 작업 (${completedTasks.length}건):
+[완료된 개발 작업 — ${completedTasks.length}건]
 ${tasksList}
 
-이슈/버그 리포트 (${issuesPosts.length}건):
+[이슈·버그 — ${issuesPosts.length}건]
 ${issuesList}
 
-보고서 형식 (마크다운):
-1. ## ✅ 완료된 작업 (N건)
-   - 각 작업을 한 줄씩, 쉬운 말로 설명. 기술용어 금지. "무엇을 고쳤는지/만들었는지" 위주.
-2. ## ⚠️ 품질 점검
-   - 이슈/버그: N건 (있으면 간략 설명, 없으면 "이슈 없음")
-   - 완료 후 연속 수정이 있었는지 (있으면 언급)
-3. ## 💬 종합 평가
-   - 2~3문장. "오늘 X가지 개선이 이루어졌습니다. [평가]" 형식.
-   - 완료 작업이 없으면 솔직하게 "작업 없음"으로.
+[해결된 토론·결정사항 — ${resolvedPosts.length}건]
+${resolvedList}
 
-규칙: 한국어만, 쉬운 말, 사실만, 과장 금지.`;
+---
+작성 지침:
+- 말투: 집사가 대표님께 드리는 보고 어조 (~했습니다, ~되었습니다). 공손하되 딱딱하지 않게.
+- 각 완료 작업은 비개발자도 이해할 수 있게 1~2문장으로 풀어서 설명. "무엇이 어떻게 개선됐는지" 위주.
+  나쁜 예: "SSE 브로드캐스트 추가" → 좋은 예: "작업이 완료될 때 화면이 즉시 새로고침되도록 실시간 알림 기능을 추가했습니다."
+- 완료 작업이 없으면 "오늘은 완료된 작업이 없었습니다"라고 솔직하게 쓰세요.
+- 서론·맺음말·상투적 칭찬 ("훌륭한 하루", "열심히 일했습니다" 등) 금지.
+- 이슈가 있으면 심각도와 현재 상태를 명확히.
+- 해결된 토론·결정사항이 있으면 간략하게 언급.
 
-  const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+보고서 구조 (이 형식을 정확히 따르세요):
+
+## ✅ 완료 작업 (${completedTasks.length}건)
+[각 작업을 쉬운 말로 설명. 작업이 없으면 "오늘은 완료된 작업이 없었습니다."]
+
+## 🔍 품질 현황
+[이슈 건수 및 상태, 해결된 결정사항 요약. 모두 없으면 "이슈 없음 · 특이사항 없음"]
+
+## 📋 오늘의 요약
+[전체를 2~3문장으로. 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
+
+  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${groqApiKey}`,
-      'Content-Type': 'application/json',
+      'x-api-key': anthropicApiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 1000,
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     }),
     signal: AbortSignal.timeout(30000),
@@ -116,8 +133,8 @@ ${issuesList}
 
   let reportContent = '';
   if (aiRes?.ok) {
-    const aiData = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
-    reportContent = aiData?.choices?.[0]?.message?.content?.trim() ?? '';
+    const aiData = await aiRes.json() as { content: Array<{ text: string }> };
+    reportContent = aiData?.content?.[0]?.text?.trim() ?? '';
   }
   const aiGenerated = !!reportContent;
   if (!reportContent) {
@@ -126,8 +143,8 @@ ${issuesList}
   }
 
   // Full report with header
-  const generatedBy = aiGenerated ? '🤖 AI 자동 생성' : '⚠️ AI 실패 · 원본 데이터';
-  const fullContent = `${reportContent}\n\n---\n📅 기간: ${periodLabel}  |  ${generatedBy}`;
+  const generatedBy = aiGenerated ? '' : ' · ⚠️ AI 실패(원본 데이터)';
+  const fullContent = `${reportContent}\n\n---\n📅 ${periodLabel}${generatedBy}`;
 
   // 5. Store as post with type='report'
   const postId = randomUUID();
