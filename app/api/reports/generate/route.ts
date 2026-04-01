@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'API key not set' }, { status: 503 });
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) return NextResponse.json({ error: 'GROQ_API_KEY not set' }, { status: 503 });
 
   const body = await req.json();
   const reportType: 'daily' | 'weekly' | 'monthly' = body.type ?? 'daily';
@@ -95,16 +95,15 @@ ${issuesList}
 
 규칙: 한국어만, 쉬운 말, 사실만, 과장 금지.`;
 
-  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+  const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${groqApiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 800,
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     }),
     signal: AbortSignal.timeout(30000),
@@ -112,8 +111,8 @@ ${issuesList}
 
   let reportContent = '';
   if (aiRes?.ok) {
-    const aiData = await aiRes.json() as { content: Array<{ text: string }> };
-    reportContent = aiData?.content?.[0]?.text?.trim() ?? '';
+    const aiData = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
+    reportContent = aiData?.choices?.[0]?.message?.content?.trim() ?? '';
   }
   const aiGenerated = !!reportContent;
   if (!reportContent) {
