@@ -22,16 +22,6 @@ export class LLMError extends Error {
   }
 }
 
-/** 재시도 불필요한 에러 (인증·입력 오류) */
-function isNonRetryable(err: LLMError): boolean {
-  return err.status !== undefined && err.status >= 400 && err.status < 500;
-}
-
-/** 지수 백오프 대기 */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 export async function callLLM(
   prompt: string,
   options: {
@@ -40,10 +30,6 @@ export async function callLLM(
     signal?: AbortSignal;
     timeoutMs?: number;
     systemPrompt?: string;
-    /** Groq temperature (0–2). 반론형 0.8, 합성형 0.3, 표준 0.65 */
-    temperature?: number;
-    /** 실패 시 재시도 횟수 (기본 2회, 타임아웃/네트워크 오류에만 적용) */
-    retries?: number;
   } = {},
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -54,78 +40,54 @@ export async function callLLM(
     maxTokens = 1200,
     timeoutMs = 20000,
     systemPrompt,
-    temperature,
-    retries = 2,
   } = options;
+
+  // Use provided signal or create our own timeout
+  let controller: AbortController | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let signal = options.signal;
+
+  if (!signal) {
+    controller = new AbortController();
+    timer = setTimeout(() => controller!.abort(), timeoutMs);
+    signal = controller.signal;
+  }
 
   const messages: Array<{ role: string; content: string }> = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: prompt });
 
-  let lastErr: LLMError | null = null;
+  try {
+    const res = await fetch(GROQ_BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages,
+      }),
+      signal,
+    });
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    // 재시도 전 지수 백오프 (첫 시도는 대기 없음)
-    if (attempt > 0) {
-      await sleep(500 * Math.pow(2, attempt - 1)); // 500ms, 1000ms
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new LLMError(`Groq API 오류 (${res.status}): ${body.slice(0, 200)}`, res.status);
     }
 
-    // Use provided signal or create our own timeout
-    let controller: AbortController | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let signal = options.signal;
-
-    if (!signal) {
-      controller = new AbortController();
-      timer = setTimeout(() => controller!.abort(), timeoutMs);
-      signal = controller.signal;
+    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
+    const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
+    if (!text) throw new LLMError('빈 응답');
+    return text;
+  } catch (err: unknown) {
+    if (err instanceof LLMError) throw err;
+    if ((err as Error).name === 'AbortError' || (err as Error).message?.includes('aborted')) {
+      throw new LLMError('LLM 응답 시간 초과', 504, true);
     }
-
-    try {
-      const res = await fetch(GROQ_BASE_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          ...(temperature !== undefined && { temperature }),
-          messages,
-        }),
-        signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        const err = new LLMError(`Groq API 오류 (${res.status}): ${body.slice(0, 200)}`, res.status);
-        // 4xx 에러는 재시도 무의미
-        if (isNonRetryable(err)) throw err;
-        lastErr = err;
-        continue;
-      }
-
-      const data = await res.json() as { choices: Array<{ message: { content: string } }> };
-      const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
-      if (!text) throw new LLMError('빈 응답');
-      return text;
-    } catch (err: unknown) {
-      if (err instanceof LLMError) {
-        if (isNonRetryable(err)) throw err; // 4xx는 즉시 throw
-        lastErr = err;
-        continue;
-      }
-      if ((err as Error).name === 'AbortError' || (err as Error).message?.includes('aborted')) {
-        lastErr = new LLMError('LLM 응답 시간 초과', 504, true);
-        continue;
-      }
-      lastErr = new LLMError((err as Error).message ?? 'LLM 호출 실패');
-      continue;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
+    throw new LLMError((err as Error).message ?? 'LLM 호출 실패');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-
-  throw lastErr ?? new LLMError('LLM 호출 실패 (재시도 소진)');
 }

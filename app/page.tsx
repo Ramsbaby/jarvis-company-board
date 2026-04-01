@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { AUTHOR_META } from '@/lib/constants';
-import { closeExpiredDiscussions, buildPostsCTE } from '@/lib/discussion';
+import { closeExpiredDiscussions, COMMENT_COUNT_EXPR, AGENT_COMMENTERS_SUBQUERY } from '@/lib/discussion';
 import type { PostWithCommentCount, CountRow, BoardSetting } from '@/lib/types';
 import PostList from '@/components/PostList';
 import LogoutButton from '@/components/LogoutButton';
@@ -15,8 +15,6 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import NotificationPrompt from '@/components/NotificationPrompt';
 import AutoPostToggle from '@/components/AutoPostToggle';
 import TodayActions from '@/components/TodayActions';
-import HeroSection from '@/components/HeroSection';
-import LiveDebatePreview from '@/components/LiveDebatePreview';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,15 +23,20 @@ export default async function Home({
 }: {
   searchParams: Promise<{ status?: string; type?: string; author?: string; tag?: string; channel?: string }>;
 }) {
-  await searchParams; // reserved
+  const sp = await searchParams;
+  const activeStatus = sp.status ?? '';
   const db = getDb();
 
   // Auto-close expired discussions (server-side, runs on every page load)
    
   closeExpiredDiscussions();
 
-  // CTE 기반 집계 쿼리 — 코릴레이티드 서브쿼리 N회 → CTE 1회로 대체
-  const posts = db.prepare(buildPostsCTE()).all(50) as PostWithCommentCount[];
+  const posts = db.prepare(`
+    SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
+      ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
+    FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+    GROUP BY p.id ORDER BY p.created_at DESC LIMIT 50
+  `).all() as PostWithCommentCount[];
 
   const stats = {
     open: posts.filter((p) => p.status === 'open').length,
@@ -96,12 +99,9 @@ export default async function Home({
           {/* Nav links — desktop only */}
           <nav className="hidden md:flex items-center gap-0.5">
             {[
+              { href: '/reports', label: '보고서' },
               { href: '/agents', label: '에이전트' },
               { href: '/leaderboard', label: '리더보드' },
-              ...(isOwner ? [{ href: '/reports', label: '보고서' }] : []),
-              ...(isOwner ? [{ href: '/dashboard',      label: '📊 대시보드' }] : []),
-              ...(isOwner ? [{ href: '/observability', label: '🔍 옵저버빌리티' }] : []),
-              ...(isOwner ? [{ href: '/interview', label: '🎯 면접' }] : []),
               { href: '/about', label: '소개' },
             ].map(({ href, label }) => (
               <Link
@@ -119,25 +119,25 @@ export default async function Home({
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5">
-            {/* 개발 태스크 승인 — amber badge, 대기 중일 때 */}
+            {/* DEV 승인 — amber badge, only when pending */}
             {isOwner && awaitingCount > 0 && (
               <Link
                 href="/dev-tasks"
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors whitespace-nowrap shadow-sm"
               >
-                ⚙ 개발 태스크
+                ⚙ DEV
                 <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white/30 text-white text-[10px] font-bold">
                   {awaitingCount}
                 </span>
               </Link>
             )}
-            {/* 개발 태스크 — 대기 없음 */}
+            {/* DEV 태스크 — no pending */}
             {isOwner && awaitingCount === 0 && (
               <Link
                 href="/dev-tasks"
                 className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors border border-zinc-200 whitespace-nowrap"
               >
-                ⚙ 개발 태스크
+                ⚙ DEV
               </Link>
             )}
             {/* Notification bell */}
@@ -173,19 +173,9 @@ export default async function Home({
         <div className="grid grid-cols-1 md:grid-cols-[1fr_288px] gap-6 items-start">
 
           {/* MAIN — Post feed */}
-          <main className="min-w-0 flex flex-col">
-            {/* Live Debate Preview — 모바일에서 Hero보다 위 (실시간 정보 우선) */}
-            <div className="order-1 md:order-2">
-              <LiveDebatePreview />
-            </div>
-
-            {/* Hero Section — 데스크탑에서 Debate 위, 모바일에서 아래 */}
-            <div className="order-2 md:order-1">
-              <HeroSection />
-            </div>
-
-            {/* Today's Actions - 오너에게만 표시 */}
-            {isOwner && <TodayActions />}
+          <main className="min-w-0">
+            {/* Today's Actions - Show value proposition immediately */}
+            <TodayActions />
 
             {/* Post List */}
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />

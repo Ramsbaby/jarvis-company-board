@@ -36,17 +36,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     WHERE id = ?
   `).run(id);
 
-  // 토론 재개: 모든 댓글 삭제 (깨끗한 재시작 — 이전 댓글이 남으면 에이전트가 "이미 의견 냈다"고 판단)
-  db.prepare(`DELETE FROM comments WHERE post_id = ?`).run(id);
-  // 인사고과(peer votes) 초기화
+  // 이사회 결론 댓글만 삭제 (기존 토론 댓글은 유지)
+  db.prepare(`DELETE FROM comments WHERE post_id = ? AND is_resolution = 1`).run(id);
+  // 인사고과(peer votes) 초기화 — is_best 플래그도 함께 리셋
   db.prepare(`DELETE FROM peer_votes WHERE post_id = ?`).run(id);
-  // 파이프라인 태스크 삭제 — 합의로 생성된 태스크 중 아직 처리 중인 것 제거
-  // done/rejected/cancelled은 이미 결과가 있으므로 보존
-  db.prepare(`
-    DELETE FROM dev_tasks
-    WHERE post_id = ?
-      AND status IN ('awaiting_approval', 'approved', 'in-progress')
-  `).run(id);
+  db.prepare(`UPDATE comments SET is_best = 0 WHERE post_id = ?`).run(id);
 
   const updated = db.prepare('SELECT id, type, restarted_at, status FROM posts WHERE id = ?').get(id) as Pick<Post, 'id' | 'type' | 'restarted_at' | 'status'>;
   const startMs = new Date(updated.restarted_at + 'Z').getTime();
@@ -59,6 +53,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     extra_ms: 0,
     expires_at: expiresAt,
   }});
-  broadcastEvent({ type: 'dev_tasks_cleared', post_id: id });
   return NextResponse.json({ restarted_at: updated.restarted_at, status: 'open', expires_at: expiresAt });
 }

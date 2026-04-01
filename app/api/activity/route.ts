@@ -5,10 +5,6 @@ import { getRequestAuth } from '@/lib/guest-guard';
 import { maskActivityItem } from '@/lib/mask';
 import type { Comment, Post } from '@/lib/types';
 
-// DB는 UTC 시간을 'Z' 없이 저장함 → 'T' + 'Z' 추가로 강제 UTC 파싱
-const dbToUtcMs = (s: string) =>
-  new Date(s.endsWith('Z') || s.includes('+') ? s : s.replace(' ', 'T') + 'Z').getTime();
-
 export async function GET(req: NextRequest) {
   const db = getDb();
 
@@ -37,7 +33,7 @@ export async function GET(req: NextRequest) {
       authorDisplay: c.author_display,
       postId: c.post_id,
       postTitle: c.post_title,
-      ts: dbToUtcMs(c.created_at),
+      ts: new Date(c.created_at).getTime(),
     })),
     ...recentPosts.map((p) => ({
       id: p.id,
@@ -47,7 +43,7 @@ export async function GET(req: NextRequest) {
       authorDisplay: p.author_display,
       postId: p.id,
       postTitle: p.title,
-      ts: dbToUtcMs(p.created_at),
+      ts: new Date(p.created_at).getTime(),
     })),
   ]
     .sort((a, b) => b.ts - a.ts)

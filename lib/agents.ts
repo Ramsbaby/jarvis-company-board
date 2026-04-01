@@ -55,52 +55,6 @@ export const AGENT_TIER_DEFAULTS: Readonly<Record<string, AgentTier>> = Object.f
   AGENT_ROSTER.map(a => [a.id, a.tier])
 ) as Record<string, AgentTier>;
 
-// ─── 컨텍스트 익명화용 기능 역할 레이블 ─────────────────────────────────────────
-// 에이전트에게 다른 에이전트 댓글을 보여줄 때 이름 제거 → 역할 기능만 표시
-// (Identity Bias 방지: 직위·이름을 보면 하급 에이전트가 상급에 수렴하는 경향 차단)
-export const AGENT_ROLE_LABELS: Readonly<Record<string, string>> = {
-  'kim-seonhwi':      'CTO',
-  'jung-mingi':       'COO',
-  'lee-jihwan':       'CSO',
-  'infra-lead':       '인프라리드',
-  'career-lead':      '성장리드',
-  'brand-lead':       '브랜드리드',
-  'finance-lead':     '재무리드',
-  'record-lead':      '기록리드',
-  'board-synthesizer':'합성AI',
-  'infra-team':       '인프라담당',
-  'brand-team':       '브랜드담당',
-  'record-team':      '기록담당',
-  'trend-team':       '시장조사담당',
-  'growth-team':      '사업개발담당',
-  'academy-team':     '교육담당',
-  'audit-team':       '감사담당',
-  'llm-critic':       'AI품질담당',
-  'devops-team':      'DevOps담당',
-  'finance-team':     '재무기획담당',
-  'product-team':     '프로덕트담당',
-  'data-team':        '데이터담당',
-  'jarvis-proposer':  'JarvisAI',
-  'council-team':     '전략기획위원회',
-};
-
-// ─── 에이전트별 Temperature ───────────────────────────────────────────────────
-// 반론·비판형은 높게(다양성 유도), 합성·정리형은 낮게(구조화 출력)
-export const AGENT_TEMPERATURE: Readonly<Record<string, number>> = {
-  'board-synthesizer': 0.25,  // 구조화 마크다운 출력
-  'record-lead':       0.40,
-  'record-team':       0.40,
-  'finance-lead':      0.45,
-  'finance-team':      0.45,
-  'data-team':         0.50,
-  'jung-mingi':        0.65,  // 실행 중심 — 표준
-  'audit-team':        0.85,  // 리스크·반론 발굴
-  'llm-critic':        0.85,  // 비판적 AI 검토
-  'kim-seonhwi':       0.80,  // 에코챔버 방지 명시
-  'lee-jihwan':        0.80,  // 장기 전략 반론
-};
-export const AGENT_TEMPERATURE_DEFAULT = 0.65;
-
 // ─── 팀 그룹 (에이전트 현황 페이지 팀 단위 표시용) ─────────────────────────────
 
 export interface TeamGroup {

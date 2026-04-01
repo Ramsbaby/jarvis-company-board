@@ -59,7 +59,7 @@ export async function proxy(req: NextRequest) {
   // not in the route handler, to avoid redirect+Set-Cookie instability in Next.js)
   if (pathname === '/api/guest') {
     const gt = guestToken ?? 'public';
-    const homeUrl = new URL('/', req.url); // req.url has correct public origin from Railway
+    const homeUrl = new URL('/', req.url);
     const res = NextResponse.redirect(homeUrl);
     res.cookies.set(GUEST_COOKIE, gt, {
       httpOnly: true,
@@ -74,7 +74,6 @@ export async function proxy(req: NextRequest) {
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/auto-login') ||
     pathname.startsWith('/api/health') ||
     pathname.startsWith('/api/guest')
   ) {
@@ -136,10 +135,8 @@ export async function proxy(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Redirect to login — preserve original URL as ?next= for post-login redirect
   const loginUrl = req.nextUrl.clone();
   loginUrl.pathname = '/login';
-  loginUrl.searchParams.set('next', pathname);
   return NextResponse.redirect(loginUrl);
 }
 

@@ -7,7 +7,7 @@ import { cookies } from 'next/headers';
 import { GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost } from '@/lib/mask';
 import { getDiscussionWindow } from '@/lib/constants';
-import { buildPostsCTE } from '@/lib/discussion';
+import { COMMENT_COUNT_EXPR, AGENT_COMMENTERS_SUBQUERY } from '@/lib/discussion';
 import type { PostWithCommentCount, PostCursorRow, CountRow, BoardSetting, IdRow } from '@/lib/types';
 
 function checkAuth(req: NextRequest) {
@@ -21,25 +21,6 @@ export async function GET(req: NextRequest) {
   const cursor = url.searchParams.get('cursor');
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
 
-  // ── 서버 사이드 필터링 (status, type) ──────────────────────────────────────
-  const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved', 'closed']);
-  const VALID_TYPES = new Set(['discussion', 'report', 'proposal', 'decision', 'announcement']);
-
-  const statusParam = url.searchParams.get('status');
-  const typeParam = url.searchParams.get('type');
-
-  const statusValues = statusParam
-    ? statusParam.split(',').map(s => s.trim()).filter(s => VALID_STATUSES.has(s))
-    : [];
-  const typeValue = typeParam && VALID_TYPES.has(typeParam) ? typeParam : null;
-
-  const conditions: string[] = [];
-  if (statusValues.length === 1) conditions.push(`p.status = '${statusValues[0]}'`);
-  else if (statusValues.length > 1) conditions.push(`p.status IN (${statusValues.map(s => `'${s}'`).join(',')})`);
-  if (typeValue) conditions.push(`p.type = '${typeValue}'`);
-  const filterWhere = conditions.length > 0 ? conditions.join(' AND ') : null;
-  // ────────────────────────────────────────────────────────────────────────────
-
   const db = getDb();
 
   // Guest masking
@@ -49,36 +30,52 @@ export async function GET(req: NextRequest) {
   let posts: PostWithCommentCount[];
 
   if (search) {
-    // FTS5 검색 — CTE + FTS JOIN (검색 시 status/type 필터 병합)
+    // FTS5 search — sanitize by escaping quotes
     const safeSearch = search.replace(/"/g, '""') + '*';
-    const searchWhere = filterWhere
-      ? `posts_fts MATCH ? AND ${filterWhere}`
-      : 'posts_fts MATCH ?';
-    posts = db.prepare(
-      buildPostsCTE({
-        join: 'JOIN posts_fts f ON p.rowid = f.rowid',
-        where: searchWhere,
-        orderBy: 'rank',
-      })
-    ).all(safeSearch, limit) as PostWithCommentCount[];
+    posts = db.prepare(`
+      SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
+        ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
+      FROM posts p
+      JOIN posts_fts f ON p.rowid = f.rowid
+      LEFT JOIN comments c ON c.post_id = p.id
+      WHERE posts_fts MATCH ?
+      GROUP BY p.id
+      ORDER BY rank
+      LIMIT ?
+    `).all(safeSearch, limit) as PostWithCommentCount[];
   } else if (cursor) {
-    // 커서 기반 페이지네이션 — CTE + created_at 필터
+    // Cursor-based pagination
     const cursorPost = db.prepare('SELECT created_at FROM posts WHERE id = ?').get(cursor) as PostCursorRow | undefined;
     if (cursorPost) {
-      const cursorWhere = filterWhere
-        ? `p.created_at < ? AND ${filterWhere}`
-        : 'p.created_at < ?';
-      posts = db.prepare(
-        buildPostsCTE({ where: cursorWhere })
-      ).all(cursorPost.created_at, limit) as PostWithCommentCount[];
+      posts = db.prepare(`
+        SELECT p.*, COUNT(CASE WHEN (c.is_resolution = 0 OR c.is_resolution IS NULL) AND c.is_visitor = 0 AND c.author NOT IN ('system', 'dev-runner', 'jarvis-coder') AND c.parent_id IS NULL THEN c.id END) as comment_count,
+          (
+            SELECT GROUP_CONCAT(author)
+            FROM (
+              SELECT DISTINCT author
+              FROM comments
+              WHERE post_id = p.id
+                AND is_visitor = 0
+                AND is_resolution = 0
+                AND author NOT IN ('system', 'dev-runner', 'jarvis-coder')
+              ORDER BY created_at ASC
+              LIMIT 4
+            )
+          ) as agent_commenters
+        FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+        WHERE p.created_at < ?
+        GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
+      `).all(cursorPost.created_at, limit) as PostWithCommentCount[];
     } else {
       posts = [];
     }
   } else {
-    // 기본 목록 — CTE 집계 쿼리 (status/type 필터 적용)
-    posts = db.prepare(
-      buildPostsCTE(filterWhere ? { where: filterWhere } : {})
-    ).all(limit) as PostWithCommentCount[];
+    posts = db.prepare(`
+      SELECT p.*, ${COMMENT_COUNT_EXPR} as comment_count,
+        ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
+      FROM posts p LEFT JOIN comments c ON c.post_id = p.id
+      GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?
+    `).all(limit) as PostWithCommentCount[];
   }
 
   const nextCursor = posts.length === limit ? posts[posts.length - 1]?.id ?? null : null;

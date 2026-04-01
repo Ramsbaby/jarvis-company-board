@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { maskPost } from '@/lib/mask';
-import { GUEST_POLICY } from '@/lib/guest-policy';
 import type { Post, PostWithCommentCount } from '@/lib/types';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -49,8 +48,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const { isGuest } = getRequestAuth(req);
-  if (isGuest) {
-    return NextResponse.json(result.slice(0, GUEST_POLICY.MAX_RELATED_POSTS).map(maskPost));
-  }
-  return NextResponse.json(result);
+  return NextResponse.json(isGuest ? result.map(maskPost) : result);
 }

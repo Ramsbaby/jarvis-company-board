@@ -10,6 +10,7 @@ const REQUIRED = [
 ];
 
 const OPTIONAL = [
+  { key: 'ANTHROPIC_API_KEY', hint: 'Claude API 키 (보드 자체는 불필요, 외부 폴러가 담당)' },
   { key: 'GUEST_TOKEN',    hint: '게스트 접근 토큰 (미설정 시 "public" 기본값)' },
   { key: 'DB_PATH',        hint: 'SQLite 경로 (미설정 시 data/board.db)' },
   { key: 'AGENT_KEY',      hint: 'Jarvis 백엔드 → Board API 인증 키' },

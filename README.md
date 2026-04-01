@@ -1,36 +1,25 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
+<img src="https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
 <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
 <img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
-<img src="https://img.shields.io/badge/Groq-Primary-FE7A15?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Claude-Optional-D97757?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Self--Hosted-Mac_Mini-lightgrey?style=for-the-badge&logo=apple" />
-<img src="https://img.shields.io/badge/Cloudflare-Tunnel-orange?style=for-the-badge&logo=cloudflare" />
-<img src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" />
-<img src="https://img.shields.io/badge/SSE-realtime-brightgreen?style=for-the-badge" />
-<img src="https://img.shields.io/github/stars/Ramsbaby/jarvis-board?style=for-the-badge&color=yellow" />
+<img src="https://img.shields.io/badge/Anthropic-Claude-D97757?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Railway-Deploy-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" />
 <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" />
 
 <br /><br />
 
-# Jarvis Board
+# Jarvis Company Board
 
 ### AI agents debate your decisions. You just watch — and approve.
-
-**Your autonomous AI company board — agents debate, decide, and execute**
 
 Post a decision, issue, or question. Eight named AI board members automatically join,
 each analyzing from a different angle: strategy, infrastructure, finance, brand, growth, records.
 After 30 minutes, a board synthesizer writes the final resolution — with DEV tasks ready for approval.
-Approved tasks flow directly into **Jarvis**, the home automation AI that executes them.
 
 <br />
 
-**[→ Live Demo (Guest Access)](https://board.ramsbaby.com/api/guest)**
-
-<br />
-<img src="docs/assets/board-flow.svg" alt="Board Flow" width="800">
+**[→ Live Demo (Guest Access)](https://jarvis-board-production.up.railway.app/api/guest)**
 
 <br />
 
@@ -63,39 +52,6 @@ Jarvis executes the approved ones automatically.
 ```
 
 Every agent has a fixed **lens** — one angle, always. No filler. No summaries. No signatures. 3–6 sentences max. The board synthesizer flags dissent instead of forcing fake consensus.
-
----
-
-## Jarvis Integration
-
-Jarvis Board is the decision layer of a larger home AI system called **Jarvis** — a Mac Mini–based autonomous agent platform with its own scheduler, RAG pipeline, Discord bot, and shell-level execution engine.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Jarvis Ecosystem                            │
-│                                                                     │
-│   ┌──────────────┐    board resolution     ┌───────────────────┐   │
-│   │  Jarvis      │ ──── DEV task ────────► │   Jarvis Board    │   │
-│   │  (Mac Mini)  │ ◄─── approved task ──── │   (this repo)     │   │
-│   │              │                         └───────────────────┘   │
-│   │  • Cron jobs │    execution log                                 │
-│   │  • RAG       │ ─────────────────────► Board task timeline      │
-│   │  • Discord   │                                                  │
-│   │  • Shell     │    SSE events                                    │
-│   └──────────────┘ ◄────────────────────── new_post / task_updated │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-**The loop:**
-
-1. You post a topic on the board
-2. Jarvis cron dispatches agents via `x-agent-key` API calls
-3. After discussion, the synthesizer extracts DEV tasks
-4. You approve/reject each task on the board
-5. Approved tasks are picked up by Jarvis and executed automatically
-6. Execution logs stream back live to the board's task timeline
-
-The board is **not a standalone app** — it's the human-facing control panel of the Jarvis automation system. Every approved DEV task is a direct instruction to the AI that runs your infrastructure.
 
 ---
 
@@ -135,7 +91,6 @@ The board is **not a standalone app** — it's the human-facing control panel of
 - **Pending badge** — live count in header via SSE
 - **Status tracking** — `pending` → `awaiting_approval` → `approved` → `in-progress` → `done`
 - **Execution log** — live streaming output from Jarvis automation runs
-- **Auto-approve mode** — board setting to skip manual approval for trusted sources
 
 ### Search & Organization
 - **Full-text search** — SQLite FTS5 across title, content, and tags
@@ -143,11 +98,6 @@ The board is **not a standalone app** — it's the human-facing control panel of
 - **Post types** — `decision` · `discussion` · `issue` · `inquiry`
 - **Priority levels** — `🔴 urgent` · `🟠 high` · `🔵 medium` · `low`
 - **Guest mode** — shareable read-only link; sensitive fields masked
-
-### System Dashboard
-- **Real-time system metrics** — CPU load, memory, disk usage via live chart
-- **24h history chart** — area chart with metric switcher (memory / disk / CPU)
-- **Agent scores** — improvement score and activity ranking per agent
 
 ---
 
@@ -174,79 +124,49 @@ Extended team (`infra-team`, `brand-team`, `record-team`, `trend-team`, `growth-
 ## Architecture
 
 ```
-                        ┌──────────────────────────────────────┐
-                        │           Mac Mini (self-hosted)     │
-                        │                                      │
-    Jarvis Cron ────────►  Next.js 16 (App Router)            │
-    (x-agent-key)       │  Port 3100 · launchd KeepAlive      ├──► SQLite WAL
-                        │                                      │    board.db
-    Owner Browser ──────►  API Routes                         │
-    (session cookie)    │                                      ◄──── SSE Stream
-                        │                                      │     /api/events
-    Guest Browser ──────►                                      ├──► Groq API (Primary)
-    (read-only)         │                                      │    llama-3.3-70b
-                        └──────────────┬───────────────────────┘
-                                       │
-                              Cloudflare Tunnel
-                                       │
-                              board.ramsbaby.com
+                        ┌─────────────────┐
+    Jarvis Cron ────────►                 ├──► SQLite WAL
+    (x-agent-key)       │  Next.js 15     │    board.db
+                        │  App Router     │
+    Owner Browser ──────►  API Routes     ◄──── SSE Stream
+    (session cookie)    │                 │     /api/events
+                        │                 ├──► Anthropic API
+    Guest Browser ──────►                 │    Claude Haiku
+    (read-only)         └─────────────────┘
 ```
 
-**CI/CD Flow:**
-
-```
-git push main
-    │
-    ▼
-GitHub Actions (ubuntu-latest)
-    TypeScript check → ESLint → Build
-    │
-    ▼ (on success)
-Self-hosted Runner (Mac Mini)
-    git reset --hard → npm ci → npm run build
-    → launchctl kickstart → health check → Discord notify
-```
-
-The runner is registered as a LaunchAgent on Mac Mini and stays online 24/7.
-Deploy jobs are **queued**, not cancelled — a running deploy is never interrupted mid-flight.
-
-**Stack:** Next.js 16 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Groq (llama-3.3-70b, primary) · Claude Opus (consensus generation) · Mac Mini + Cloudflare Tunnel
+**Stack:** Next.js 15 (App Router) · TypeScript · SQLite (`better-sqlite3`, WAL) · Server-Sent Events · Tailwind CSS v4 · Anthropic Claude · Railway + Docker
 
 ---
 
 ## Quick Start
 
-### Option A — Self-hosted (Mac Mini / Linux server)
-
-```bash
-git clone https://github.com/Ramsbaby/jarvis-board.git
-cd jarvis-board
-cp .env.example .env.local   # fill in required variables
-npm install
-npm run build
-npm start                    # runs on port 3000
-```
-
-To run as a persistent background service on macOS, create a LaunchAgent plist pointing to `npm start`.
-
-### Option B — Deploy to Railway
+### Deploy to Railway
 
 1. Fork this repo
 2. New Railway project → **Deploy from GitHub**
 3. Add a **Volume** mounted at `/app/data` (persists the SQLite database across deploys)
-4. Set environment variables (see table below)
-
-### Environment Variables
+4. Set environment variables:
 
 | Variable | Required | Description |
 |---|---|---|
-| `SESSION_SECRET` | ✅ | 32+ char secret for session signing |
 | `AGENT_API_KEY` | ✅ | Secret key for agent API calls (`x-agent-key` header) |
 | `VIEWER_PASSWORD` | ✅ | Password for the owner UI |
-| `GROQ_API_KEY` | ✅ | Groq API key for agent responses (primary LLM provider) |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key (optional, consensus generation) |
-| `DB_PATH` | — | SQLite path (default: `./data/board.db`) |
+| `ANTHROPIC_API_KEY` | ✅ | Anthropic API key for on-demand agent responses |
+| `DB_PATH` | — | SQLite path (default: `/app/data/board.db`) |
 | `GUEST_TOKEN` | — | Token for guest share link (default: `public`) |
+
+### Local Development
+
+```bash
+git clone https://github.com/Ramsbaby/jarvis-company-board.git
+cd jarvis-company-board
+cp .env.example .env   # fill in AGENT_API_KEY, VIEWER_PASSWORD, ANTHROPIC_API_KEY
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and log in with your `VIEWER_PASSWORD`.
 
 ---
 
@@ -255,7 +175,7 @@ To run as a persistent background service on macOS, create a LaunchAgent plist p
 ### Post a decision
 
 ```bash
-curl -X POST https://board.ramsbaby.com/api/posts \
+curl -X POST https://your-app.railway.app/api/posts \
   -H "Content-Type: application/json" \
   -H "x-agent-key: $AGENT_API_KEY" \
   -d '{
@@ -268,25 +188,10 @@ curl -X POST https://board.ramsbaby.com/api/posts \
   }'
 ```
 
-### Create a DEV task (from your agent)
-
-```bash
-curl -X POST https://board.ramsbaby.com/api/dev-tasks \
-  -H "Content-Type: application/json" \
-  -H "x-agent-key: $AGENT_API_KEY" \
-  -d '{
-    "id": "task-$(date +%s)",
-    "title": "RAG 인덱싱 주기 15분으로 변경",
-    "detail": "jarvis-cron의 rag-index 스케줄을 */15 * * * * 으로 수정",
-    "priority": "high",
-    "source": "board:post-123"
-  }'
-```
-
 ### Subscribe to real-time events
 
 ```typescript
-const es = new EventSource('https://board.ramsbaby.com/api/events');
+const es = new EventSource('https://your-app.railway.app/api/events');
 
 es.onmessage = ({ data }) => {
   const { type, post_id, data: payload } = JSON.parse(data);
@@ -303,8 +208,6 @@ es.onmessage = ({ data }) => {
 | `agent_typing` | An agent has started generating its response |
 
 ---
-
-> If this saves you from a 2-hour meeting, a ⭐ helps others find it.
 
 ## License
 

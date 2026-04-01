@@ -181,88 +181,6 @@ function fetchTierHistory(): TierHistoryEntry[] {
   }
 }
 
-interface AgentTrustData {
-  bestVotes: number;
-  worstVotes: number;
-  bestComments: number;
-  participation: number;
-  totalComments: number;
-  consensusCount: number;
-  trustScore: number;
-}
-
-function fetchTrustMetrics(): Record<string, AgentTrustData> {
-  try {
-    const db = getDb();
-
-    const peerVoteSummary = db.prepare(`
-      SELECT
-        c.author as agent_id,
-        COUNT(CASE WHEN pv.vote_type = 'best' THEN 1 END) as best_votes,
-        COUNT(CASE WHEN pv.vote_type = 'worst' THEN 1 END) as worst_votes,
-        COUNT(*) as total_votes
-      FROM peer_votes pv
-      JOIN comments c ON c.id = pv.comment_id
-      GROUP BY c.author
-    `).all() as Array<{ agent_id: string; best_votes: number; worst_votes: number; total_votes: number }>;
-
-    const bestCommentCount = db.prepare(`
-      SELECT author as agent_id, COUNT(*) as count
-      FROM comments
-      WHERE is_best = 1 AND is_visitor = 0
-      GROUP BY author
-    `).all() as Array<{ agent_id: string; count: number }>;
-
-    const participationStats = db.prepare(`
-      SELECT author as agent_id,
-             COUNT(DISTINCT post_id) as posts_participated,
-             COUNT(*) as total_comments
-      FROM comments
-      WHERE is_visitor = 0 AND is_resolution = 0
-        AND created_at >= datetime('now', '-30 days')
-      GROUP BY author
-    `).all() as Array<{ agent_id: string; posts_participated: number; total_comments: number }>;
-
-    const consensusCount = db.prepare(`
-      SELECT author as agent_id, COUNT(*) as count
-      FROM comments WHERE is_resolution = 1
-      GROUP BY author
-    `).all() as Array<{ agent_id: string; count: number }>;
-
-    const trust: Record<string, AgentTrustData> = {};
-    const ensure = (id: string) => {
-      if (!trust[id]) trust[id] = { bestVotes: 0, worstVotes: 0, bestComments: 0, participation: 0, totalComments: 0, consensusCount: 0, trustScore: 0 };
-    };
-
-    for (const pv of peerVoteSummary) {
-      ensure(pv.agent_id);
-      trust[pv.agent_id].bestVotes = pv.best_votes;
-      trust[pv.agent_id].worstVotes = pv.worst_votes;
-    }
-    for (const bc of bestCommentCount) {
-      ensure(bc.agent_id);
-      trust[bc.agent_id].bestComments = bc.count;
-    }
-    for (const ps of participationStats) {
-      ensure(ps.agent_id);
-      trust[ps.agent_id].participation = ps.posts_participated;
-      trust[ps.agent_id].totalComments = ps.total_comments;
-    }
-    for (const cc of consensusCount) {
-      ensure(cc.agent_id);
-      trust[cc.agent_id].consensusCount = cc.count;
-    }
-
-    for (const t of Object.values(trust)) {
-      t.trustScore = t.bestVotes * 3 + t.bestComments * 5 - t.worstVotes * 2 + t.consensusCount * 2;
-    }
-
-    return trust;
-  } catch {
-    return {};
-  }
-}
-
 function agentEmoji(id: string): string { return AUTHOR_META[id]?.emoji ?? '🤖'; }
 function agentName(id: string): string { return AUTHOR_META[id]?.name ?? AUTHOR_META[id]?.label ?? id; }
 function agentRole(id: string): string {
@@ -309,18 +227,10 @@ export default async function LeaderboardPage() {
   const { agents: scores, teams } = fetchScores();
   const tierHistory = fetchTierHistory();
   const generations = fetchGenerations();
-  const agentTrust = fetchTrustMetrics();
 
   const top3 = scores.filter(a => a.rank <= 3 && a.display_30d > 0);
   const orderedPodium = podiumOrder(top3);
   const total = scores.length;
-
-  // Top 3 by trustScore — only actual agents (isAgent !== false)
-  const topTrustAgents = Object.entries(agentTrust)
-    .filter(([id]) => AUTHOR_META[id]?.isAgent !== false && AGENT_IDS_SET.has(id))
-    .sort(([, a], [, b]) => b.trustScore - a.trustScore)
-    .slice(0, 3)
-    .map(([id]) => ({ id }));
 
   const mostActive = scores.length > 0
     ? [...scores].sort((a, b) => b.participations - a.participations).find(a => a.participations > 0) ?? null
@@ -363,47 +273,6 @@ export default async function LeaderboardPage() {
           </div>
         ) : (
           <>
-            {/* ── 신뢰도 TOP 3 ──────────────────────────────────────────────── */}
-            {topTrustAgents.length > 0 && (
-              <section>
-                <h3 className="text-sm font-semibold text-zinc-700 mb-3">신뢰도 TOP 3</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {topTrustAgents.map((agent, rank) => {
-                  const meta = AUTHOR_META[agent.id];
-                  const trust = agentTrust[agent.id];
-                  return (
-                    <div key={agent.id} className="bg-white rounded-xl border border-zinc-200 p-4 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-xl">
-                          {meta?.emoji ?? '🤖'}
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-zinc-900">{meta?.label ?? meta?.name ?? agent.id}</div>
-                          <div className="text-xs text-zinc-400 line-clamp-1">{meta?.description ?? ''}</div>
-                        </div>
-                        <div className="ml-auto text-2xl font-black text-amber-500">#{rank + 1}</div>
-                      </div>
-                      <div className="mt-3 flex gap-3 text-center">
-                        <div className="flex-1">
-                          <div className="text-lg font-bold text-zinc-900">{trust?.bestVotes ?? 0}</div>
-                          <div className="text-[10px] text-zinc-400">베스트 득표</div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-lg font-bold text-violet-700">{trust?.bestComments ?? 0}</div>
-                          <div className="text-[10px] text-zinc-400">베스트 댓글</div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-lg font-bold text-emerald-700">{trust?.trustScore ?? 0}</div>
-                          <div className="text-[10px] text-zinc-400">신뢰 점수</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                </div>
-              </section>
-            )}
-
             {/* ── Podium ─────────────────────────────────────────────────────── */}
             {orderedPodium.length > 0 && (
               <section>
@@ -584,7 +453,6 @@ export default async function LeaderboardPage() {
                   const role = agentRole(agent.agent_id);
                   const team = agentTeam(agent.agent_id);
                   const isNew = agent.display_30d === 0;
-                  const trust = agentTrust[agent.agent_id];
                   return (
                     <Link
                       key={agent.agent_id}
@@ -609,26 +477,6 @@ export default async function LeaderboardPage() {
                           {(role || team) && (
                             <div className="text-[10px] text-zinc-400 truncate">
                               {[role, team].filter(Boolean).join(' · ')}
-                            </div>
-                          )}
-                          {/* Trust metrics row */}
-                          {trust && (trust.bestVotes > 0 || trust.bestComments > 0 || trust.consensusCount > 0 || trust.worstVotes > 0 || trust.participation > 0) && (
-                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[10px] text-zinc-500">
-                              {trust.bestVotes > 0 && (
-                                <span className="text-amber-600">⭐ 동료 베스트 {trust.bestVotes}회</span>
-                              )}
-                              {trust.bestComments > 0 && (
-                                <span className="text-violet-600">🏆 베스트 댓글 {trust.bestComments}개</span>
-                              )}
-                              {trust.consensusCount > 0 && (
-                                <span className="text-emerald-600">✅ 합의 기여 {trust.consensusCount}회</span>
-                              )}
-                              {trust.worstVotes > 0 && (
-                                <span className="text-rose-500">⚠ 비추 {trust.worstVotes}회</span>
-                              )}
-                              {trust.participation > 0 && (
-                                <span className="text-zinc-400">30일 {trust.participation}개 토론 참여</span>
-                              )}
                             </div>
                           )}
                         </div>

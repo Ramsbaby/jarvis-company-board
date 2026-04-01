@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ExternalLink, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useEvent } from '@/contexts/EventContext';
 import MarkdownContent from '@/components/MarkdownContent';
 import type { DevTask } from '@/lib/types';
@@ -128,47 +127,13 @@ function secsToNextCron(): number {
 }
 
 
-function toGitHubUrl(filePath: string): string | null {
-  // Normalize path: remove home-dir prefixes
-  let p = filePath
-    .replace(/^~\/\.jarvis\//, '')
-    .replace(/^\/Users\/ramsbaby\/\.jarvis\//, '');
-  if (p !== filePath) {
-    return `https://github.com/Ramsbaby/jarvis/blob/main/${p}`;
-  }
-  // jarvis-board paths
-  p = filePath
-    .replace(/^~\/jarvis-board\//, '')
-    .replace(/^\/Users\/ramsbaby\/jarvis-board\//, '');
-  if (p !== filePath) {
-    return `https://github.com/Ramsbaby/jarvis-board/blob/main/${p}`;
-  }
-  return null;
-}
-
-function parseDependsOn(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((v: unknown) => typeof v === 'string' && v.length > 0) : [];
-  } catch { return []; }
-}
-
-// "진행 중 (Xs 경과)" 형태의 헛비트 패턴 — 단계 정보 없으므로 건너뜀
-const HEARTBEAT_RE = /진행\s*중\s*\(\d+s\s*경과\)/;
-
 function detectPhase(logs: LogEntry[]): number {
   if (logs.length === 0) return 0;
-  // 마지막부터 역순으로 탐색 — 헛비트는 건너뜀
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const msg = logs[i].message.toLowerCase();
-    if (HEARTBEAT_RE.test(msg)) continue; // 헛비트 무시
-    if (/완료|done|success|finish/.test(msg)) return 3;
-    if (/테스트|test|검증|verify|build/.test(msg)) return 2;
-    if (/수정|writing|edit|create|update/.test(msg)) return 1;
-    if (/분석|reading|checking|read|check/.test(msg)) return 0;
-    break; // 패턴 없는 일반 로그 → 0단계 유지
-  }
+  const last = logs[logs.length - 1].message.toLowerCase();
+  if (/완료|done|success|finish/.test(last)) return 3;
+  if (/테스트|test|검증|verify|build/.test(last)) return 2;
+  if (/수정|writing|edit|create|update/.test(last)) return 1;
+  if (/분석|reading|checking|read|check/.test(last)) return 0;
   return 0;
 }
 
@@ -204,38 +169,35 @@ function renderTitle(title: string): React.ReactNode {
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function TimelineStep({
-  icon, label, sublabel, time, elapsedLabel, done, active, pulse, rejected, failed,
+  icon, label, sublabel, time, elapsedLabel, done, active, pulse, rejected,
 }: {
   icon: string; label: string; sublabel?: string; time?: string;
   elapsedLabel?: string | null; done: boolean; active: boolean;
-  pulse?: boolean; rejected?: boolean; failed?: boolean;
+  pulse?: boolean; rejected?: boolean;
 }) {
   return (
     <div className="flex items-start gap-4">
       <div className="flex flex-col items-center shrink-0 relative z-10">
         <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-          failed   ? 'bg-red-100 border-red-300 text-red-400' :
           rejected ? 'bg-zinc-100 border-zinc-200 text-zinc-300' :
           done     ? 'bg-emerald-500 border-emerald-500 text-white' :
           active   ? 'bg-indigo-500 border-indigo-500 text-white' :
                      'bg-white border-zinc-200 text-zinc-300'
         } ${pulse && active ? 'animate-pulse' : ''}`}>
-          {done ? '✓' : failed ? '✕' : active ? icon : '·'}
+          {done ? '✓' : active ? icon : '·'}
         </div>
       </div>
       <div className="pb-6 min-w-0 flex-1">
-        <p className={`text-sm font-semibold leading-snug ${
-          failed   ? 'text-red-500' :
-          rejected ? 'text-zinc-400' :
-          done || active ? 'text-zinc-900' : 'text-zinc-400'
-        }`}>{label}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className={`text-sm font-semibold leading-snug ${
+            rejected ? 'text-zinc-400' : done || active ? 'text-zinc-900' : 'text-zinc-400'
+          }`}>{label}</p>
+          {elapsedLabel && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-medium">{elapsedLabel}</span>
+          )}
+        </div>
         {sublabel && (
-          <p className={`text-[11px] mt-0.5 ${
-            failed ? 'text-red-400' : done || active ? 'text-zinc-500' : 'text-zinc-300'
-          }`}>{sublabel}</p>
-        )}
-        {elapsedLabel && (
-          <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-medium">{elapsedLabel}</span>
+          <p className={`text-[11px] mt-0.5 ${done || active ? 'text-zinc-500' : 'text-zinc-300'}`}>{sublabel}</p>
         )}
         {time && (
           <p className="text-[11px] text-zinc-400 mt-1 tabular-nums">{fmt(time)} · {timeAgo(time)}</p>
@@ -382,8 +344,6 @@ export default function TaskDetailClient({
   });
   const [loadingImpact, setLoadingImpact] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [siblingTasks, setSiblingTasks] = useState<DevTask[]>([]);
-  const [siblingsExpanded, setSiblingsExpanded] = useState(true);
 
   // Inline editing state
   const [editingMinutes, setEditingMinutes] = useState(false);
@@ -451,15 +411,6 @@ export default function TaskDetailClient({
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [task.execution_log]);
-
-  // Fetch sibling tasks when group_id exists
-  useEffect(() => {
-    if (!task.group_id) return;
-    fetch(`/api/dev-tasks?group_id=${encodeURIComponent(task.group_id)}`)
-      .then(res => res.ok ? res.json() : [])
-      .then((tasks: DevTask[]) => setSiblingTasks(tasks))
-      .catch(() => setSiblingTasks([]));
-  }, [task.group_id]);
 
   // ── Action handlers ────────────────────────────────────────────────────────
 
@@ -573,35 +524,6 @@ export default function TaskDetailClient({
         setTimeout(() => router.push('/login'), 1500);
       } else {
         setActionError(`재시도 요청 실패 (${res.status})`);
-      }
-    } catch {
-      setActionError('네트워크 오류.');
-    } finally { setActionLoading(null); }
-  }
-
-  async function handleCancelToReview() {
-    setActionLoading('cancel');
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/dev-tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ status: 'awaiting_approval' }),
-      });
-      if (res.ok) {
-        setTask(prev => ({
-          ...prev, status: 'awaiting_approval',
-          approved_at: null, started_at: null,
-          completed_at: null, result_summary: null,
-          changed_files: '[]', execution_log: '[]',
-        }));
-        router.refresh();
-      } else if (res.status === 401) {
-        setActionError('세션이 만료되었습니다. 다시 로그인해주세요.');
-        setTimeout(() => router.push('/login'), 1500);
-      } else {
-        setActionError(`요청 실패 (${res.status})`);
       }
     } catch {
       setActionError('네트워크 오류.');
@@ -732,9 +654,6 @@ export default function TaskDetailClient({
   const impactAreas: string[] = (() => { try { return JSON.parse(task.impact_areas || '[]'); } catch { return []; } })();
   const attemptHistory: AttemptEntry[] = (() => { try { return JSON.parse(task.attempt_history || '[]'); } catch { return []; } })();
 
-  const dependsOnIds = parseDependsOn(task.depends_on);
-  const isGhostTask = isDone && changedFiles.length === 0;
-
   const waitTime  = elapsed(task.created_at, (task.approved_at ?? task.rejected_at) ?? undefined);
   const workTime  = elapsed(task.started_at ?? undefined, task.completed_at ?? undefined);
   const totalTime = elapsed(task.created_at, (task.completed_at ?? task.rejected_at) ?? undefined);
@@ -754,54 +673,15 @@ export default function TaskDetailClient({
                       isApproved ? 'bg-gradient-to-r from-teal-400 to-emerald-400' :
                                    'bg-zinc-100';
 
-  // Phase detection — done일 때만 3(마무리), in-progress 중 서브스텝 "완료" 로그는 최대 2(검증)
-  const currentPhase = isDone ? 3 : Math.min(detectPhase(logs), 2);
+  // Phase detection for in-progress
+  const currentPhase = detectPhase(logs);
   const phaseNames = ['코드 분석', '코드 수정', '검증', '마무리'];
   const phaseIcons = ['📖', '✏️', '🔍', '✅'];
 
   // Last activity time from logs
   const lastLogTime = logs.length > 0 ? new Date(logs[logs.length - 1].time) : null;
   const lastActivitySecs = lastLogTime ? Math.floor((Date.now() - lastLogTime.getTime()) / 1000) : null;
-  const isStale = lastActivitySecs !== null && lastActivitySecs > 60 && isLive;
-
-  // Step group extraction — splits logs at ✅ boundaries to build progress strip
-  const completedSteps = (() => {
-    const steps: { label: string; startTime: string; endTime: string; durationSecs: number; stepNum: number }[] = [];
-    let groupEntries: LogEntry[] = [];
-    let groupStart: string | null = null;
-    let n = 0;
-
-    const getLabel = (entries: LogEntry[], fallback: number): string => {
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const m = entries[i].message;
-        if (HEARTBEAT_RE.test(m)) continue;
-        if (/^⚙️|^✅|^⏳/.test(m)) continue;
-        // Strip leading emoji/punctuation, take first 32 chars
-        const clean = m.replace(/^[\s\S]{0,3}?\s/, '').trim();
-        if (clean.length > 2) return clean.slice(0, 32);
-      }
-      return `단계 ${fallback}`;
-    };
-
-    for (const entry of logs) {
-      if (/^⚙️/.test(entry.message)) {
-        groupStart = entry.time;
-        groupEntries = [entry];
-      } else if (/^✅/.test(entry.message) && groupStart) {
-        groupEntries.push(entry);
-        n++;
-        const startMs = new Date(groupStart).getTime();
-        const endMs = new Date(entry.time).getTime();
-        const dur = (!isNaN(startMs) && !isNaN(endMs)) ? Math.max(0, Math.floor((endMs - startMs) / 1000)) : 0;
-        steps.push({ label: getLabel(groupEntries, n), startTime: groupStart, endTime: entry.time, durationSecs: dur, stepNum: n });
-        groupStart = entry.time;
-        groupEntries = [];
-      } else {
-        groupEntries.push(entry);
-      }
-    }
-    return steps;
-  })();
+  const isStale = lastActivitySecs !== null && lastActivitySecs > 120 && isLive;
 
   // Completion durations
   const completionDuration = task.started_at && task.completed_at
@@ -818,7 +698,7 @@ export default function TaskDetailClient({
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 transition-colors shrink-0"
+            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -826,9 +706,7 @@ export default function TaskDetailClient({
             뒤로
           </button>
 
-          <p className="flex-1 min-w-0 text-sm font-semibold text-zinc-700 truncate">{task.title}</p>
-
-          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end shrink-0">
+          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
             {/* SSE dot */}
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
@@ -1012,85 +890,6 @@ export default function TaskDetailClient({
             </div>
           </div>
         </div>
-
-        {/* ── Ghost task warning ── */}
-        {isGhostTask && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-800 leading-relaxed">
-              <span className="font-semibold">유령 태스크:</span> 완료 처리되었으나 변경된 파일이 없습니다. 실제 작업이 수행되지 않았을 수 있습니다.
-            </p>
-          </div>
-        )}
-
-        {/* ── Depends on (선행 태스크) ── */}
-        {dependsOnIds.length > 0 && (
-          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
-            <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">선행 태스크 ({dependsOnIds.length})</p>
-            <div className="flex flex-wrap gap-2">
-              {dependsOnIds.map(depId => (
-                <Link
-                  key={depId}
-                  href={`/dev-tasks/${depId}`}
-                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors font-medium"
-                >
-                  <span className="text-indigo-400">→</span>
-                  <span className="font-mono">{depId.length > 16 ? depId.slice(0, 16) + '…' : depId}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Sibling tasks (같은 그룹) ── */}
-        {task.group_id && siblingTasks.length > 1 && (
-          <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
-            <button
-              onClick={() => setSiblingsExpanded(v => !v)}
-              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-zinc-50 transition-colors border-b border-zinc-100"
-            >
-              {siblingsExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
-              <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">같은 그룹 태스크</span>
-              <span className="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500">{siblingTasks.length}</span>
-            </button>
-            {siblingsExpanded && (
-              <div className="p-2 space-y-1">
-                {siblingTasks.map(sibling => {
-                  const isCurrent = sibling.id === task.id;
-                  const pill = STATUS_PILL[sibling.status] ?? STATUS_PILL.awaiting_approval;
-                  return isCurrent ? (
-                    <div
-                      key={sibling.id}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                      <p className="flex-1 min-w-0 text-xs font-semibold text-indigo-800 leading-snug truncate">
-                        {sibling.title}
-                      </p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 font-semibold shrink-0 whitespace-nowrap">
-                        현재
-                      </span>
-                    </div>
-                  ) : (
-                    <Link
-                      key={sibling.id}
-                      href={`/dev-tasks/${sibling.id}`}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-transparent hover:bg-zinc-50 hover:border-zinc-200 transition-all group"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 group-hover:bg-zinc-400 shrink-0 transition-colors" />
-                      <p className="flex-1 min-w-0 text-xs font-medium text-zinc-700 leading-snug truncate group-hover:text-zinc-900">
-                        {sibling.title}
-                      </p>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${pill.className}`}>
-                        {pill.label}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── Pending card (미제출) ── */}
         {isPending && isOwner && (
@@ -1339,12 +1138,12 @@ export default function TaskDetailClient({
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center text-lg shrink-0">✅</div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-teal-800">승인 완료 — 실행 대기 중</p>
-                  <p className="text-xs text-teal-600 mt-0.5">5분 내 큐에 등록되어 즉시 실행됩니다</p>
+                  <p className="text-sm font-bold text-teal-800">승인 완료 — 개발 시작 준비 중</p>
+                  <p className="text-xs text-teal-600 mt-0.5">Jarvis가 곧 코드 작업을 시작합니다</p>
                 </div>
                 {/* Poller countdown */}
                 <div className="text-right shrink-0">
-                  <p className="text-[10px] text-zinc-400 font-medium">큐 등록까지</p>
+                  <p className="text-[10px] text-zinc-400 font-medium">개발 시작까지</p>
                   <p className="text-2xl font-black tabular-nums text-teal-700 leading-none">
                     {cronMin}:{String(cronSecDisplay).padStart(2, '0')}
                   </p>
@@ -1363,8 +1162,8 @@ export default function TaskDetailClient({
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { icon: '✅', label: '승인 완료', sub: '방금', done: true, active: false },
-                  { icon: '📥', label: '큐 등록 중', sub: `약 ${cronMin}분 내`, done: false, active: true },
-                  { icon: '⚙️', label: 'Jarvis 코드 작업', sub: '큐 등록 후 자동 실행', done: false, active: false },
+                  { icon: '🚀', label: '개발 준비 중', sub: `약 ${cronMin}분 내`, done: false, active: true },
+                  { icon: '⚙️', label: 'Jarvis 코드 작업', sub: '곧 자동 실행', done: false, active: false },
                 ].map((step, i) => (
                   <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
                     step.done   ? 'bg-teal-50 border-teal-200' :
@@ -1377,21 +1176,6 @@ export default function TaskDetailClient({
                   </div>
                 ))}
               </div>
-
-              {/* Cancel approval */}
-              {isOwner && (
-                <div className="flex justify-end pt-1">
-                  <button
-                    onClick={handleCancelToReview}
-                    disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-zinc-100 text-zinc-500 hover:bg-zinc-200 disabled:opacity-40 transition-colors"
-                  >
-                    {actionLoading === 'cancel' ? (
-                      <><span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> 처리 중...</>
-                    ) : '↩ 승인 취소하고 재검토'}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -1414,7 +1198,7 @@ export default function TaskDetailClient({
                     </>
                   ) : (
                     <>
-                      <p className="text-sm font-bold text-indigo-800">개발 큐 등록됨 — 실행 대기 중</p>
+                      <p className="text-sm font-bold text-indigo-800">개발 시작 준비 중</p>
                       <p className="text-xs text-indigo-600 mt-0.5">Jarvis가 곧 코드 작업을 시작합니다</p>
                     </>
                   )}
@@ -1436,7 +1220,7 @@ export default function TaskDetailClient({
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { icon: '✅', label: '승인', done: true, active: false },
-                    { icon: '📥', label: '큐 등록', done: true, active: false },
+                    { icon: '🚀', label: '개발 준비 완료', done: true, active: false },
                     { icon: '⚙️', label: 'Jarvis 코드 작업', done: false, active: true },
                   ].map((step, i) => (
                     <div key={i} className={`rounded-xl px-3 py-2.5 border text-center ${
@@ -1522,21 +1306,6 @@ export default function TaskDetailClient({
                   </span>
                 </div>
               )}
-
-              {/* Owner: abort and return to review */}
-              {isOwner && (
-                <div className="flex justify-end pt-1">
-                  <button
-                    onClick={handleCancelToReview}
-                    disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-40 transition-colors"
-                  >
-                    {actionLoading === 'cancel' ? (
-                      <><span className="w-3 h-3 border-2 border-amber-300 border-t-amber-700 rounded-full animate-spin" /> 처리 중...</>
-                    ) : '⏹ 작업 중단하고 재검토'}
-                  </button>
-                </div>
-              )}
             </div>
             )}
           </div>
@@ -1575,59 +1344,17 @@ export default function TaskDetailClient({
                   ⚠️ {actionError}
                 </div>
               )}
-              {isOwner && !showRetryForm && (
-                <div className="flex flex-wrap gap-2 pt-1">
+              {isOwner && (
+                <div className="flex gap-2 pt-1">
                   <button
                     onClick={handleRetry}
                     disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 disabled:opacity-40 transition-all"
+                    className="inline-flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-xl bg-zinc-800 text-white hover:bg-zinc-900 disabled:opacity-40 transition-colors font-semibold"
                   >
                     {actionLoading === 'retry' ? (
-                      <><span className="w-3 h-3 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" /> 처리 중...</>
-                    ) : '↺ 그대로 재시도'}
+                      <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
+                    ) : '🔄 재시도 (미제출로 초기화)'}
                   </button>
-                  <button
-                    onClick={() => setShowRetryForm(true)}
-                    disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-violet-50 text-violet-600 border border-violet-100 hover:bg-violet-100 disabled:opacity-40 transition-all"
-                  >
-                    ✏ 수정 후 재요청
-                  </button>
-                </div>
-              )}
-
-              {isOwner && showRetryForm && (
-                <div className="space-y-3 pt-1">
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-600 mb-1.5 block">
-                      추가 지시사항 <span className="text-zinc-400 font-normal">(선택)</span>
-                    </label>
-                    <textarea
-                      value={retryNote}
-                      onChange={e => setRetryNote(e.target.value)}
-                      placeholder="어떤 부분을 수정해서 다시 시도할지 작성해주세요..."
-                      className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-xl p-3 resize-none outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
-                      rows={3}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setShowRetryForm(false); setRetryNote(''); }}
-                      className="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-700 transition-colors"
-                    >
-                      취소
-                    </button>
-                    <button
-                      onClick={handleRetryWithNote}
-                      disabled={!!actionLoading}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-all"
-                    >
-                      {actionLoading === 'retry-note' ? (
-                        <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> 처리 중...</>
-                      ) : '↺ 재요청 확정'}
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
@@ -1662,11 +1389,11 @@ export default function TaskDetailClient({
             {/* Step 2: 대표 승인 */}
             <TimelineStep
               icon="✓"
-              label={isRejected ? '반려 — 작업 중단' : isApproved ? '승인됨 — 실행 대기 중' : '대표 승인'}
+              label={isRejected ? '반려 — 작업 중단' : isApproved ? '승인됨 — 개발 시작 예정' : '대표 승인'}
               sublabel={isRejected
                 ? (task.rejection_note ? `사유: ${task.rejection_note.slice(0, 60)}` : '반려 사유 없음')
                 : isApproved
-                ? '5분 내 자동으로 개발 큐에 등록됩니다'
+                ? 'Jarvis가 곧 코드 작업을 시작합니다'
                 : isDone || isLive || isFailed
                 ? '승인 완료'
                 : '승인 후 Jarvis 코드 작업이 시작됩니다'}
@@ -1692,7 +1419,7 @@ export default function TaskDetailClient({
                 ? '작업 중 오류 발생 — 재시도 가능'
                 : '승인 후 Jarvis가 자동으로 코드를 수정합니다'}
               time={task.started_at ?? undefined}
-              done={isDone} active={isLive} pulse={isLive} failed={isFailed} rejected={isRejected}
+              done={isDone} active={isLive} pulse={isLive} rejected={isFailed || isRejected}
             />
 
             {/* Step 4: 완료 */}
@@ -1708,7 +1435,7 @@ export default function TaskDetailClient({
                 : '코드 작업 완료 시 자동으로 기록됩니다'}
               time={task.completed_at ?? undefined}
               elapsedLabel={workTime ? `작업 소요 ${workTime}` : null}
-              done={isDone} active={false} failed={isFailed} rejected={isRejected}
+              done={isDone} active={false} rejected={isRejected || isFailed}
             />
           </div>
         </div>
@@ -1756,11 +1483,7 @@ export default function TaskDetailClient({
                     LIVE
                   </span>
                 )}
-                {completedSteps.length > 0 && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 font-medium">
-                    {completedSteps.length}단계 완료
-                  </span>
-                )}
+                {/* Current phase indicator */}
                 {isLive && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 font-medium">
                     {phaseIcons[currentPhase]} {phaseNames[currentPhase]}
@@ -1768,6 +1491,7 @@ export default function TaskDetailClient({
                 )}
               </div>
               <div className="flex items-center gap-3 shrink-0">
+                {/* Last activity */}
                 {lastActivitySecs !== null && (
                   <span className={`text-[10px] tabular-nums ${isStale ? 'text-amber-400' : 'text-zinc-500'}`}>
                     {lastActivitySecs < 60 ? `${lastActivitySecs}s 전 활동` : `${Math.floor(lastActivitySecs / 60)}m 전 활동`}
@@ -1785,150 +1509,31 @@ export default function TaskDetailClient({
               </div>
             </div>
 
-            {/* Step progress strip — shows each completed ✅ step with label + duration */}
-            {completedSteps.length > 0 && (
-              <div className="px-4 py-2.5 border-b border-zinc-800/60 bg-zinc-950/40">
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                  {completedSteps.map((step, i) => {
-                    const dur = step.durationSecs < 60
-                      ? `${step.durationSecs}s`
-                      : `${Math.floor(step.durationSecs / 60)}m ${String(step.durationSecs % 60).padStart(2, '0')}s`;
-                    return (
-                      <div key={i} className="flex items-center gap-1 shrink-0">
-                        <div
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/40"
-                          title={`단계 ${step.stepNum}: ${step.label} (${dur})`}
-                        >
-                          <span className="w-4 h-4 rounded-full bg-emerald-800/50 border border-emerald-700/50 flex items-center justify-center text-[9px] font-bold text-emerald-400 shrink-0">
-                            {step.stepNum}
-                          </span>
-                          <span className="text-[10px] text-emerald-300 max-w-[88px] truncate leading-none">{step.label}</span>
-                          <span className="text-[9px] text-emerald-700 leading-none tabular-nums">{dur}</span>
-                        </div>
-                        {(i < completedSteps.length - 1 || isLive) && (
-                          <span className="text-zinc-700 text-xs shrink-0 mx-0.5">›</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {isLive && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-700/40 bg-zinc-800/20 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-pulse shrink-0" />
-                      <span className="text-[10px] text-zinc-500">진행 중</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Log entries — tail -f style */}
-            <div className="p-4 font-mono text-xs max-h-[480px] overflow-y-auto space-y-0.5">
+            {/* Log entries */}
+            <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto space-y-1.5">
               {logs.length === 0 ? (
                 <p className="text-zinc-600 italic">로그 대기 중...</p>
-              ) : (() => {
-                  const rawLogs = logExpanded ? logs : logs.slice(-8);
-                  const collapsedLogs: Array<LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number; _stepNum?: number }> = [];
-                  let pendingHeartbeat: (LogEntry & { _isHeartbeat?: boolean; _collapsedCount?: number }) | null = null;
-                  let heartbeatCount = 0;
-                  // Track which step number ✅ entries in the visible window correspond to
-                  let visibleStepIdx = logExpanded ? 0 : logs.slice(0, logs.length - 8).filter(e => /^✅/.test(e.message)).length;
-
-                  for (const entry of rawLogs) {
-                    if (HEARTBEAT_RE.test(entry.message)) {
-                      pendingHeartbeat = { ...entry, _isHeartbeat: true };
-                      heartbeatCount++;
-                    } else {
-                      if (pendingHeartbeat) {
-                        collapsedLogs.push({ ...pendingHeartbeat, _collapsedCount: heartbeatCount });
-                        pendingHeartbeat = null;
-                        heartbeatCount = 0;
-                      }
-                      const enriched: LogEntry & { _stepNum?: number } = { ...entry };
-                      if (/^✅/.test(entry.message)) {
-                        enriched._stepNum = ++visibleStepIdx;
-                      }
-                      collapsedLogs.push(enriched);
-                    }
-                  }
-                  if (pendingHeartbeat) collapsedLogs.push({ ...pendingHeartbeat, _collapsedCount: heartbeatCount });
-
-                  return collapsedLogs.map((entry, i) => {
-                    const msg = entry.message.replace(/\s*\([^)]*\d{2}:\d{2}:\d{2}[^)]*\)\s*$/, '').trim();
-                    const isHeartbeat = !!entry._isHeartbeat;
-                    const isErr      = /error|fail|failed/i.test(msg);
-                    const isWarn     = /warn|warning/i.test(msg);
-                    const isStart    = /^⚙️/.test(msg);
-                    const isCheckmark = /^✅/.test(msg);
-                    const isFinalDone = isCheckmark && isDone;
-                    const isSubDone   = isCheckmark && !isDone;
-                    const isProgress  = /^⏳/.test(msg) || isHeartbeat;
-                    const isToolCall = /^(📖|📝|✏️|💻|🔍|📁|🤖|🔗|🌐|🔧)\s/.test(msg);
-                    const isText     = /^💬/.test(msg);
-
-                    const color = isErr       ? 'text-red-400' :
-                                  isWarn      ? 'text-amber-400' :
-                                  isFinalDone ? 'text-emerald-400' :
-                                  isSubDone   ? 'text-emerald-500' :
-                                  isStart     ? 'text-sky-400' :
-                                  isProgress  ? 'text-zinc-500' :
-                                  isToolCall  ? 'text-cyan-300' :
-                                  isText      ? 'text-violet-300' :
-                                                'text-zinc-300';
-
-                    const isEvent = isStart || isFinalDone;
-                    const stepNum = entry._stepNum;
-                    const matchingStep = stepNum ? completedSteps.find(s => s.stepNum === stepNum) : null;
-                    const durStr = matchingStep
-                      ? (matchingStep.durationSecs < 60
-                          ? `${matchingStep.durationSecs}s`
-                          : `${Math.floor(matchingStep.durationSecs / 60)}m ${String(matchingStep.durationSecs % 60).padStart(2, '0')}s`)
-                      : null;
-
-                    return (
-                      <div
-                        key={i}
-                        className={[
-                          'flex gap-3 leading-relaxed',
-                          isToolCall ? 'bg-zinc-800/50 rounded px-2 py-1 -mx-2' : '',
-                          isEvent    ? 'border-t border-zinc-800 pt-1.5 mt-1'   : '',
-                          isSubDone  ? 'border-t border-zinc-800/50 pt-1.5 mt-1' : '',
-                          isProgress ? 'opacity-50' : '',
-                        ].filter(Boolean).join(' ')}
-                      >
-                        <span className="text-zinc-600 shrink-0 tabular-nums w-[52px]">
-                          {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                        </span>
-                        <span className={`${color} break-all flex-1 min-w-0`}>
-                          {isSubDone ? (
-                            <span className="flex items-center gap-2 flex-wrap">
-                              <span>✅ 단계 {stepNum} 완료</span>
-                              {matchingStep && !matchingStep.label.startsWith('단계 ') && (
-                                <span className="text-[10px] text-emerald-800/90 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-900/50 max-w-[160px] truncate">
-                                  {matchingStep.label}
-                                </span>
-                              )}
-                              {durStr && (
-                                <span className="text-[10px] text-zinc-600 tabular-nums">{durStr}</span>
-                              )}
-                            </span>
-                          ) : (
-                            <>
-                              {msg}
-                              {isHeartbeat && entry._collapsedCount && entry._collapsedCount > 1
-                                ? <span className="text-zinc-700 ml-1.5 text-[10px]">×{entry._collapsedCount}</span>
-                                : null}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    );
-                  });
-                })()
-              }
+              ) : (
+                (logExpanded ? logs : logs.slice(-5)).map((entry, i) => {
+                  const msg = entry.message;
+                  const isErr     = /error|fail|failed/i.test(msg);
+                  const isWarn    = /warn|warning/i.test(msg);
+                  const isDoneLog = /done|complete|success|완료/i.test(msg);
+                  const color = isErr ? 'text-red-400' : isWarn ? 'text-amber-400' : isDoneLog ? 'text-emerald-400' : 'text-zinc-200';
+                  return (
+                    <div key={i} className="flex gap-3 leading-relaxed">
+                      <span className="text-zinc-600 shrink-0 tabular-nums">
+                        {new Date(entry.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </span>
+                      <span className={color}>{msg}</span>
+                    </div>
+                  );
+                })
+              )}
               {isLive && (
-                <div className="flex gap-3 mt-2 border-t border-zinc-800 pt-2">
-                  <span className="text-zinc-700 w-[52px] shrink-0">···</span>
-                  <span className="text-indigo-400 animate-pulse">실행 중</span>
+                <div className="flex gap-3 mt-1">
+                  <span className="text-zinc-700">···</span>
+                  <span className="text-indigo-400 animate-pulse">작업 실행 중</span>
                 </div>
               )}
               <div ref={logEndRef} />
@@ -1969,71 +1574,16 @@ export default function TaskDetailClient({
                 </div>
               )}
 
-              {/* Quality Review */}
-              {task.review && (() => {
-                const rv = (() => { try { return JSON.parse(task.review); } catch { return null; } })();
-                if (!rv) return null;
-                const scoreBg = rv.score >= 4 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : rv.score >= 3 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-red-100 text-red-800 border-red-200';
-                const riskBg = rv.risk === 'high' ? 'bg-red-500' : rv.risk === 'medium' ? 'bg-amber-500' : rv.risk === 'low' ? 'bg-blue-500' : 'bg-zinc-300';
-                return (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wider">품질 리뷰</p>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${scoreBg}`}>
-                          {rv.score}/5
-                        </span>
-                        <span className={`w-2 h-2 rounded-full ${riskBg}`} title={`Risk: ${rv.risk}`} />
-                      </div>
-                    </div>
-                    {rv.summary && <p className="text-sm text-zinc-700">{rv.summary}</p>}
-                    {rv.positives?.length > 0 && (
-                      <div className="space-y-1">
-                        {rv.positives.map((p: string, i: number) => (
-                          <p key={i} className="text-xs text-emerald-700 flex items-start gap-1">
-                            <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />{p}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    {rv.issues?.length > 0 && (
-                      <div className="space-y-1">
-                        {rv.issues.map((issue: string, i: number) => (
-                          <p key={i} className="text-xs text-red-700 flex items-start gap-1">
-                            <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />{issue}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
               {/* Changed files */}
               {changedFiles.length > 0 && (
                 <div>
                   <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">수정된 파일 ({changedFiles.length})</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {changedFiles.map((f, i) => {
-                      const ghUrl = toGitHubUrl(f);
-                      return (
-                        <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-600 font-mono">
-                          {f.split('/').pop() || f}
-                          {ghUrl && (
-                            <a
-                              href={ghUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-zinc-400 hover:text-indigo-500 transition-colors"
-                              title={`GitHub에서 보기: ${f}`}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </span>
-                      );
-                    })}
+                    {changedFiles.map((f, i) => (
+                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-600 font-mono">
+                        {f.split('/').pop() || f}
+                      </span>
+                    ))}
                   </div>
                 </div>
               )}
@@ -2054,12 +1604,7 @@ export default function TaskDetailClient({
                 </div>
               )}
 
-              {/* AI impact analysis — 부모(계획) 태스크는 실제 실행이 없으므로 임팩트 분석 숨김 */}
-              {task.id.startsWith('parent-grp-') ? (
-                <div className="pt-1 border-t border-zinc-100">
-                  <p className="text-xs text-zinc-400 italic">이 태스크는 이사회 결의 그룹 태스크입니다. 실제 실행은 하위 태스크에서 이루어집니다.</p>
-                </div>
-              ) : (
+              {/* AI impact analysis */}
               <div className="pt-1 border-t border-zinc-100">
                 {!impactAnalysis ? (
                   <button
@@ -2097,8 +1642,8 @@ export default function TaskDetailClient({
                     {impactAnalysis.improvement_score !== undefined && (
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-zinc-500">개선도</p>
-                        <StarRating score={Math.min(impactAnalysis.improvement_score, 5)} />
-                        <p className="text-xs font-semibold text-zinc-700">{Math.min(impactAnalysis.improvement_score, 5)}/5</p>
+                        <StarRating score={impactAnalysis.improvement_score} />
+                        <p className="text-xs font-semibold text-zinc-700">{impactAnalysis.improvement_score}/5</p>
                       </div>
                     )}
                     {impactAnalysis.user_visible && (
@@ -2116,28 +1661,12 @@ export default function TaskDetailClient({
                   </div>
                 )}
               </div>
-              )}
 
               {/* Owner: create follow-up task */}
               {isOwner && (
                 <div className="pt-2 border-t border-zinc-100">
                   <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">후속 작업</p>
                   <FollowUpTaskForm taskId={task.id} taskTitle={task.title} sourceId={sourcePostId} boardUrl={task.source} />
-                </div>
-              )}
-
-              {/* Owner: retry completed task */}
-              {isOwner && (
-                <div className="pt-2 border-t border-zinc-100 flex justify-end">
-                  <button
-                    onClick={handleRetry}
-                    disabled={!!actionLoading}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-zinc-100 text-zinc-500 hover:bg-zinc-200 disabled:opacity-40 transition-colors"
-                  >
-                    {actionLoading === 'retry' ? (
-                      <><span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> 처리 중...</>
-                    ) : '↺ 이 작업 재시도'}
-                  </button>
                 </div>
               )}
             </div>

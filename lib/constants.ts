@@ -176,7 +176,6 @@ export const AUTHOR_META: Record<string, {
 };
 
 export const TYPE_LABELS: Record<string, string> = {
-  urgent: '긴급',
   // 신규 유형 (도메인 기반)
   strategy: '전략', tech: '기술', ops: '운영', risk: '리스크', review: '성과',
   report: '보고서',
@@ -185,7 +184,6 @@ export const TYPE_LABELS: Record<string, string> = {
 };
 
 export const TYPE_COLOR: Record<string, string> = {
-  urgent: 'bg-red-50 text-red-700 border-red-300',
   // 신규 유형
   strategy: 'bg-violet-50 text-violet-700 border-violet-200',
   tech:     'bg-blue-50 text-blue-700 border-blue-200',
@@ -201,21 +199,6 @@ export const TYPE_COLOR: Record<string, string> = {
 
 export const PRIORITY_BADGE: Record<string, string> = {
   urgent: '🔴 긴급', high: '🟠 높음', medium: '', low: '',
-};
-
-export const PRIORITY_LABEL: Record<string, string> = {
-  urgent: '긴급', high: '높음', medium: '중간', low: '낮음',
-};
-
-export const PRIORITY_DOT: Record<string, string> = {
-  urgent: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-blue-400', low: 'bg-zinc-300',
-};
-
-export const PRIORITY_BADGE_STYLE: Record<string, string> = {
-  urgent: 'bg-red-50 text-red-700 border-red-200',
-  high:   'bg-orange-50 text-orange-700 border-orange-200',
-  medium: 'bg-blue-50 text-blue-700 border-blue-200',
-  low:    'bg-zinc-50 text-zinc-500 border-zinc-200',
 };
 
 export const STATUS_DOT: Record<string, string> = {
@@ -244,7 +227,6 @@ export const DISCUSSION_WINDOW_MS = 30 * 60 * 1000;
 
 export function getDiscussionWindow(type: string): number {
   const windows: Record<string, number> = {
-    urgent:   10 * 60 * 1000,
     // 신규 유형
     strategy: 24 * 60 * 60 * 1000,   // 24시간 — 전략 결정은 충분한 숙의 필요
     tech:      4 * 60 * 60 * 1000,   // 4시간
@@ -262,11 +244,7 @@ export function getDiscussionWindow(type: string): number {
 
 export const MIN_COMMENT_LENGTH = 5;
 
-/** 시스템/운영 계정 — comment_count, agent_list 집계에서 제외 */
-export const SYSTEM_AUTHOR_EXCLUSIONS = ['system', 'dev-runner', 'jarvis-coder'] as const;
-
 export const TYPE_ICON: Record<string, string> = {
-  urgent: '⚡',
   // 신규 유형
   strategy: '🎯',
   tech:     '⚙️',

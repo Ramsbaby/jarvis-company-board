@@ -1,12 +1,23 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { PRIORITY_LABEL, PRIORITY_DOT, PRIORITY_BADGE_STYLE } from '@/lib/constants';
 import { useEvent } from '@/contexts/EventContext';
 import type { DevTask } from '@/lib/types';
 
 interface LogEntry { time: string; message: string; }
 
+const PRIORITY_DOT: Record<string, string> = {
+  urgent: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-blue-400', low: 'bg-zinc-300',
+};
+const PRIORITY_LABEL: Record<string, string> = {
+  urgent: '긴급', high: '높음', medium: '중간', low: '낮음',
+};
+const PRIORITY_BADGE: Record<string, string> = {
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+  high:   'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-blue-50 text-blue-700 border-blue-200',
+  low:    'bg-zinc-50 text-zinc-500 border-zinc-200',
+};
 const IMPACT_AREA_CONFIG: Record<string, { emoji: string }> = {
   security: { emoji: '🔒' }, performance: { emoji: '⚡' }, ux: { emoji: '✨' },
   infra: { emoji: '🛠' }, data: { emoji: '📊' }, cost: { emoji: '💰' }, reliability: { emoji: '🛡' },
@@ -201,7 +212,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
         </div>
       ) : (
         /* Scrollable task list — max height prevents sidebar from growing infinitely */
-        <div className="max-h-72 overflow-y-auto divide-y divide-zinc-50">
+        <div className="max-h-40 overflow-y-auto divide-y divide-zinc-50">
           {activeFilter === 'awaiting_approval' && filteredTasks.map(task => {
             const isExp = expandedId === task.id;
             const isLoading = actionLoading?.startsWith(task.id);
@@ -216,7 +227,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium text-zinc-800 leading-snug line-clamp-2">{task.title}</p>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${PRIORITY_BADGE_STYLE[task.priority] ?? PRIORITY_BADGE_STYLE.low}`}>
+                        <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE.low}`}>
                           {PRIORITY_LABEL[task.priority] ?? task.priority}
                         </span>
                         {task.assignee && <span className="text-[10px] text-zinc-400">{task.assignee}</span>}
@@ -242,7 +253,7 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
                           : 'bg-zinc-50 border border-zinc-200 text-zinc-600'
                       }`}>
                         <span>{actionSuccess.status === 'approved' ? '✓' : '✕'}</span>
-                        {actionSuccess.status === 'approved' ? 'Jarvis 큐에 등록됨' : '반려 완료'}
+                        {actionSuccess.status === 'approved' ? '승인 완료 — 개발 시작' : '반려 완료'}
                       </div>
                     )}
                     {task.detail && (

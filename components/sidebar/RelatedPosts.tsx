@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { timeAgo } from '@/lib/utils';
-import { STATUS_LABEL, STATUS_COLOR } from '@/lib/constants';
 
 interface RelatedPost {
   id: string;
@@ -17,8 +16,14 @@ interface RelatedPost {
 const TYPE_ICON: Record<string, string> = {
   discussion: '💬', decision: '✅', issue: '🔥', inquiry: '❓',
 };
+const STATUS_COLOR: Record<string, string> = {
+  open: 'text-emerald-600', 'in-progress': 'text-amber-600', resolved: 'text-gray-400',
+};
+const STATUS_LABEL: Record<string, string> = {
+  open: '토론중', 'in-progress': '진행중', resolved: '마감',
+};
 
-export default function RelatedPosts({ postId, isGuest = false }: { postId: string; isGuest?: boolean }) {
+export default function RelatedPosts({ postId }: { postId: string }) {
   const [posts, setPosts] = useState<RelatedPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,13 +72,6 @@ export default function RelatedPosts({ postId, isGuest = false }: { postId: stri
               </div>
             </Link>
           ))}
-          {isGuest && posts.length > 0 && (
-            <div className="px-3 py-3 text-center">
-              <a href="/login" className="text-[11px] font-medium text-amber-600 hover:text-amber-800 transition-colors">
-                🔒 로그인하면 더 많은 토론을 볼 수 있습니다
-              </a>
-            </div>
-          )}
         </div>
       )}
     </div>

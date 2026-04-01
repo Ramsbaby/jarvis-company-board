@@ -173,19 +173,6 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN attempt_history TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     // source post title for display (avoid re-fetching the post)
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN post_title TEXT NOT NULL DEFAULT ''"); } catch { /* already exists */ }
-    // parent-child task grouping: tasks from same discussion share a group_id
-    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN group_id TEXT'); } catch { /* already exists */ }
-    try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
-    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_group ON dev_tasks(group_id)'); } catch { /* already exists */ }
-    // parent-child task hierarchy
-    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN parent_id TEXT'); } catch { /* already exists */ }
-    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN task_type TEXT'); } catch { /* already exists */ }
-    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_parent ON dev_tasks(parent_id)'); } catch { /* already exists */ }
-    // quality review (jarvis-coder 자동 품질 리뷰 JSON)
-    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN review TEXT'); } catch { /* already exists */ }
-    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_completed ON dev_tasks(completed_at DESC)'); } catch { /* already exists */ }
-    // peer_votes: score_detail — 전체 댓글 룰 기반 점수 breakdown (JSON)
-    try { _db!.exec('ALTER TABLE peer_votes ADD COLUMN score_detail TEXT'); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (
@@ -288,91 +275,6 @@ export function getDb(): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_gen_members_gen ON persona_generation_members(generation_id);
       CREATE INDEX IF NOT EXISTS idx_gen_members_agent ON persona_generation_members(agent_id);
     `);
-
-    // ── 면접 시뮬레이션 시스템 ────────────────────────────────────────
-    _db!.exec(`
-      CREATE TABLE IF NOT EXISTS interview_sessions (
-        id TEXT PRIMARY KEY,
-        company TEXT NOT NULL,
-        category TEXT NOT NULL,
-        difficulty TEXT NOT NULL DEFAULT 'mid',
-        status TEXT NOT NULL DEFAULT 'active',
-        total_score REAL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        completed_at TEXT
-      );
-      CREATE TABLE IF NOT EXISTS interview_messages (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        score INTEGER,
-        strengths TEXT,
-        weaknesses TEXT,
-        better_answer TEXT,
-        missing_keywords TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      CREATE INDEX IF NOT EXISTS idx_interview_messages_session ON interview_messages(session_id);
-      CREATE INDEX IF NOT EXISTS idx_interview_sessions_created ON interview_sessions(created_at DESC);
-    `);
-    // 기존 DB 마이그레이션: missing_keywords 컬럼 추가 (없을 경우에만)
-    try { _db.exec('ALTER TABLE interview_messages ADD COLUMN missing_keywords TEXT'); } catch { /* 이미 존재 */ }
-    // 마이그레이션: share_token 컬럼 추가
-    try { _db!.exec('ALTER TABLE interview_sessions ADD COLUMN share_token TEXT;'); } catch { /* already exists */ }
-    try { _db!.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_sessions_share_token ON interview_sessions(share_token);'); } catch { /* already exists */ }
-    try { _db!.exec(`CREATE TABLE IF NOT EXISTS live_coding_sessions (
-  id TEXT PRIMARY KEY,
-  problem_id TEXT NOT NULL,
-  problem_title TEXT NOT NULL,
-  submitted_code TEXT,
-  feedback_json TEXT,
-  hint_used INTEGER NOT NULL DEFAULT 0,
-  time_used INTEGER,
-  status TEXT NOT NULL DEFAULT 'active',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  completed_at TEXT
-)`); } catch { /* already exists */ }
-
-    // ── interview_feedback 정규화 테이블 ─────────────────────────────────
-    // interview_messages의 피드백 컬럼(희소)을 별도 테이블로 분리
-    _db!.exec(`
-      CREATE TABLE IF NOT EXISTS interview_feedback (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
-        message_id TEXT NOT NULL REFERENCES interview_messages(id) ON DELETE CASCADE,
-        score INTEGER NOT NULL,
-        strengths TEXT NOT NULL DEFAULT '[]',
-        weaknesses TEXT NOT NULL DEFAULT '[]',
-        missing_keywords TEXT NOT NULL DEFAULT '[]',
-        better_answer TEXT,
-        parse_error INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      CREATE INDEX IF NOT EXISTS idx_interview_feedback_session ON interview_feedback(session_id);
-      CREATE INDEX IF NOT EXISTS idx_interview_feedback_message ON interview_feedback(message_id);
-      CREATE INDEX IF NOT EXISTS idx_interview_feedback_score ON interview_feedback(score);
-    `);
-
-    // 기존 interview_messages 피드백 행을 interview_feedback으로 마이그레이션 (중복 방지)
-    _db!.exec(`
-      INSERT OR IGNORE INTO interview_feedback (id, session_id, message_id, score, strengths, weaknesses, missing_keywords, better_answer, created_at)
-      SELECT
-        'mig_' || id,
-        session_id,
-        id,
-        COALESCE(score, 0),
-        COALESCE(strengths, '[]'),
-        COALESCE(weaknesses, '[]'),
-        COALESCE(missing_keywords, '[]'),
-        better_answer,
-        created_at
-      FROM interview_messages
-      WHERE role = 'feedback' AND score IS NOT NULL
-    `);
-
-    // 마이그레이션: evaluator_verdict 컬럼 추가 (Generator-Evaluator 패턴 verdict 저장용)
-    try { _db!.exec("ALTER TABLE interview_feedback ADD COLUMN evaluator_verdict TEXT DEFAULT 'fair';"); } catch { /* already exists */ }
   }
   return _db;
 }

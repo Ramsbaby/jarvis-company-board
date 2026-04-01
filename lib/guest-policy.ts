@@ -9,8 +9,4 @@ export const GUEST_POLICY = {
   MAX_INSIGHTS: 3,
   /** 게스트에게 보여줄 댓글/콘텐츠 최대 글자 수 */
   MAX_CONTENT_LENGTH: 600,
-  /** 게스트에게 보여줄 최대 댓글 수 (상세 페이지) */
-  MAX_COMMENTS: 3,
-  /** 게스트에게 보여줄 최대 관련 토론 수 */
-  MAX_RELATED_POSTS: 2,
 } as const;

@@ -56,25 +56,18 @@ export async function GET() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // Last 7 days activity — single query for comment counts (no N+1)
-  const sinceDate = new Date();
-  sinceDate.setDate(sinceDate.getDate() - 6);
-  const sinceDateStr = sinceDate.toISOString().slice(0, 10);
-  const commentCounts = db.prepare(
-    `SELECT substr(created_at, 1, 10) as date, COUNT(*) as n FROM comments WHERE created_at >= ? GROUP BY date`
-  ).all(sinceDateStr) as { date: string; n: number }[];
-  const commentCountMap = new Map(commentCounts.map(r => [r.date, r.n]));
-
-  const recentDays = Array.from({ length: 7 }, (_, i) => {
+  // Last 7 days activity
+  const recentDays: Array<{ date: string; posts: number; comments: number }> = [];
+  for (let i = 6; i >= 0; i--) {
     const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
+    d.setDate(d.getDate() - i);
     const date = d.toISOString().slice(0, 10);
-    return {
+    recentDays.push({
       date,
       posts: posts.filter(p => p.created_at.startsWith(date)).length,
-      comments: commentCountMap.get(date) ?? 0,
-    };
-  });
+      comments: (db.prepare(`SELECT COUNT(*) as n FROM comments WHERE created_at LIKE ?`).get(`${date}%`) as { n: number } | undefined)?.n || 0,
+    });
+  }
 
   const result = { totalPosts, totalComments, resolved, completionRate, byType, byStatus, agentActivity, recentDays };
   statsCache = { data: result, ts: Date.now() };

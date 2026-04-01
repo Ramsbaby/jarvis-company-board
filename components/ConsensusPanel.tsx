@@ -2,24 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import MarkdownContent from '@/components/MarkdownContent';
 
-interface ConsensusStructure {
-  voteFor: number; voteAgainst: number; voteAbstain: number;
-  minorityOpinion: string;
-  deadlines: string[];
-}
-
-function parseConsensusStructure(text: string): ConsensusStructure {
-  const distMatch = text.match(/\*\*의견\s*분포\*\*[：:]\s*찬성\s*(\d+)명\s*\/\s*반대\s*(\d+)명\s*\/\s*보류\s*(\d+)명/);
-  const voteFor     = distMatch ? parseInt(distMatch[1], 10) : 0;
-  const voteAgainst = distMatch ? parseInt(distMatch[2], 10) : 0;
-  const voteAbstain = distMatch ? parseInt(distMatch[3], 10) : 0;
-  const minorityMatch = text.match(/\*\*소수\s*의견\s*보호\*\*[：:]\s*(.+?)(?:\n|$)/);
-  const minorityOpinion = minorityMatch ? minorityMatch[1].trim() : '';
-  const deadlineMatches = [...text.matchAll(/기한[:：]\s*(\d+[주달개월])/g)];
-  const deadlines = [...new Set(deadlineMatches.map(m => m[1]))];
-  return { voteFor, voteAgainst, voteAbstain, minorityOpinion, deadlines };
-}
-
 export default function ConsensusPanel({ postId, autoTrigger = false }: { postId: string; autoTrigger?: boolean }) {
   const [result, setResult] = useState<string | null>(null);
   const [consensusAt, setConsensusAt] = useState<string | null>(null);
@@ -65,8 +47,7 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
       })
       .catch(() => {});
     return stopPolling;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postId, autoTrigger]);
+  }, [postId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchConsensus = async () => {
     setLoading(true);
@@ -172,32 +153,6 @@ export default function ConsensusPanel({ postId, autoTrigger = false }: { postId
           {/* Resolution section */}
           {expanded === 'resolution' && (
             <div className="p-4 bg-violet-50">
-              {/* Structured summary — opinion distribution + minority opinion + deadlines */}
-              {(() => {
-                const s = parseConsensusStructure(parts.resolution);
-                const hasVotes = s.voteFor + s.voteAgainst + s.voteAbstain > 0;
-                if (!hasVotes && !s.minorityOpinion) return null;
-                return (
-                  <div className="mb-3 space-y-2">
-                    {hasVotes && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wide mr-0.5">분포</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">✔ 찬성 {s.voteFor}</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 border border-red-200 text-red-700">✖ 반대 {s.voteAgainst}</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-zinc-100 border border-zinc-200 text-zinc-600">◎ 보류 {s.voteAbstain}</span>
-                        {s.deadlines.map(d => (
-                          <span key={d} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 border border-blue-200 text-blue-700">📅 {d}</span>
-                        ))}
-                      </div>
-                    )}
-                    {s.minorityOpinion && (
-                      <div className="px-3 py-2 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg text-xs text-amber-800">
-                        <span className="font-semibold mr-1">소수 의견:</span>{s.minorityOpinion}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
               <MarkdownContent content={parts.resolution} />
             </div>
           )}

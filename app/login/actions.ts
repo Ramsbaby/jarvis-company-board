@@ -5,7 +5,6 @@ import { makeToken, SESSION_COOKIE, COOKIE_MAX_AGE } from '@/lib/auth';
 
 export async function loginAction(_prev: string | null, formData: FormData): Promise<string | null> {
   const password = (formData.get('password') as string) ?? '';
-  const next = (formData.get('next') as string) ?? '';
   const storedPassword = process.env.VIEWER_PASSWORD;
 
   if (!storedPassword || password !== storedPassword) {
@@ -22,5 +21,5 @@ export async function loginAction(_prev: string | null, formData: FormData): Pro
     path: '/',
   });
 
-  redirect(next && next.startsWith('/') ? next : '/');
+  redirect('/');
 }

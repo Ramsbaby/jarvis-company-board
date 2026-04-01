@@ -5,7 +5,7 @@ import { AGENT_ROSTER, AGENT_IDS_SET, AGENT_TIER_DEFAULTS, TEAM_GROUPS } from '@
 import type Database from 'better-sqlite3';
 
 // ── Load tier overrides from DB (most recent tier_history entry per agent) ────
-// Replaces filesystem read — works in Railway production.
+// Loads tier overrides from DB (most recent tier_history entry per agent).
 function loadTierOverrides(db: Database.Database): Record<string, string> {
   try {
     const rows = db.prepare(`

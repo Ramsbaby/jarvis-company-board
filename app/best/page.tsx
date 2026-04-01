@@ -16,7 +16,7 @@ export default async function BestCommentsPage() {
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
-  if (!isOwner && !isGuest) {
+  if (!isOwner) {
     redirect('/login');
   }
 

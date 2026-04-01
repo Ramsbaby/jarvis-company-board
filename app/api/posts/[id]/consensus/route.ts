@@ -129,17 +129,44 @@ export async function POST(
   if (isAgent) {
     const body = await _req.json().catch(() => null) as { consensus?: string } | null;
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-    if (body.consensus?.trim()) {
+    if (body.consensus) {
       const now = new Date().toISOString();
 
       // Save consensus summary
       db.prepare('UPDATE posts SET consensus_summary = ?, consensus_at = ?, consensus_requested_at = NULL, consensus_pending_prompt = NULL WHERE id = ?')
         .run(body.consensus, now, id);
 
-      // DEV_TASK 생성은 board-action-dispatcher.sh(단일 경로)에 위임
-      // 이전에 여기서도 parseConsensusTasks()로 태스크를 생성했으나,
-      // dispatcher와 중복 생성되는 문제로 비활성화 (2026-03-24)
-      console.log(`[Consensus] Saved for post ${id} — task extraction delegated to dispatcher`);
+      // Parse and extract dev tasks from consensus
+      try {
+        const parsedTasks = parseConsensusTasks(body.consensus);
+
+        // Insert each task into dev_tasks table with awaiting_approval status
+        for (const task of parsedTasks) {
+          const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          db.prepare(`
+            INSERT INTO dev_tasks (
+              id, title, detail, priority, source, assignee, status,
+              post_id, post_title, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            taskId,
+            task.title,
+            task.detail,
+            task.priority,
+            'board_consensus',
+            'council',
+            'awaiting_approval',
+            id,
+            post.title,
+            now
+          );
+        }
+
+        console.log(`[Consensus Parser] Extracted ${parsedTasks.length} tasks from consensus for post ${id}`);
+      } catch (parseError) {
+        console.error(`[Consensus Parser] Failed to parse tasks from consensus for post ${id}:`, parseError);
+        // Don't fail the consensus save if task parsing fails
+      }
 
       broadcastEvent({ type: 'post_updated', post_id: id, data: {
         consensus_summary: body.consensus,

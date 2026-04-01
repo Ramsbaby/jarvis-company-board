@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
 import { maskPost, maskComment } from '@/lib/mask';
-import { GUEST_POLICY } from '@/lib/guest-policy';
 import MarkdownContent from '@/components/MarkdownContent';
 import PostComments from '@/components/PostComments';
 import CountdownTimer from '@/components/CountdownTimer';
@@ -19,12 +18,9 @@ import PostContentSummary from '@/components/PostContentSummary';
 import RestartDiscussionButton from '@/components/RestartDiscussionButton';
 import DeletePostButton from '@/components/DeletePostButton';
 import ConsensusPanel from '@/components/ConsensusPanel';
-import AskAgentPanel from '@/components/AskAgentPanel';
-import DevTaskTimeline from '@/components/DevTaskTimeline';
 import PeerVotePanel from '@/components/sidebar/PeerVotePanel';
 import ForceCloseButton from '@/components/ForceCloseButton';
 import ExtendDiscussionButton from '@/components/ExtendDiscussionButton';
-import DecisionTracker from '@/components/DecisionTracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,8 +82,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   // Polls (#10)
   const rawPolls = db.prepare('SELECT * FROM polls WHERE post_id = ? ORDER BY created_at ASC').all(id) as Poll[];
   const polls = rawPolls.map((poll) => {
-    let options: string[] = [];
-    try { options = JSON.parse(poll.options); } catch { options = []; }
+    const options: string[] = JSON.parse(poll.options);
     const votes = db.prepare(
       'SELECT option_idx, COUNT(*) as cnt FROM poll_votes WHERE poll_id = ? GROUP BY option_idx'
     ).all(poll.id) as PollVoteCount[];
@@ -104,44 +99,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   // DEV tasks linked to this post (post_id column added via migration in lib/db.ts)
   const devTaskCount = (db.prepare('SELECT COUNT(*) as cnt FROM dev_tasks WHERE post_id = ?').get(post.id) as CountRow | undefined)?.cnt ?? 0;
 
-  // 관련 태스크 목록 (post_id 또는 source로 조회)
-  interface DevTaskRow {
-    id: string; title: string; status: string; priority: string;
-    created_at: string;
-    completed_at: string | null; changed_files: string | null;
-    approved_at: string | null; rejected_at: string | null;
-    started_at: string | null; result_summary: string | null;
-    execution_log: string | null; actual_impact: string | null;
-    expected_impact: string | null; rejection_note: string | null;
-    detail?: string;
-  }
-  const devTasks = db.prepare(
-    `SELECT id, title, status, priority, detail,
-            created_at, approved_at, rejected_at, started_at, completed_at,
-            result_summary, execution_log, changed_files,
-            actual_impact, expected_impact, rejection_note
-     FROM dev_tasks
-     WHERE post_id = ? OR source = ?
-     ORDER BY created_at ASC LIMIT 20`
-  ).all(post.id, `board:${post.id}`) as DevTaskRow[];
-
   const meta = AUTHOR_META[post.author] ?? {
     label: post.author_display, color: 'bg-zinc-800 text-zinc-300 border-zinc-700',
     accent: 'border-zinc-700', emoji: '💬', description: '',
   };
 
   const tags: string[] = JSON.parse(post.tags ?? '[]');
-
-  // 에이전트 참여자: is_visitor=0, is_resolution=0, 시스템 제외, 중복 제거
-  const SYSTEM_AUTHORS = new Set(['system', 'dev-runner', 'jarvis-coder']);
-  const agentCommenters: Array<{ author: string; emoji: string; label: string }> = [];
-  const seen = new Set<string>();
-  for (const c of comments) {
-    if (c.is_visitor || c.is_resolution || SYSTEM_AUTHORS.has(c.author) || seen.has(c.author)) continue;
-    seen.add(c.author);
-    const m = AUTHOR_META[c.author];
-    if (m) agentCommenters.push({ author: c.author, emoji: m.emoji, label: m.label ?? c.author });
-  }
 
   // 세션 쿠키로 대표님 여부 판단
   const cookieStore = await cookies();
@@ -152,9 +115,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
   // Apply masking for guest mode
   const renderPost = isGuest ? maskPost(post) : post;
-  const allRenderComments = isGuest ? comments.map(maskComment) : comments;
-  const hiddenCommentCount = isGuest ? Math.max(0, allRenderComments.length - GUEST_POLICY.MAX_COMMENTS) : 0;
-  const renderComments = isGuest ? allRenderComments.slice(0, GUEST_POLICY.MAX_COMMENTS) : allRenderComments;
+  const renderComments = isGuest ? comments.map(maskComment) : comments;
 
   const isActive = post.status !== 'resolved';
   const timerBase = post.restarted_at ?? post.created_at;
@@ -194,19 +155,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           <div className="bg-amber-50 border-t border-amber-200 px-4 py-1.5 text-center">
             <span className="text-xs text-amber-700 font-medium">
               👤 게스트 모드 — 일부 정보가 마스킹됩니다.{' '}
-              <a href={`/login?next=/posts/${id}`} className="underline font-medium hover:text-amber-900">로그인하기 →</a>
+              <a href="/login" className="underline font-medium hover:text-amber-900">로그인하기 →</a>
             </span>
           </div>
         )}
       </header>
-
-      {post.type === 'urgent' && post.status !== 'resolved' && (
-        <div className="bg-red-600 px-4 py-2.5 flex items-center justify-center gap-2.5">
-          <span className="text-white text-base animate-bounce">⚡</span>
-          <span className="text-white font-bold text-sm">긴급 패스트트랙 활성화</span>
-          <span className="text-red-200 text-xs font-medium">— 처리 속도 5배 적용 중 · 토론 윈도우 10분</span>
-        </div>
-      )}
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-5 items-start">
@@ -247,7 +200,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
               {/* DEV Tasks badge */}
               {devTaskCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full mb-2">
-                  ⚙ 개발 태스크 {devTaskCount}
+                  ⚙ DEV {devTaskCount}
                 </span>
               )}
 
@@ -337,12 +290,6 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                   {isActive && <ExtendDiscussionButton postId={id} />}
                   {displayStatus !== 'open' && <RestartDiscussionButton postId={id} />}
                 </div>
-                {/* 에이전트 의견 요청 — 진행 중인 토론에서만 노출 */}
-                {isActive && (
-                  <div className="border-t border-zinc-100">
-                    <AskAgentPanel postId={id} comments={comments} pausedAt={post.paused_at ?? null} />
-                  </div>
-                )}
                 {/* Consensus panel — autoTrigger for resolved posts with no analysis */}
                 {comments.length > 0 && (
                   <div className="border-t border-zinc-100 px-1 py-1">
@@ -357,13 +304,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             )}
 
             {/* Comments */}
-            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} restartedAt={post.restarted_at ?? null} postType={post.type} extraMs={post.extra_ms ?? 0} hideResolutionCard={isOwner && !!post.consensus_summary} hiddenCommentCount={hiddenCommentCount} />
+            <PostComments postId={id} initialComments={renderComments} isOwner={isOwner} postCreatedAt={renderPost.created_at} postStatus={renderPost.status} pausedAt={post.paused_at ?? null} restartedAt={post.restarted_at ?? null} postType={post.type} extraMs={post.extra_ms ?? 0} hideResolutionCard={isOwner && !!post.consensus_summary} />
             {/* Mobile: Peer votes + Related posts below comments */}
             <div className="md:hidden mt-4 space-y-3">
               {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
               )}
-              <RelatedPosts postId={id} isGuest={isGuest} />
+              <RelatedPosts postId={id} />
             </div>
           </div>
 
@@ -372,7 +319,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
             <div className="sticky top-20 space-y-3">
               {/* Post quick stats */}
               <div className="bg-white border border-zinc-200 rounded-lg p-4">
-                <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">게시물 정보</p>
+                <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">포스트 정보</p>
                 <div className="divide-y divide-zinc-100">
                   <div className="flex justify-between text-xs py-2 first:pt-0 last:pb-0">
                     <span className="text-zinc-500">유형</span>
@@ -396,39 +343,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
                       <span className="font-medium text-zinc-700">{post.resolved_at.slice(0, 10)}</span>
                     </div>
                   )}
-                  {agentCommenters.length > 0 && (
-                    <div className="pt-2">
-                      <p className="text-[10px] text-zinc-400 mb-1.5">참여 에이전트</p>
-                      <div className="flex flex-wrap gap-1">
-                        {agentCommenters.map(({ author, emoji, label }) => (
-                          <span
-                            key={author}
-                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200"
-                            title={label}
-                          >
-                            {emoji} <span className="truncate max-w-[60px]">{label}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
               {/* #16 Discussion Timeline */}
               {comments.length > 0 && (
                 <DiscussionTimeline comments={renderComments} postId={id} />
               )}
-              {/* 결의안 실행 추적 */}
-              <DecisionTracker postId={id} />
               {/* 인사고과 결과 — 마감된 토론은 메인에 시상식으로 표시, 활성 토론에서만 사이드바 유지 */}
               {post.status !== 'resolved' && comments.length > 0 && (
                 <PeerVotePanel postId={id} comments={comments} />
               )}
-              {/* 이 토론에서 생성된 개발 태스크 */}
-              {devTasks.length > 0 && (
-                <DevTaskTimeline tasks={devTasks} />
-              )}
-              <RelatedPosts postId={id} isGuest={isGuest} />
+              <RelatedPosts postId={id} />
             </div>
           </aside>
 

@@ -17,31 +17,7 @@ export async function GET(_req: NextRequest) {
   for (const row of rows) settings[row.key] = row.value;
   return NextResponse.json({
     auto_post_paused: settings['auto_post_paused'] === '1',
-    auto_approve_board_tasks: settings['auto_approve_board_tasks'] === '1',
   });
-}
-
-// Agent용 — board_metrics_url 등 내부 설정 저장
-export async function POST(req: NextRequest) {
-  const agentKey = req.headers.get('x-agent-key');
-  if (!agentKey || agentKey !== process.env.AGENT_API_KEY) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const body = await req.json().catch(() => null) as { key?: string; value?: string } | null;
-  if (!body?.key || typeof body.value !== 'string') {
-    return NextResponse.json({ error: 'key, value required' }, { status: 400 });
-  }
-  const ALLOWED_KEYS = ['board_metrics_url'];
-  if (!ALLOWED_KEYS.includes(body.key)) {
-    return NextResponse.json({ error: 'disallowed key' }, { status: 400 });
-  }
-  const db = getDb();
-  const now = new Date().toISOString();
-  db.prepare(
-    `INSERT INTO board_settings (key, value, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-  ).run(body.key, body.value, now);
-  return NextResponse.json({ ok: true, key: body.key });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -65,19 +41,8 @@ export async function PATCH(req: NextRequest) {
     ).run(val, now);
   }
 
-  if (typeof body.auto_approve_board_tasks === 'boolean') {
-    const val = body.auto_approve_board_tasks ? '1' : '0';
-    db.prepare(
-      `INSERT INTO board_settings (key, value, updated_at) VALUES ('auto_approve_board_tasks', ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-    ).run(val, now);
-  }
-
   const rows = db.prepare('SELECT key, value FROM board_settings').all() as BoardSetting[];
   const settings: Record<string, string> = {};
   for (const row of rows) settings[row.key] = row.value;
-  return NextResponse.json({
-    auto_post_paused: settings['auto_post_paused'] === '1',
-    auto_approve_board_tasks: settings['auto_approve_board_tasks'] === '1',
-  });
+  return NextResponse.json({ auto_post_paused: settings['auto_post_paused'] === '1' });
 }

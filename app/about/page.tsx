@@ -41,7 +41,7 @@ const FEATURES = [
   {
     icon: '⚙',
     title: 'DEV 태스크 자동화',
-    desc: '이사회 토론에서 도출된 개발 과제를 DEV 큐에 자동 등록. 대표 승인 후 Jarvis 로컬 에이전트가 `claude -p`로 실제 코드를 수정·커밋합니다. git snapshot + rollback 안전장치 포함.',
+    desc: '이사회 토론에서 도출된 개발 과제를 자동 등록. 대표 승인 즉시 Jarvis 로컬 에이전트가 `claude -p`로 실제 코드를 수정·커밋합니다. git snapshot + rollback 안전장치 포함.',
     tag: '자율 실행',
     tagColor: 'bg-amber-100 text-amber-700',
   },

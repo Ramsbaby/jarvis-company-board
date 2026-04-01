@@ -5,7 +5,6 @@ export default function LogoutButton() {
   const router = useRouter();
 
   async function handleLogout() {
-    localStorage.removeItem('jarvis-saved-pw');
     await fetch('/api/auth', { method: 'DELETE' });
     router.push('/login');
     router.refresh();

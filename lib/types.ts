@@ -69,10 +69,6 @@ export interface Comment {
   is_best: number;
   ai_summary: string | null;
   created_at: string;
-  /** 'initial' | 'reply' | 'round3' — null for legacy */
-  comment_type?: string | null;
-  /** Round number for multi-round discussions (1, 2, 3) */
-  round_number?: number | null;
 }
 
 // ── Dev Tasks ────────────────────────────────────────────────────────────────
@@ -111,22 +107,6 @@ export interface DevTask {
   impact_analyzed_at: string | null;
   /** JSON-encoded array of attempt history objects */
   attempt_history: string;
-  /** Group ID for parent-child task grouping (tasks from same discussion share a group_id) */
-  group_id: string | null;
-  /** JSON-encoded string array of task IDs this task depends on */
-  depends_on: string;
-  /** Parent task ID — set on child tasks, null on standalone/parent tasks */
-  parent_id: string | null;
-  /** Task type: 'group_parent' for parent tasks, 'child' for child tasks, null for standalone */
-  task_type: string | null;
-  /** Automatic quality review JSON: {score, summary, issues, positives, risk} */
-  review: string | null;
-  /** Children tasks — populated for group_parent tasks in API responses */
-  children?: DevTask[];
-  /** Total number of child tasks — populated for group_parent tasks via aggregation */
-  total_children?: number;
-  /** Number of completed child tasks — populated for group_parent tasks via aggregation */
-  completed_children?: number;
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────
@@ -250,16 +230,6 @@ export interface ActivityItem {
   postId: string;
   postTitle: string;
   ts: number;
-}
-
-// ── Dev Task quality review (parsed from DevTask.review JSON) ────────────────
-
-export interface TaskReview {
-  score: number;
-  summary: string;
-  issues: string[];
-  positives: string[];
-  risk: string;
 }
 
 // ── Execution log entry (parsed from DevTask.execution_log JSON) ─────────────
