@@ -59,6 +59,26 @@ export function updatePostStatus(postId: string, status: string, extra?: Record<
   broadcastEvent({ type: 'post_updated', post_id: postId, data: { status, ...extra } });
 }
 
+// ── 메인 피드 CTE 쿼리 빌더 ────────────────────────────────────────────────
+
+/**
+ * 메인 피드용 posts SELECT — comment_count + agent_commenters 포함.
+ * page.tsx 서버 컴포넌트에서 호출. .all(limit) 바인딩 사용.
+ */
+export function buildPostsCTE(): string {
+  return `
+    SELECT p.*,
+      ${COMMENT_COUNT_EXPR} as comment_count,
+      ${AGENT_COMMENTERS_SUBQUERY} as agent_commenters
+    FROM posts p
+    LEFT JOIN comments c ON c.post_id = p.id
+    WHERE p.type != 'report'
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
+    LIMIT ?
+  `;
+}
+
 // ── 만료 토론 자동 마감 ─────────────────────────────────────────────────────
 
 interface ExpiredCandidate {
