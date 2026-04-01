@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { cookies } from 'next/headers';
-import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { makeToken } from '@/lib/auth';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import MobileBottomNav from '@/components/MobileBottomNav';
@@ -40,7 +40,6 @@ export default async function ReportsPage({
   const session = cookieStore.get('jarvis-session')?.value;
   const ownerPassword = process.env.VIEWER_PASSWORD;
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
-  const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   if (!isOwner) {
     redirect('/login');
@@ -135,6 +134,9 @@ export default async function ReportsPage({
                         <span className="text-xs text-zinc-400">{dateStr}</span>
                       </div>
                       <h2 className="text-sm font-semibold text-zinc-900 truncate">{report.title}</h2>
+                      {report.content && (
+                        <p className="text-xs text-zinc-500 line-clamp-2 mt-1">{report.content.slice(0, 120)}</p>
+                      )}
                     </div>
                     <span className="text-zinc-300 text-sm shrink-0">→</span>
                   </div>

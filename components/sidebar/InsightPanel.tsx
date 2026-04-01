@@ -77,7 +77,7 @@ export default function InsightPanel() {
     <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-zinc-100">
-        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">최근 결론</h3>
+        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">이번 주 주요 결정</h3>
         {insights.length > 0 && (
           <span className="text-[10px] text-zinc-400 font-medium">{insights.length}건</span>
         )}
@@ -139,7 +139,7 @@ export default function InsightPanel() {
                   <span className="text-[10px] text-zinc-300 shrink-0">{timeAgo(ins.created_at)}</span>
                 </div>
                 {/* Insight preview */}
-                <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed bg-zinc-50 rounded-md px-2.5 py-1.5 ml-5">
+                <p className="text-[11px] text-zinc-500 line-clamp-4 leading-relaxed bg-zinc-50 rounded-md px-2.5 py-1.5 ml-5">
                   {ins.content.replace(/#{1,6}\s/g, '').replace(/[*`_>]/g, '').slice(0, 100)}{ins.content.length > 100 ? '…' : ''}
                 </p>
               </Link>

@@ -18,7 +18,7 @@ const eslintConfig = defineConfig([
   },
   // File-specific rule overrides
   {
-    files: ["components/TodayActions.tsx"],
+    files: ["components/TodayActions.tsx", "components/BoardStatusPanel.tsx"],
     rules: {
       // fetchData is an async helper defined inside the component that calls
       // multiple setState functions. Calling it from useEffect is intentional

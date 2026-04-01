@@ -891,6 +891,11 @@ function PostListInner({
                               ))}
                             </div>
                           )}
+                          {post.status === 'resolved' && post.consensus_summary && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                              ✓ 합의완료
+                            </span>
+                          )}
                           {post.status !== 'resolved' ? (
                             <span className="text-xs px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-500 flex items-center gap-1">
                               💬 {post.comment_count || 0}개 의견
