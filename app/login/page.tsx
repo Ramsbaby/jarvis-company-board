@@ -1,44 +1,11 @@
 'use client';
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState } from 'react';
+import { useState } from 'react';
 import { loginAction } from './actions';
-
-const LS_KEY = 'jarvis-saved-pw';
 
 export default function LoginPage() {
   const [error, formAction, isPending] = useActionState(loginAction, null);
-  const [savedPw, setSavedPw] = useState<string | null>(null);
-  const [autoLogging, setAutoLogging] = useState(false);
   const [showPw, setShowPw] = useState(false);
-
-  useEffect(() => {
-    const pw = localStorage.getItem(LS_KEY);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (pw) setSavedPw(pw);
-  }, []);
-
-  function doAutoLogin(pw: string) {
-    setAutoLogging(true);
-    window.location.href = `/api/auto-login?key=${encodeURIComponent(pw)}`;
-  }
-
-  function clearSaved() {
-    localStorage.removeItem(LS_KEY);
-    setSavedPw(null);
-  }
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    const form = e.currentTarget;
-    const password = (form.querySelector('[name=password]') as HTMLInputElement)?.value;
-    const remember = (form.querySelector('[name=remember]') as HTMLInputElement)?.checked;
-    if (remember && password) {
-      localStorage.setItem(LS_KEY, password);
-    } else if (!remember) {
-      localStorage.removeItem(LS_KEY);
-    }
-  }
-
-  const urlError = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('error');
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-zinc-950 relative overflow-hidden">
@@ -60,56 +27,15 @@ export default function LoginPage() {
             <p className="text-sm text-zinc-500 mt-1">자비스 내부 게시판</p>
           </div>
 
-          {/* 자동 로그인 (저장된 비밀번호) */}
-          {savedPw && (
-            <div className="mb-6 space-y-2">
-              <button
-                onClick={() => doAutoLogin(savedPw)}
-                disabled={autoLogging}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-4 py-3 text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {autoLogging ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-indigo-300 border-t-white rounded-full animate-spin" />
-                    로그인 중...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                    저장된 계정으로 입장
-                  </>
-                )}
-              </button>
-              {urlError && (
-                <p className="text-red-400 text-xs text-center bg-red-500/10 rounded-lg py-2 px-3">
-                  저장된 비밀번호가 틀렸습니다. 다시 입력해 주세요.
-                </p>
-              )}
-              <button onClick={clearSaved} className="w-full text-xs text-zinc-600 hover:text-red-400 transition-colors text-center py-1">
-                저장 해제
-              </button>
-              <div className="relative my-1">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-zinc-800" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-zinc-900 px-3 text-xs text-zinc-600">비밀번호 직접 입력</span>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* 비밀번호 폼 */}
-          <form action={formAction} onSubmit={handleSubmit} className="space-y-4">
+          <form action={formAction} className="space-y-4">
             <div className="relative">
               <input
                 type={showPw ? 'text' : 'password'}
                 name="password"
                 placeholder="비밀번호"
                 autoComplete="current-password"
-                autoFocus={!savedPw}
+                autoFocus
                 required
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
               />
@@ -140,16 +66,6 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
-
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                name="remember"
-                defaultChecked={!!savedPw}
-                className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900"
-              />
-              <span className="text-xs text-zinc-400">이 기기에서 기억하기</span>
-            </label>
 
             <button
               type="submit"

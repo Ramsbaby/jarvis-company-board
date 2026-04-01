@@ -30,6 +30,7 @@ export async function callLLM(
     signal?: AbortSignal;
     timeoutMs?: number;
     systemPrompt?: string;
+    temperature?: number;
   } = {},
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -40,6 +41,7 @@ export async function callLLM(
     maxTokens = 1200,
     timeoutMs = 20000,
     systemPrompt,
+    temperature,
   } = options;
 
   // Use provided signal or create our own timeout
@@ -68,6 +70,7 @@ export async function callLLM(
         model,
         max_tokens: maxTokens,
         messages,
+        ...(temperature !== undefined ? { temperature } : {}),
       }),
       signal,
     });
