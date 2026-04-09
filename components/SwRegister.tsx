@@ -22,7 +22,11 @@ function isInStandaloneMode() {
 export default function SwRegister() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const dismissedUntil = localStorage.getItem('pwa-banner-dismissed');
+    return !!(dismissedUntil && Date.now() < Number(dismissedUntil));
+  });
 
   useEffect(() => {
     // SW 등록
@@ -32,13 +36,6 @@ export default function SwRegister() {
 
     // 이미 앱으로 설치된 경우 배너 숨김
     if (isInStandaloneMode()) return;
-
-    // dismiss 기록 확인 (7일간 숨김)
-    const dismissedUntil = localStorage.getItem('pwa-banner-dismissed');
-    if (dismissedUntil && Date.now() < Number(dismissedUntil)) {
-      setDismissed(true);
-      return;
-    }
 
     // Android Chrome: beforeinstallprompt 캐치
     const handler = (e: Event) => {

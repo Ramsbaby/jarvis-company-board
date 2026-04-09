@@ -151,7 +151,8 @@ export default function BoardStatusPanel() {
         event.type === 'post_updated' ||
         event.type === 'new_post' ||
         event.type === 'post_deleted' ||
-        event.type === 'dev_task_updated'
+        event.type === 'dev_task_updated' ||
+        event.type === 'new_comment'
       ) {
         fetchData();
       }
