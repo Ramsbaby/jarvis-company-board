@@ -270,6 +270,7 @@ export default function PostComments({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editLoading, setEditLoading] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { subscribe } = useEvent();
 
@@ -778,24 +779,41 @@ export default function PostComments({
                 {editingId === c.id ? '취소' : '✏ 수정'}
               </button>
               {/* #16 Delete comment */}
-              <button
-                disabled={deletingIds.has(c.id)}
-                onClick={async () => {
-                  if (deletingIds.has(c.id)) return;
-                  if (!confirm('댓글을 삭제하시겠습니까?')) return;
-                  setDeletingIds(prev => new Set(prev).add(c.id));
-                  try {
-                    const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
-                    if (res.ok) setComments(prev => prev.filter(cm => cm.id !== c.id));
-                  } finally {
-                    setDeletingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
-                  }
-                }}
-                className="ml-auto text-[11px] text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40"
-                title="댓글 삭제"
-              >
-                × 삭제
-              </button>
+              {confirmDeleteId === c.id ? (
+                <span className="ml-auto inline-flex items-center gap-1">
+                  <span className="text-[11px] text-zinc-500">삭제 확인</span>
+                  <button
+                    disabled={deletingIds.has(c.id)}
+                    onClick={async () => {
+                      setDeletingIds(prev => new Set(prev).add(c.id));
+                      try {
+                        const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
+                        if (res.ok) setComments(prev => prev.filter(cm => cm.id !== c.id));
+                      } finally {
+                        setDeletingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
+                        setConfirmDeleteId(null);
+                      }
+                    }}
+                    className="text-[11px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 disabled:opacity-40"
+                  >
+                    {deletingIds.has(c.id) ? '…' : '삭제'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  >
+                    취소
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteId(c.id)}
+                  className="ml-auto text-[11px] text-gray-300 hover:text-red-400 transition-colors"
+                  title="댓글 삭제"
+                >
+                  × 삭제
+                </button>
+              )}
             </div>
           )}
           {/* Inline edit form */}
@@ -845,24 +863,41 @@ export default function PostComments({
           {/* Reply-only delete for owner */}
           {isReply && isOwner && (
             <div className="mt-1.5 flex justify-end">
-              <button
-                disabled={deletingIds.has(c.id)}
-                onClick={async () => {
-                  if (deletingIds.has(c.id)) return;
-                  if (!confirm('댓글을 삭제하시겠습니까?')) return;
-                  setDeletingIds(prev => new Set(prev).add(c.id));
-                  try {
-                    const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
-                    if (res.ok) setComments(prev => prev.filter(cm => cm.id !== c.id));
-                  } finally {
-                    setDeletingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
-                  }
-                }}
-                className="text-[11px] text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40"
-                title="댓글 삭제"
-              >
-                × 삭제
-              </button>
+              {confirmDeleteId === c.id ? (
+                <span className="inline-flex items-center gap-1">
+                  <span className="text-[11px] text-zinc-500">삭제 확인</span>
+                  <button
+                    disabled={deletingIds.has(c.id)}
+                    onClick={async () => {
+                      setDeletingIds(prev => new Set(prev).add(c.id));
+                      try {
+                        const res = await fetch(`/api/comments/${c.id}`, { method: 'DELETE' });
+                        if (res.ok) setComments(prev => prev.filter(cm => cm.id !== c.id));
+                      } finally {
+                        setDeletingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
+                        setConfirmDeleteId(null);
+                      }
+                    }}
+                    className="text-[11px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 disabled:opacity-40"
+                  >
+                    {deletingIds.has(c.id) ? '…' : '삭제'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  >
+                    취소
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteId(c.id)}
+                  className="text-[11px] text-gray-300 hover:text-red-400 transition-colors"
+                  title="댓글 삭제"
+                >
+                  × 삭제
+                </button>
+              )}
             </div>
           )}
 

@@ -30,9 +30,15 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
   ];
 
   const moreItems = [
+    ...(isOwner ? [
+      { href: '/dashboard', label: '대시보드', icon: '📊' },
+      { href: '/observability', label: '옵저버빌리티', icon: '🔍' },
+      { href: '/interview', label: '면접', icon: '🎤' },
+      { href: '/dev-tasks', label: '개발 태스크', icon: '⚙️' },
+    ] : []),
     { href: '/reports', label: '보고서', icon: '📊' },
     { href: '/leaderboard', label: '리더보드', icon: '🏆' },
-    { href: '/about', label: 'About', icon: 'ℹ️' },
+    { href: '/about', label: '소개', icon: 'ℹ️' },
   ];
 
   return (
@@ -71,7 +77,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
 
           {/* 드롭업 메뉴 */}
           {moreOpen && (
-            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-zinc-200 shadow-lg overflow-hidden min-w-[100px] z-50">
+            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl border border-zinc-200 shadow-lg overflow-hidden min-w-[140px] z-50">
               {moreItems.map(item => (
                 <Link
                   key={item.href}

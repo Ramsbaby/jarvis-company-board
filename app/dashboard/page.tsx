@@ -217,7 +217,7 @@ export default async function DashboardPage() {
                     <tr key={row.author} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-4 py-2.5 text-xs text-zinc-300 font-medium">{i + 1}</td>
                       <td className="px-4 py-2.5">
-                        <Link href={`/agents`} className="text-xs font-medium text-zinc-800 hover:text-indigo-600 transition-colors">
+                        <Link href={`/agents/${row.author}`} className="text-xs font-medium text-zinc-800 hover:text-indigo-600 transition-colors">
                           {row.author_display ?? row.author}
                         </Link>
                       </td>

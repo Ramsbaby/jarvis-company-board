@@ -60,6 +60,272 @@ function ImpactChips({ raw }: { raw?: string }) {
 
 type FilterKey = 'awaiting_approval' | 'in-progress' | 'done' | 'rejected';
 
+interface TaskGroup {
+  postTitle: string;
+  tasks: DevTask[];
+}
+
+function groupByPostTitle(tasks: DevTask[]): { groups: TaskGroup[]; singles: DevTask[] } {
+  const titleCounts = new Map<string, number>();
+  for (const t of tasks) {
+    if (t.post_title) {
+      titleCounts.set(t.post_title, (titleCounts.get(t.post_title) ?? 0) + 1);
+    }
+  }
+
+  const groupMap = new Map<string, TaskGroup>();
+  const singles: DevTask[] = [];
+
+  for (const t of tasks) {
+    if (t.post_title && (titleCounts.get(t.post_title) ?? 0) >= 2) {
+      if (!groupMap.has(t.post_title)) {
+        groupMap.set(t.post_title, { postTitle: t.post_title, tasks: [] });
+      }
+      groupMap.get(t.post_title)!.tasks.push(t);
+    } else {
+      singles.push(t);
+    }
+  }
+
+  return { groups: Array.from(groupMap.values()), singles };
+}
+
+/* ── Group header for tasks sharing the same post_title ── */
+function GroupHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-4 pt-2.5 pb-1">
+      <div className="w-0.5 h-3 rounded-full bg-indigo-400 shrink-0" />
+      <p className="text-[10px] font-medium text-indigo-500 truncate">🔗 {title}</p>
+    </div>
+  );
+}
+
+/* ── Renders tasks with post_title grouping ── */
+function GroupedTaskList({
+  tasks,
+  activeFilter,
+  expandedId,
+  setExpandedId,
+  actionLoading,
+  actionSuccess,
+  isOwner,
+  handleAction,
+}: {
+  tasks: DevTask[];
+  activeFilter: FilterKey;
+  expandedId: string | null;
+  setExpandedId: (id: string | null) => void;
+  actionLoading: string | null;
+  actionSuccess: { id: string; status: string } | null;
+  isOwner: boolean;
+  handleAction: (taskId: string, status: 'approved' | 'rejected') => void;
+}) {
+  const { groups, singles } = groupByPostTitle(tasks);
+
+  function renderAwaitingTask(task: DevTask) {
+    const isExp = expandedId === task.id;
+    const isLoading = actionLoading?.startsWith(task.id);
+    return (
+      <div key={task.id} className="bg-amber-50/20">
+        <button
+          className="w-full text-left px-4 py-2.5 hover:bg-amber-50/60 transition-colors"
+          onClick={() => setExpandedId(isExp ? null : task.id)}
+        >
+          <div className="flex items-start gap-2.5">
+            <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-zinc-300'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-medium text-zinc-800 leading-snug line-clamp-2">{task.title}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE.low}`}>
+                  {PRIORITY_LABEL[task.priority] ?? task.priority}
+                </span>
+                {task.assignee && <span className="text-[10px] text-zinc-400">{task.assignee}</span>}
+                <span className="text-[10px] text-zinc-300 ml-auto">{timeAgoShort(task.created_at)}전</span>
+              </div>
+              {task.expected_impact && (
+                <p className="text-[10px] text-amber-600 italic mt-1 line-clamp-1">
+                  💡 {task.expected_impact.length > 40 ? task.expected_impact.slice(0, 40) + '...' : task.expected_impact}
+                </p>
+              )}
+            </div>
+            <svg className={`w-3 h-3 text-zinc-300 shrink-0 mt-1.5 transition-transform ${isExp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+        {isExp && (
+          <div className="px-4 pb-3 space-y-2">
+            {actionSuccess?.id === task.id && (
+              <div className={`flex items-center gap-2 py-2 px-3 rounded-lg text-xs font-bold ${
+                actionSuccess.status === 'approved'
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                  : 'bg-zinc-50 border border-zinc-200 text-zinc-600'
+              }`}>
+                <span>{actionSuccess.status === 'approved' ? '✓' : '✕'}</span>
+                {actionSuccess.status === 'approved' ? '승인 완료 — 개발 시작' : '반려 완료'}
+              </div>
+            )}
+            {task.detail && (
+              <p className="text-[11px] text-zinc-500 leading-relaxed bg-white rounded-lg p-2.5 border border-amber-100 line-clamp-3">
+                {task.detail}
+              </p>
+            )}
+            {isOwner ? (
+              <div className="flex gap-1.5 pt-0.5">
+                <button
+                  onClick={() => handleAction(task.id, 'approved')}
+                  disabled={!!isLoading || actionSuccess?.id === task.id}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  {actionLoading === task.id + 'approved'
+                    ? <span className="flex items-center justify-center gap-1"><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />처리 중</span>
+                    : '✓ 승인'}
+                </button>
+                <button
+                  onClick={() => handleAction(task.id, 'rejected')}
+                  disabled={!!isLoading || actionSuccess?.id === task.id}
+                  className="py-1.5 px-3 text-xs font-bold rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                >
+                  {actionLoading === task.id + 'rejected'
+                    ? <span className="w-3 h-3 border-2 border-red-300 border-t-red-600 rounded-full animate-spin inline-block" />
+                    : '✕'}
+                </button>
+                <Link
+                  href={`/dev-tasks/${task.id}`}
+                  className="py-1.5 px-2.5 text-xs rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 transition-colors"
+                >→</Link>
+              </div>
+            ) : (
+              <Link href={`/dev-tasks/${task.id}`} className="block w-full text-center py-1.5 text-xs text-zinc-400 hover:text-indigo-500 transition-colors">
+                상세 보기 →
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderInProgressTask(task: DevTask) {
+    const isExp = expandedId === task.id;
+    let logEntries: LogEntry[] = [];
+    try { logEntries = JSON.parse(task.execution_log || '[]') as LogEntry[]; } catch {}
+    const lastLog = logEntries[logEntries.length - 1];
+    const showRemaining = !!(task.estimated_minutes && task.started_at);
+    const remaining = showRemaining ? calcRemaining(task.started_at!, task.estimated_minutes!) : 0;
+    const isApprovedWaiting = task.status === 'approved';
+
+    return (
+      <div key={task.id} className={isApprovedWaiting ? 'bg-emerald-50/20' : 'bg-indigo-50/20'}>
+        <button
+          className={`w-full text-left px-4 py-2.5 transition-colors ${isApprovedWaiting ? 'hover:bg-emerald-50/50' : 'hover:bg-indigo-50/40'}`}
+          onClick={() => setExpandedId(isExp ? null : task.id)}
+        >
+          <div className="flex items-start gap-2.5">
+            {isApprovedWaiting
+              ? <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              : <div className="mt-1 w-3 h-3 shrink-0 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+            }
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-medium text-zinc-800 leading-snug line-clamp-2">{task.title}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-[9px] px-1 py-0.5 rounded font-semibold bg-zinc-100 text-zinc-500">
+                  {isApprovedWaiting ? '⏳ 대기중' : '⚙ 실행중'}
+                </span>
+                {task.started_at && (
+                  <span className="text-[10px] text-indigo-400 ml-auto">{timeAgoShort(task.started_at)}전 시작</span>
+                )}
+              </div>
+              {lastLog && (
+                <p className="text-[10px] text-indigo-500 mt-1 line-clamp-1 italic">▶ {lastLog.message}</p>
+              )}
+              {showRemaining && (
+                <p className={`text-[10px] mt-0.5 font-medium ${remaining >= 0 ? 'text-indigo-400' : 'text-orange-500'}`}>
+                  ⏱ {remaining >= 0 ? `약 ${remaining}분 남음` : `${Math.abs(remaining)}분 초과 중`}
+                </p>
+              )}
+            </div>
+            <svg className={`w-3 h-3 text-zinc-300 shrink-0 mt-1.5 transition-transform ${isExp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+        {isExp && (
+          <div className="px-4 pb-3 space-y-2">
+            {task.detail && (
+              <p className="text-[11px] text-zinc-500 bg-white rounded-lg p-2.5 border border-indigo-100 line-clamp-3">{task.detail}</p>
+            )}
+            {logEntries.length > 0 && (
+              <div className="bg-zinc-900 rounded-lg p-2.5 space-y-1 max-h-24 overflow-y-auto">
+                {logEntries.slice(-4).map((entry, i) => (
+                  <p key={i} className="text-[10px] text-emerald-400 font-mono leading-snug">
+                    <span className="text-zinc-500 mr-1.5">{entry.time?.slice(11, 16)}</span>
+                    {entry.message}
+                  </p>
+                ))}
+              </div>
+            )}
+            <Link href={`/dev-tasks/${task.id}`} className="block text-center text-[11px] text-indigo-500 hover:underline">
+              상세 보기 →
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderDoneTask(task: DevTask) {
+    return (
+      <Link key={task.id} href={`/dev-tasks/${task.id}`} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-zinc-50 transition-colors group">
+        <span className="mt-1.5 text-xs shrink-0">🎉</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-medium text-zinc-700 line-clamp-1 group-hover:text-indigo-600 transition-colors">{task.title}</p>
+          {task.actual_impact && (
+            <p className="text-[10px] text-emerald-600 italic mt-0.5 line-clamp-1">✨ {task.actual_impact.slice(0, 45)}{task.actual_impact.length > 45 ? '...' : ''}</p>
+          )}
+          {task.completed_at && (
+            <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgoShort(task.completed_at)}전 완료</p>
+          )}
+        </div>
+      </Link>
+    );
+  }
+
+  function renderRejectedTask(task: DevTask) {
+    return (
+      <Link key={task.id} href={`/dev-tasks/${task.id}`} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-zinc-50 transition-colors group">
+        <span className="mt-1.5 text-xs shrink-0 text-zinc-400">✕</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-zinc-500 line-clamp-1 group-hover:text-zinc-700 transition-colors">{task.title}</p>
+          {task.rejected_at && (
+            <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgoShort(task.rejected_at)}전 반려</p>
+          )}
+        </div>
+      </Link>
+    );
+  }
+
+  const renderTask = (task: DevTask) => {
+    if (activeFilter === 'awaiting_approval') return renderAwaitingTask(task);
+    if (activeFilter === 'in-progress') return renderInProgressTask(task);
+    if (activeFilter === 'done') return renderDoneTask(task);
+    if (activeFilter === 'rejected') return renderRejectedTask(task);
+    return null;
+  };
+
+  return (
+    <div className="max-h-40 overflow-y-auto divide-y divide-zinc-50">
+      {groups.map(group => (
+        <div key={group.postTitle}>
+          <GroupHeader title={group.postTitle} />
+          {group.tasks.map(task => renderTask(task))}
+        </div>
+      ))}
+      {singles.map(task => renderTask(task))}
+    </div>
+  );
+}
+
 export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) {
   const [tasks, setTasks] = useState<DevTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,186 +478,16 @@ export default function DevTaskList({ isOwner = false }: { isOwner?: boolean }) 
         </div>
       ) : (
         /* Scrollable task list — max height prevents sidebar from growing infinitely */
-        <div className="max-h-40 overflow-y-auto divide-y divide-zinc-50">
-          {activeFilter === 'awaiting_approval' && filteredTasks.map(task => {
-            const isExp = expandedId === task.id;
-            const isLoading = actionLoading?.startsWith(task.id);
-            return (
-              <div key={task.id} className="bg-amber-50/20">
-                <button
-                  className="w-full text-left px-4 py-2.5 hover:bg-amber-50/60 transition-colors"
-                  onClick={() => setExpandedId(isExp ? null : task.id)}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-zinc-300'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium text-zinc-800 leading-snug line-clamp-2">{task.title}</p>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE.low}`}>
-                          {PRIORITY_LABEL[task.priority] ?? task.priority}
-                        </span>
-                        {task.assignee && <span className="text-[10px] text-zinc-400">{task.assignee}</span>}
-                        <span className="text-[10px] text-zinc-300 ml-auto">{timeAgoShort(task.created_at)}전</span>
-                      </div>
-                      {task.expected_impact && (
-                        <p className="text-[10px] text-amber-600 italic mt-1 line-clamp-1">
-                          💡 {task.expected_impact.length > 40 ? task.expected_impact.slice(0, 40) + '...' : task.expected_impact}
-                        </p>
-                      )}
-                    </div>
-                    <svg className={`w-3 h-3 text-zinc-300 shrink-0 mt-1.5 transition-transform ${isExp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-                {isExp && (
-                  <div className="px-4 pb-3 space-y-2">
-                    {actionSuccess?.id === task.id && (
-                      <div className={`flex items-center gap-2 py-2 px-3 rounded-lg text-xs font-bold ${
-                        actionSuccess.status === 'approved'
-                          ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                          : 'bg-zinc-50 border border-zinc-200 text-zinc-600'
-                      }`}>
-                        <span>{actionSuccess.status === 'approved' ? '✓' : '✕'}</span>
-                        {actionSuccess.status === 'approved' ? '승인 완료 — 개발 시작' : '반려 완료'}
-                      </div>
-                    )}
-                    {task.detail && (
-                      <p className="text-[11px] text-zinc-500 leading-relaxed bg-white rounded-lg p-2.5 border border-amber-100 line-clamp-3">
-                        {task.detail}
-                      </p>
-                    )}
-                    {isOwner ? (
-                      <div className="flex gap-1.5 pt-0.5">
-                        <button
-                          onClick={() => handleAction(task.id, 'approved')}
-                          disabled={!!isLoading || actionSuccess?.id === task.id}
-                          className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                        >
-                          {actionLoading === task.id + 'approved'
-                            ? <span className="flex items-center justify-center gap-1"><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />처리 중</span>
-                            : '✓ 승인'}
-                        </button>
-                        <button
-                          onClick={() => handleAction(task.id, 'rejected')}
-                          disabled={!!isLoading || actionSuccess?.id === task.id}
-                          className="py-1.5 px-3 text-xs font-bold rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
-                        >
-                          {actionLoading === task.id + 'rejected'
-                            ? <span className="w-3 h-3 border-2 border-red-300 border-t-red-600 rounded-full animate-spin inline-block" />
-                            : '✕'}
-                        </button>
-                        <Link
-                          href={`/dev-tasks/${task.id}`}
-                          className="py-1.5 px-2.5 text-xs rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 transition-colors"
-                        >→</Link>
-                      </div>
-                    ) : (
-                      <Link href={`/dev-tasks/${task.id}`} className="block w-full text-center py-1.5 text-xs text-zinc-400 hover:text-indigo-500 transition-colors">
-                        상세 보기 →
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {activeFilter === 'in-progress' && filteredTasks.map(task => {
-            const isExp = expandedId === task.id;
-            let logEntries: LogEntry[] = [];
-            try { logEntries = JSON.parse(task.execution_log || '[]') as LogEntry[]; } catch {}
-            const lastLog = logEntries[logEntries.length - 1];
-            const showRemaining = !!(task.estimated_minutes && task.started_at);
-            const remaining = showRemaining ? calcRemaining(task.started_at!, task.estimated_minutes!) : 0;
-            const isApprovedWaiting = task.status === 'approved';
-
-            return (
-              <div key={task.id} className={isApprovedWaiting ? 'bg-emerald-50/20' : 'bg-indigo-50/20'}>
-                <button
-                  className={`w-full text-left px-4 py-2.5 transition-colors ${isApprovedWaiting ? 'hover:bg-emerald-50/50' : 'hover:bg-indigo-50/40'}`}
-                  onClick={() => setExpandedId(isExp ? null : task.id)}
-                >
-                  <div className="flex items-start gap-2.5">
-                    {isApprovedWaiting
-                      ? <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                      : <div className="mt-1 w-3 h-3 shrink-0 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium text-zinc-800 leading-snug line-clamp-2">{task.title}</p>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-[9px] px-1 py-0.5 rounded font-semibold bg-zinc-100 text-zinc-500">
-                          {isApprovedWaiting ? '⏳ 대기중' : '⚙ 실행중'}
-                        </span>
-                        {task.started_at && (
-                          <span className="text-[10px] text-indigo-400 ml-auto">{timeAgoShort(task.started_at)}전 시작</span>
-                        )}
-                      </div>
-                      {lastLog && (
-                        <p className="text-[10px] text-indigo-500 mt-1 line-clamp-1 italic">▶ {lastLog.message}</p>
-                      )}
-                      {showRemaining && (
-                        <p className={`text-[10px] mt-0.5 font-medium ${remaining >= 0 ? 'text-indigo-400' : 'text-orange-500'}`}>
-                          ⏱ {remaining >= 0 ? `약 ${remaining}분 남음` : `${Math.abs(remaining)}분 초과 중`}
-                        </p>
-                      )}
-                    </div>
-                    <svg className={`w-3 h-3 text-zinc-300 shrink-0 mt-1.5 transition-transform ${isExp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-                {isExp && (
-                  <div className="px-4 pb-3 space-y-2">
-                    {task.detail && (
-                      <p className="text-[11px] text-zinc-500 bg-white rounded-lg p-2.5 border border-indigo-100 line-clamp-3">{task.detail}</p>
-                    )}
-                    {logEntries.length > 0 && (
-                      <div className="bg-zinc-900 rounded-lg p-2.5 space-y-1 max-h-24 overflow-y-auto">
-                        {logEntries.slice(-4).map((entry, i) => (
-                          <p key={i} className="text-[10px] text-emerald-400 font-mono leading-snug">
-                            <span className="text-zinc-500 mr-1.5">{entry.time?.slice(11, 16)}</span>
-                            {entry.message}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    <Link href={`/dev-tasks/${task.id}`} className="block text-center text-[11px] text-indigo-500 hover:underline">
-                      상세 보기 →
-                    </Link>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {activeFilter === 'done' && filteredTasks.map(task => (
-            <Link key={task.id} href={`/dev-tasks/${task.id}`} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-zinc-50 transition-colors group">
-              <span className="mt-1.5 text-xs shrink-0">🎉</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-zinc-700 line-clamp-1 group-hover:text-indigo-600 transition-colors">{task.title}</p>
-                {task.actual_impact && (
-                  <p className="text-[10px] text-emerald-600 italic mt-0.5 line-clamp-1">✨ {task.actual_impact.slice(0, 45)}{task.actual_impact.length > 45 ? '...' : ''}</p>
-                )}
-                {task.completed_at && (
-                  <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgoShort(task.completed_at)}전 완료</p>
-                )}
-              </div>
-            </Link>
-          ))}
-
-          {activeFilter === 'rejected' && filteredTasks.map(task => (
-            <Link key={task.id} href={`/dev-tasks/${task.id}`} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-zinc-50 transition-colors group">
-              <span className="mt-1.5 text-xs shrink-0 text-zinc-400">✕</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] text-zinc-500 line-clamp-1 group-hover:text-zinc-700 transition-colors">{task.title}</p>
-                {task.rejected_at && (
-                  <p className="text-[10px] text-zinc-300 mt-0.5">{timeAgoShort(task.rejected_at)}전 반려</p>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
+        <GroupedTaskList
+          tasks={filteredTasks}
+          activeFilter={activeFilter}
+          expandedId={expandedId}
+          setExpandedId={setExpandedId}
+          actionLoading={actionLoading}
+          actionSuccess={actionSuccess}
+          isOwner={isOwner}
+          handleAction={handleAction}
+        />
       )}
 
       {/* Footer: link to full list */}
