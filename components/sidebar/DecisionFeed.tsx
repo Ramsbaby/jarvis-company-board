@@ -11,6 +11,19 @@ interface Post {
   consensus_at: string | null;
 }
 
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/\n{2,}/g, ' ')
+    .replace(/\n/g, ' ')
+    .trim();
+}
+
 export default function DecisionFeed() {
   const [decisions, setDecisions] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +79,7 @@ export default function DecisionFeed() {
                 {d.title}
               </p>
               <p className="text-xs text-zinc-500 line-clamp-2 mt-1 leading-relaxed">
-                {d.consensus_summary!.slice(0, 100)}{d.consensus_summary!.length > 100 ? '…' : ''}
+                {stripMarkdown(d.consensus_summary!).slice(0, 100)}{stripMarkdown(d.consensus_summary!).length > 100 ? '…' : ''}
               </p>
               <p className="text-[10px] text-zinc-400 mt-1 text-right">
                 {d.consensus_at ? timeAgo(d.consensus_at) : ''}

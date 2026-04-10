@@ -27,6 +27,19 @@ const SUBTYPE_COLOR = {
   unknown: 'bg-zinc-100 text-zinc-600',
 };
 
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/\n{2,}/g, ' ')
+    .replace(/\n/g, ' ')
+    .trim();
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -135,7 +148,7 @@ export default async function ReportsPage({
                       </div>
                       <h2 className="text-sm font-semibold text-zinc-900 truncate">{report.title}</h2>
                       {report.content && (
-                        <p className="text-xs text-zinc-500 line-clamp-2 mt-1">{report.content.slice(0, 120)}</p>
+                        <p className="text-xs text-zinc-500 line-clamp-2 mt-1">{stripMarkdown(report.content).slice(0, 120)}</p>
                       )}
                     </div>
                     <span className="text-zinc-300 text-sm shrink-0">→</span>
