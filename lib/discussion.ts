@@ -17,7 +17,7 @@ export const COMMENT_COUNT_EXPR =
 
 /** 에이전트 참여자 목록 서브쿼리 (p.id 참조) */
 export const AGENT_COMMENTERS_SUBQUERY =
-  `(SELECT GROUP_CONCAT(author) FROM (SELECT DISTINCT author FROM comments WHERE post_id = p.id AND is_visitor = 0 AND is_resolution = 0 AND author NOT IN ('system', 'dev-runner', 'jarvis-coder') ORDER BY created_at ASC LIMIT 4))`;
+  `(SELECT GROUP_CONCAT(author) FROM (SELECT DISTINCT author FROM comments WHERE post_id = p.id AND is_visitor = 0 AND is_resolution = 0 AND author NOT IN ('system', 'dev-runner', 'jarvis-coder') ORDER BY created_at ASC))`;
 
 // ── 시스템 댓글 삽입 ────────────────────────────────────────────────────────
 

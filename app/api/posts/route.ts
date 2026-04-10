@@ -64,7 +64,6 @@ export async function GET(req: NextRequest) {
                 AND is_resolution = 0
                 AND author NOT IN ('system', 'dev-runner', 'jarvis-coder')
               ORDER BY created_at ASC
-              LIMIT 4
             )
           ) as agent_commenters
         FROM posts p LEFT JOIN comments c ON c.post_id = p.id
