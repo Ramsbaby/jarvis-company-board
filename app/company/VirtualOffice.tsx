@@ -77,8 +77,15 @@ function buildCollisionMap(): boolean[][] {
       map[y][r.x + r.w - 1] = true;
     }
     const doorX = r.x + Math.floor(r.w / 2);
-    map[r.y + r.h - 1][doorX] = false;
-    map[r.y + r.h - 1][doorX - 1] = false;
+    // 크론센터는 위쪽 문, 나머지는 아래쪽 문
+    if (r.type === 'cron') {
+      map[r.y][doorX] = false;
+      map[r.y][doorX - 1] = false;
+      map[r.y][doorX + 1] = false;
+    } else {
+      map[r.y + r.h - 1][doorX] = false;
+      map[r.y + r.h - 1][doorX - 1] = false;
+    }
   }
   return map;
 }
@@ -989,13 +996,20 @@ export default function VirtualOffice() {
       ctx!.fillRect(rx, ry, 4, rh);
       ctx!.fillRect(rx + rw - 4, ry, 4, rh);
 
-      // Door opening (bottom center)
+      // Door opening
       const doorX = (r.x + Math.floor(r.w / 2)) * T - camX;
       ctx!.fillStyle = '#3a3a52';
-      ctx!.fillRect(doorX - T, ry + rh - 6, T * 2, 8);
-      // Door frame highlight with team color
-      ctx!.fillStyle = r.teamColor + '80';
-      ctx!.fillRect(doorX - T, ry + rh - 3, T * 2, 3);
+      if (r.type === 'cron') {
+        // 크론센터: 위쪽 문
+        ctx!.fillRect(doorX - T, ry - 2, T * 3, 8);
+        ctx!.fillStyle = r.teamColor + '80';
+        ctx!.fillRect(doorX - T, ry, T * 3, 3);
+      } else {
+        // 일반: 아래쪽 문
+        ctx!.fillRect(doorX - T, ry + rh - 6, T * 2, 8);
+        ctx!.fillStyle = r.teamColor + '80';
+        ctx!.fillRect(doorX - T, ry + rh - 3, T * 2, 3);
+      }
 
       // Draw unique furniture per room
       drawRoomFurniture(r, rx, ry, rw, rh);
