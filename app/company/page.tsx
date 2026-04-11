@@ -231,6 +231,7 @@ function DeskCard({ id, entity, status, onClick }: {
 }) {
   const name = entity?.name || id;
   const display = entity?.avatar || entity?.icon || '❓';
+  const loaded = !!status;
   const st = status?.status || 'GREEN';
   const summary = status?.summary || '상태 확인 중...';
 
@@ -238,14 +239,15 @@ function DeskCard({ id, entity, status, onClick }: {
     <button
       onClick={onClick}
       style={{
-        background: STATUS_BG[st],
-        border: `1px solid ${STATUS_COLOR[st]}33`,
+        background: loaded ? STATUS_BG[st] : 'rgba(139,148,158,0.05)',
+        border: `1px solid ${loaded ? STATUS_COLOR[st] + '33' : '#30363d'}`,
         borderRadius: 12,
         padding: '16px 12px',
         cursor: 'pointer',
         textAlign: 'center',
         transition: 'all 0.2s ease',
         position: 'relative',
+        opacity: loaded ? 1 : 0.7,
       }}
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = STATUS_COLOR[st];
@@ -261,8 +263,8 @@ function DeskCard({ id, entity, status, onClick }: {
       <div style={{
         position: 'absolute', top: 8, right: 8,
         width: 8, height: 8, borderRadius: '50%',
-        background: STATUS_COLOR[st],
-        boxShadow: `0 0 6px ${STATUS_COLOR[st]}`,
+        background: loaded ? STATUS_COLOR[st] : '#484f58',
+        boxShadow: loaded ? `0 0 6px ${STATUS_COLOR[st]}` : 'none',
       }} />
 
       {/* 아바타 */}

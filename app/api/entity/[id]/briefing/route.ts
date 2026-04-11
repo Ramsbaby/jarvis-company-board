@@ -152,7 +152,9 @@ function getCronStats24h(keywords: string[]): { total: number; success: number; 
   const raw = readSafe(CRON_LOG);
   if (!raw) return { total: 0, success: 0, failed: 0, rate: 0 };
   const lines = raw.split('\n').filter(Boolean).slice(-3000);
-  const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString().replace('T', ' ').slice(0, 19);
+  // cron.log는 KST 타임스탬프 사용 → 비교 기준도 KST로 맞춤
+  const KST_OFFSET = 9 * 3600_000;
+  const cutoff = new Date(Date.now() - 24 * 3600_000 + KST_OFFSET).toISOString().replace('T', ' ').slice(0, 19);
   let success = 0, failed = 0;
 
   for (const line of lines) {
@@ -327,20 +329,22 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
         status: 'GREEN' as const,
         summary: ragLog.length > 0 ? `최근 인덱싱: ${ragLog[ragLog.length - 1]?.slice(0, 80)}` : '인덱싱 로그 없음',
         currentValue: { recentLogs: ragLog.length },
-        recentEvents: ragLog.map(l => ({ time: l.slice(1, 20), event: l.slice(22, 100) })),
+        recentEvents: ragLog.map(l => ({ time: l.slice(1, 20), task: l.slice(22, 100), result: 'SUCCESS', message: l.slice(0, 120) })),
         alerts: [],
       };
     }
     case 'dev-queue': {
       const recent = parseCronLog(['dev-task', 'jarvis-coder'], 10);
+      const failedCount = recent.filter(r => r.result === 'FAILED').length;
+      const devStatus = failedCount > 2 ? 'RED' as const : failedCount > 0 ? 'YELLOW' as const : 'GREEN' as const;
       return {
         type: 'system-metric', id, name: entity.name, icon: entity.icon,
         description: entity.description,
-        status: 'GREEN' as const,
-        summary: `최근 개발 태스크 ${recent.length}건`,
-        currentValue: { recentCount: recent.length },
+        status: devStatus,
+        summary: `최근 개발 태스크 ${recent.length}건${failedCount > 0 ? ` (실패 ${failedCount}건)` : ' (정상)'}`,
+        currentValue: { recentCount: recent.length, failedCount },
         recentEvents: recent,
-        alerts: [],
+        alerts: failedCount > 0 ? [`최근 ${failedCount}건 실패 — jarvis-coder 점검 필요`] : [],
       };
     }
     default:
