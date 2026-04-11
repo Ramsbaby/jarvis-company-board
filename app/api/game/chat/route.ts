@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       writeFileSync(messageFile, message, 'utf8');
 
       assistantContent = execSync(
-        `cat "${messageFile}" | claude -p --no-input --output-format text --system-prompt "$(cat "${promptFile}")"`,
+        `cat "${messageFile}" | claude -p --output-format text --system-prompt "$(cat "${promptFile}")"`,
         {
           timeout: 60_000,
           encoding: 'utf8',
