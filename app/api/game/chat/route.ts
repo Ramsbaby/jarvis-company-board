@@ -1,10 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
-import { tmpdir } from 'os';
-import path from 'path';
+import { execFileSync } from 'child_process';
 import { getDb } from '@/lib/db';
 
 // 팀별 시스템 프롬프트
@@ -19,6 +16,7 @@ const TEAM_PROMPTS: Record<string, string> = {
   'academy-lead': '나는 학습팀장 신유진입니다. 학습 계획, 스터디 큐레이션을 관리합니다.',
   'cron-engine': '나는 크론 엔진 관리자입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.',
   'discord-bot': '나는 Discord 봇 관리자입니다. 봇 프로세스 상태와 채팅 시스템을 관리합니다.',
+  'disk-storage': '나는 디스크 스토리지 관리자입니다. 로컬 스토리지 사용량과 정리 상태를 관리합니다.',
 };
 
 export async function POST(req: NextRequest) {
@@ -46,32 +44,22 @@ export async function POST(req: NextRequest) {
 
     const fullPrompt = `${systemPrompt}\n\n짧고 자연스럽게 한국어로 답변해주세요.\n\n최근 대화:\n${conversationContext}`;
 
-    // 임시 파일로 프롬프트 전달 (따옴표 이스케이프 문제 방지)
-    const promptFile = path.join(tmpdir(), `jarvis-chat-${Date.now()}.txt`);
-    const messageFile = path.join(tmpdir(), `jarvis-msg-${Date.now()}.txt`);
-
     let assistantContent: string;
     try {
-      writeFileSync(promptFile, fullPrompt, 'utf8');
-      writeFileSync(messageFile, message, 'utf8');
-
-      assistantContent = execSync(
-        `cat "${messageFile}" | claude -p --output-format text --system-prompt "$(cat "${promptFile}")"`,
-        {
-          timeout: 60_000,
-          encoding: 'utf8',
-          maxBuffer: 1024 * 1024,
-          shell: '/bin/bash',
-          env: { ...process.env, TERM: 'dumb' },
-        }
-      ).trim();
+      assistantContent = execFileSync('claude', [
+        '-p', message,
+        '--output-format', 'text',
+        '--system-prompt', fullPrompt,
+      ], {
+        timeout: 60_000,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        env: { ...process.env, TERM: 'dumb' },
+      }).trim();
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       assistantContent = `잠시 응답을 생성하지 못했습니다. 다시 시도해주세요.`;
       console.error('[game-chat] claude error:', errMsg.slice(0, 200));
-    } finally {
-      try { unlinkSync(promptFile); } catch { /* ignore */ }
-      try { unlinkSync(messageFile); } catch { /* ignore */ }
     }
 
     // 어시스턴트 응답 저장

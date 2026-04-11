@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 const T = 32; // tile size
 const COLS = 40;
-const ROWS = 26;
+const ROWS = 34;
 const MOVE_SPEED = 130; // ms per tile
 
 // ── 방 정의 ────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ interface RoomDef {
   emoji: string;
   description: string;
   x: number; y: number; w: number; h: number;
-  type: 'team' | 'server' | 'meeting';
+  type: 'team' | 'server' | 'meeting' | 'cron';
   npcX: number; npcY: number;
   teamColor: string;
   floorStyle: 'executive' | 'carpet' | 'metal' | 'stage';
@@ -41,7 +41,9 @@ const ROOMS: RoomDef[] = [
   { id: 'career-lead', entityId: 'career-lead', name: '커리어팀',   emoji: '💼', description: '채용 분석 · 면접 준비 · 커리어 전략',        x: 2,  y: 18, w: 7, h: 5, type: 'team',    npcX: 5,  npcY: 20, teamColor: '#0d9488', floorStyle: 'carpet' },
   { id: 'standup',     entityId: '',             name: '스탠드업홀', emoji: '🎤', description: '매일 09:15 모닝 브리핑',                     x: 11, y: 18, w: 7, h: 5, type: 'meeting', npcX: 14, npcY: 20, teamColor: '#eab308', floorStyle: 'stage' },
   { id: 'ceo-digest',  entityId: '',             name: '회의실',     emoji: '🗂️', description: '이사회 · CEO 일일 요약',                     x: 20, y: 18, w: 7, h: 5, type: 'meeting', npcX: 23, npcY: 20, teamColor: '#64748b', floorStyle: 'carpet' },
-  { id: 'server-room', entityId: 'cron-engine',  name: '서버룸',     emoji: '🖥️', description: '크론 엔진 · 시스템 헬스 모니터링',            x: 29, y: 18, w: 7, h: 5, type: 'server',  npcX: 32, npcY: 20, teamColor: '#475569', floorStyle: 'metal' },
+  { id: 'server-room', entityId: 'cron-engine',  name: '서버룸',     emoji: '🖥️', description: 'Mac Mini 서버 · 디스크/메모리/봇 모니터링',    x: 29, y: 18, w: 7, h: 5, type: 'server',  npcX: 32, npcY: 20, teamColor: '#475569', floorStyle: 'metal' },
+  // Row 4 — Cron Center (y=25)
+  { id: 'cron-center', entityId: '',             name: '크론 센터',   emoji: '⏰', description: '전사 크론잡 실시간 모니터링',                  x: 1,  y: 25, w: 36, h: 8, type: 'cron',    npcX: 18, npcY: 28, teamColor: '#6366f1', floorStyle: 'metal' },
 ];
 
 // agent-live teamId -> room id mapping
@@ -150,6 +152,10 @@ export default function VirtualOffice() {
   const [chatLoading, setChatLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [tooltipRoom, setTooltipRoom] = useState<{ room: RoomDef; x: number; y: number } | null>(null);
+  const [showMobileHelp, setShowMobileHelp] = useState(false);
+  const [cronData, setCronData] = useState<Array<{ name: string; korName: string; status: string; lastRun: string; result: string; nextSchedule: string }>>([]);
+  const [cronPopup, setCronPopup] = useState<{ name: string; korName: string; status: string; lastRun: string; result: string; nextSchedule: string } | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // 게임 상태 refs
   const playerRef = useRef({ x: 20, y: 8 });
@@ -197,29 +203,98 @@ export default function VirtualOffice() {
         states[roomId] = { status: st, task: team.lastTask || '', activity: team.lastMessage || '' };
       }
 
-      // server-room additional check via cron-engine
+      // server-room: check via disk-storage + discord-bot
       try {
-        const hRes = await fetch('/api/entity/cron-engine/briefing');
-        if (hRes.ok) {
-          const h = await hRes.json() as BriefingData;
-          states['server-room'] = {
-            status: h.status === 'GREEN' ? 'green' : h.status === 'RED' ? 'red' : 'yellow',
-            task: 'cron-engine', activity: h.summary || '',
-          };
-        }
+        const [diskRes, botRes] = await Promise.all([
+          fetch('/api/entity/disk-storage/briefing').catch(() => null),
+          fetch('/api/entity/discord-bot/briefing').catch(() => null),
+        ]);
+        const diskOk = diskRes?.ok ? ((await diskRes.json()) as BriefingData).status : null;
+        const botOk = botRes?.ok ? ((await botRes.json()) as BriefingData).status : null;
+        const worstSt = (diskOk === 'RED' || botOk === 'RED') ? 'red'
+          : (diskOk === 'YELLOW' || botOk === 'YELLOW') ? 'yellow' : 'green';
+        states['server-room'] = {
+          status: worstSt, task: 'mac-mini', activity: 'Mac Mini 서버 모니터링',
+        };
       } catch { /* skip */ }
 
       npcStatesRef.current = states;
+
+      // Extract cron data for cron-center
+      const crons: typeof cronData = [];
+      for (const team of data.teams || []) {
+        for (const cron of team.recentCrons || []) {
+          crons.push({
+            name: cron.task || team.teamId,
+            korName: cron.task || team.label || team.teamId,
+            status: cron.result === 'success' ? 'green' : cron.result === 'failed' ? 'red' : 'yellow',
+            lastRun: cron.time || '',
+            result: cron.result || '',
+            nextSchedule: team.schedule || '',
+          });
+        }
+      }
+      setCronData(crons.slice(0, 20));
     } catch { /* retry next interval */ }
   }, []);
 
   const openBriefing = useCallback(async (room: RoomDef) => {
+    // Cron center: show cron tiles popup, not a standard briefing
+    if (room.id === 'cron-center') {
+      // If we have cron data and user clicks a specific tile, cronPopup handles that.
+      // For room-level click, just show the briefing with cron summary.
+      setPopupOpen(true);
+      setPopupLoading(false);
+      setBriefing({
+        id: room.id, name: room.name, emoji: room.emoji,
+        status: cronData.some(c => c.status === 'red') ? 'RED' : cronData.some(c => c.status === 'yellow') ? 'YELLOW' : 'GREEN',
+        summary: `${cronData.length}개 크론잡 모니터링 중`,
+        roomDescription: room.description,
+        recentActivity: cronData.map(c => ({
+          time: c.lastRun, task: c.korName, result: c.result, message: '',
+        })),
+      });
+      setChatResp('');
+      return;
+    }
+
     setPopupOpen(true);
     setPopupLoading(true);
     setBriefing(null);
     setChatResp('');
 
     const entityId = room.entityId;
+
+    // Server room: fetch Mac Mini metrics instead of cron-engine
+    if (room.id === 'server-room') {
+      try {
+        const [diskRes, botRes] = await Promise.all([
+          fetch('/api/entity/disk-storage/briefing').catch(() => null),
+          fetch('/api/entity/discord-bot/briefing').catch(() => null),
+        ]);
+        const diskData = diskRes?.ok ? await diskRes.json() as BriefingData : null;
+        const botData = botRes?.ok ? await botRes.json() as BriefingData : null;
+
+        const worstStatus = (diskData?.status === 'RED' || botData?.status === 'RED') ? 'RED'
+          : (diskData?.status === 'YELLOW' || botData?.status === 'YELLOW') ? 'YELLOW' : 'GREEN';
+
+        const summaryParts: string[] = [];
+        if (diskData?.summary) summaryParts.push(diskData.summary);
+        if (botData?.summary) summaryParts.push(botData.summary);
+
+        setBriefing({
+          id: room.id, name: room.name, emoji: room.emoji,
+          status: worstStatus,
+          summary: summaryParts.join(' / ') || room.description,
+          roomDescription: room.description,
+          stats: diskData?.stats || botData?.stats,
+          recentActivity: diskData?.recentActivity || botData?.recentActivity,
+          alerts: [...(diskData?.alerts || []), ...(botData?.alerts || [])],
+        });
+        setPopupLoading(false);
+        return;
+      } catch { /* fall through */ }
+    }
 
     // If there's an entity ID, try the entity briefing API first
     if (entityId) {
@@ -304,7 +379,7 @@ export default function VirtualOffice() {
     }
 
     setPopupLoading(false);
-  }, []);
+  }, [cronData]);
 
   // ── 게임 루프 (Canvas) ───────────────────────────────────────
   useEffect(() => {
@@ -333,7 +408,7 @@ export default function VirtualOffice() {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // Pointer/touch: tap on NPC
+    // Pointer/touch: tap on NPC or anywhere inside room
     const onPointerDown = (e: PointerEvent) => {
       if (popupOpenRef.current) return;
       const rect = canvas.getBoundingClientRect();
@@ -342,11 +417,24 @@ export default function VirtualOffice() {
       const camX = cameraRef.current.x;
       const camY = cameraRef.current.y;
 
+      // First check NPC proximity (desktop/precise click)
       for (const r of ROOMS) {
         const nx = r.npcX * T - camX + T / 2;
         const ny = r.npcY * T - camY + T / 2;
         const dist = Math.sqrt((clickX - nx) ** 2 + (clickY - ny) ** 2);
         if (dist < 28) {
+          openBriefing(r);
+          return;
+        }
+      }
+
+      // Then check if tap is inside any room area (mobile-friendly)
+      for (const r of ROOMS) {
+        const rx = r.x * T - camX;
+        const ry = r.y * T - camY;
+        const rw = r.w * T;
+        const rh = r.h * T;
+        if (clickX >= rx && clickX <= rx + rw && clickY >= ry && clickY <= ry + rh) {
           openBriefing(r);
           return;
         }
@@ -746,6 +834,41 @@ export default function VirtualOffice() {
           ctx!.strokeRect(rx + T * 2, ry + T * 0.3, T * 3, T * 0.9);
           break;
         }
+        case 'cron-center': {
+          // Cron monitoring wall — grid of small status tiles
+          const tileW = T * 1.6;
+          const tileH = T * 1.2;
+          const tilesPerRow = 8;
+          for (let i = 0; i < 16; i++) {
+            const col = i % tilesPerRow;
+            const row = Math.floor(i / tilesPerRow);
+            const tx = rx + T * 1 + col * (tileW + 8);
+            const ty = ry + T * 1.2 + row * (tileH + 8);
+            ctx!.fillStyle = '#1e293b';
+            ctx!.fillRect(tx, ty, tileW, tileH);
+            ctx!.strokeStyle = '#334155';
+            ctx!.lineWidth = 0.5;
+            ctx!.strokeRect(tx, ty, tileW, tileH);
+            // Status LED
+            const blinkPhase = (frameCountRef.current + i * 11) % 80;
+            const isLit = blinkPhase > 15;
+            ctx!.fillStyle = isLit ? (i % 5 === 0 ? '#f85149' : '#3fb950') : '#3fb95030';
+            ctx!.beginPath();
+            ctx!.arc(tx + 8, ty + tileH / 2, 3, 0, Math.PI * 2);
+            ctx!.fill();
+            // Label placeholder
+            ctx!.fillStyle = '#8b949e50';
+            ctx!.fillRect(tx + 16, ty + tileH / 2 - 2, tileW - 24, 4);
+          }
+          // Title bar
+          ctx!.fillStyle = '#6366f130';
+          ctx!.fillRect(rx + T * 1, ry + T * 0.4, T * 6, T * 0.6);
+          ctx!.fillStyle = '#a5b4fc';
+          ctx!.font = 'bold 9px monospace';
+          ctx!.textAlign = 'left';
+          ctx!.fillText('CRON MONITORING CENTER', rx + T * 1.2, ry + T * 0.8);
+          break;
+        }
         case 'server-room': {
           // Server racks (3)
           for (let i = 0; i < 3; i++) {
@@ -1141,6 +1264,7 @@ export default function VirtualOffice() {
         'ceo': 'CEO', 'infra-lead': 'INF', 'trend-lead': 'TRD', 'finance': 'FIN',
         'record-lead': 'REC', 'audit-lead': 'AUD', 'academy-lead': 'ACM', 'brand-lead': 'BRD',
         'career-lead': 'CAR', 'standup': 'STU', 'ceo-digest': 'MTG', 'server-room': 'SRV',
+        'cron-center': 'CRON',
       };
 
       // Detect which room the player is in
@@ -1420,6 +1544,11 @@ export default function VirtualOffice() {
     }
   }, [briefing, loadChatHistory]);
 
+  // Chat auto-scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, chatLoading]);
+
   // ── 메시지 전송 (인앱 대화) ──────────────────────────────────
   const sendMessage = async () => {
     if (!chatInput.trim() || !briefing) return;
@@ -1587,7 +1716,7 @@ export default function VirtualOffice() {
 
                   {/* Status badge with explanation */}
                   <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
                     padding: '8px 14px', borderRadius: 10, marginBottom: 14,
                     background: stColor(briefing.status) + '10',
                     border: `1px solid ${stColor(briefing.status)}30`,
@@ -1597,14 +1726,15 @@ export default function VirtualOffice() {
                       background: stColor(briefing.status),
                       boxShadow: `0 0 8px ${stColor(briefing.status)}60`,
                       flexShrink: 0,
+                      marginTop: 3,
                     }} />
                     <div>
                       <span style={{ fontSize: 13, fontWeight: 600, color: stColor(briefing.status) }}>
-                        {briefing.status === 'GREEN' ? '&#x1F7E2; 정상' : briefing.status === 'RED' ? '&#x1F534; 이상' : '&#x26A0;&#xFE0F; 주의'}
+                        {briefing.status === 'GREEN' ? '정상' : briefing.status === 'RED' ? '이상' : '주의'}
                       </span>
-                      <span style={{ fontSize: 12, color: '#8b949e', marginLeft: 8 }}>
+                      <div style={{ fontSize: 12, color: '#8b949e', marginTop: 2, lineHeight: 1.4 }}>
                         {statusExplanation(briefing)}
-                      </span>
+                      </div>
                     </div>
                   </div>
 
@@ -1753,6 +1883,7 @@ export default function VirtualOffice() {
                           </span>
                         </div>
                       )}
+                      <div ref={chatEndRef} />
                     </div>
                     {/* Input */}
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -1789,14 +1920,121 @@ export default function VirtualOffice() {
                 </>
               );
             })() : (
-              // This should rarely happen now — we always provide at least room description
               <div style={{ padding: 40, textAlign: 'center', color: '#8b949e' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>&#x1F50D;</div>
-                <div style={{ fontSize: 13 }}>정보를 가져오는 중...</div>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>&#x1F3E2;</div>
+                <div style={{ fontSize: 13 }}>현재 데이터를 수집하고 있어요</div>
+              </div>
+            )}
+
+            {/* Cron tiles grid (only for cron-center) */}
+            {briefing && briefing.id === 'cron-center' && cronData.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  크론잡 현황
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+                  {cronData.map((c, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setCronPopup(c)}
+                      style={{
+                        background: '#0d1117', border: '1px solid #21262d',
+                        borderRadius: 8, padding: '8px 10px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        transition: 'border-color 0.2s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = '#6366f180')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = '#21262d')}
+                    >
+                      <span style={{
+                        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                        background: c.status === 'green' ? '#3fb950' : c.status === 'red' ? '#f85149' : '#d29922',
+                      }} />
+                      <span style={{ fontSize: 12, color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.korName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* Cron Tile Popup */}
+      {cronPopup && (
+        <div
+          onClick={() => setCronPopup(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1100,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#161b22', border: '1px solid #6366f140',
+              borderRadius: 14, padding: '20px 24px', minWidth: 280, maxWidth: 360,
+              color: '#e6edf3', fontFamily: '-apple-system, sans-serif',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span style={{
+                width: 12, height: 12, borderRadius: '50%',
+                background: cronPopup.status === 'green' ? '#3fb950' : cronPopup.status === 'red' ? '#f85149' : '#d29922',
+                boxShadow: `0 0 8px ${cronPopup.status === 'green' ? '#3fb95060' : cronPopup.status === 'red' ? '#f8514960' : '#d2992260'}`,
+              }} />
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{cronPopup.korName}</span>
+            </div>
+            <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.8 }}>
+              <div>마지막 실행: {cronPopup.lastRun ? new Date(cronPopup.lastRun).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음'}</div>
+              <div>결과: <span style={{ color: cronPopup.result === 'success' ? '#3fb950' : '#f85149', fontWeight: 600 }}>{cronPopup.result === 'success' ? '성공' : cronPopup.result === 'failed' ? '실패' : cronPopup.result || '대기'}</span></div>
+              <div>스케줄: {cronPopup.nextSchedule || '정보 없음'}</div>
+            </div>
+            <button
+              onClick={() => setCronPopup(null)}
+              style={{
+                marginTop: 14, width: '100%', padding: '8px 0',
+                background: '#21262d', border: '1px solid #30363d',
+                borderRadius: 8, color: '#8b949e', cursor: 'pointer', fontSize: 13,
+              }}
+            >닫기</button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile floating help button */}
+      {isMobile && !popupOpen && (
+        <>
+          <button
+            onClick={() => setShowMobileHelp(prev => !prev)}
+            style={{
+              position: 'fixed', bottom: 60, right: 16, zIndex: 600,
+              width: 44, height: 44, borderRadius: '50%',
+              background: '#21262d', border: '1px solid #30363d',
+              color: '#8b949e', fontSize: 20, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            }}
+          >?</button>
+          {showMobileHelp && (
+            <div style={{
+              position: 'fixed', bottom: 112, right: 16, zIndex: 600,
+              background: 'rgba(22,27,34,0.95)', border: '1px solid #30363d',
+              borderRadius: 12, padding: '14px 18px', maxWidth: 220,
+              color: '#c9d1d9', fontSize: 12, fontFamily: 'monospace',
+              lineHeight: 1.8, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>조작 방법</div>
+              <div>- 방을 탭하면 대화 시작</div>
+              <div>- NPC를 탭해도 대화 가능</div>
+              <div>- 팝업 바깥 탭으로 닫기</div>
+            </div>
+          )}
+        </>
       )}
 
       {/* CSS animations */}

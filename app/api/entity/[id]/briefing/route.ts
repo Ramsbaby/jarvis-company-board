@@ -368,32 +368,57 @@ interface RichActivity {
   icon: string;
 }
 
+// 태스크별 성공 시 사람이 읽기 좋은 설명
+const FRIENDLY_SUCCESS: Record<string, string | (() => string)> = {
+  'disk-alert': () => { const d = getDiskUsage(); return `디스크 상태를 확인했어요. ${d.percent}% 사용중, 여유 있습니다.`; },
+  'system-health': '시스템 전체 점검을 완료했어요. 이상 없음.',
+  'system-doctor': '서버 종합 진단을 마쳤어요. 모두 정상입니다.',
+  'infra-daily': '서버와 인프라 일일 점검을 마쳤어요. 정상 동작중.',
+  'morning-standup': '오늘의 모닝 브리핑을 팀에 전송했어요.',
+  'record-daily': '오늘 대화 기록을 정리하고 아카이빙했어요.',
+  'council-insight': '경영 점검 보고서를 작성 완료했어요.',
+  'board-meeting-am': '오전 이사회 회의를 진행했어요.',
+  'board-meeting-pm': '오후 이사회 회의를 진행했어요.',
+  'ceo-daily-digest': 'CEO 일일 요약 리포트를 전달했어요.',
+  'news-briefing': '오늘의 주요 뉴스를 정리해서 브리핑했어요.',
+  'market-alert': '시장 동향을 분석하고 알림을 보냈어요.',
+  'tqqq-monitor': 'TQQQ 시세를 확인하고 모니터링했어요.',
+  'e2e-test': '전체 시스템 자동 테스트를 통과했어요.',
+  'rag-health': 'RAG 장기기억 시스템 상태를 점검했어요. 정상.',
+  'cron-failure-tracker': '크론 실패 이력을 추적하고 정리했어요.',
+  'scorecard-enforcer': '성과 카드를 점검했어요.',
+  'calendar-alert': '오늘 일정 알림을 확인했어요.',
+  'schedule-coherence': '일정 정합성을 확인했어요. 충돌 없음.',
+  'memory-cleanup': '오래된 메모리를 정리했어요.',
+  'token-sync': '토큰 동기화를 완료했어요.',
+  'security-scan': '보안 스캔을 마쳤어요. 이상 없음.',
+};
+
 function toRichActivity(entry: CronEntry): RichActivity {
   const timeOnly = entry.time.includes(' ') ? entry.time.split(' ')[1].slice(0, 5) : entry.time;
   const name = taskDisplayName(entry.task);
   const icon = resultIcon(entry.result);
-  const label = entry.result === 'SUCCESS' ? '완료' : entry.result === 'FAILED' ? '실패' : resultLabel(entry.result);
 
-  let description = `${name} — ${label}`;
-  // 특정 태스크에 대한 풍부한 설명 추가
-  if (entry.task === 'disk-alert' && entry.result === 'SUCCESS') {
-    const disk = getDiskUsage();
-    description = `디스크 ${disk.percent}% 사용중, 정상`;
-  } else if (entry.task === 'system-health' && entry.result === 'SUCCESS') {
-    description = '시스템 헬스 체크 완료, 이상 없음';
-  } else if (entry.task === 'system-doctor' && entry.result === 'SUCCESS') {
-    description = '시스템 종합 점검 완료, 정상';
-  } else if (entry.task === 'infra-daily' && entry.result === 'SUCCESS') {
-    description = '인프라 일일 점검 정상 완료';
-  } else if (entry.task === 'morning-standup' && entry.result === 'SUCCESS') {
-    description = '모닝 브리핑 전송 완료';
-  } else if (entry.task === 'record-daily' && entry.result === 'SUCCESS') {
-    description = '일일 기록 정리 및 아카이빙 완료';
-  } else if (entry.task === 'council-insight' && entry.result === 'SUCCESS') {
-    description = '경영 점검 보고서 작성 완료';
+  let description: string;
+
+  if (entry.result === 'SUCCESS') {
+    const friendly = FRIENDLY_SUCCESS[entry.task];
+    if (typeof friendly === 'function') {
+      description = friendly();
+    } else if (friendly) {
+      description = friendly;
+    } else {
+      description = `${name}을(를) 완료했어요. 이상 없음.`;
+    }
   } else if (entry.result === 'FAILED') {
-    const msgBrief = entry.message.slice(0, 60).replace(/^(FAILED|ERROR)[:\s]*/i, '');
-    description = `${name} 실패${msgBrief ? ' — ' + msgBrief : ''}`;
+    const msgBrief = entry.message.slice(0, 60).replace(/^(FAILED|ERROR)[:\s]*/i, '').trim();
+    description = `${name}에서 문제가 발생했어요${msgBrief ? '. 원인: ' + msgBrief : '. 확인이 필요합니다.'}`;
+  } else if (entry.result === 'SKIPPED') {
+    description = `${name}은(는) 조건이 맞지 않아 건너뛰었어요.`;
+  } else if (entry.result === 'RUNNING') {
+    description = `${name}이(가) 진행중이에요.`;
+  } else {
+    description = `${name} 상태를 확인중이에요.`;
   }
 
   return { time: timeOnly, task: name, result: resultLabel(entry.result), description, icon };
@@ -401,76 +426,85 @@ function toRichActivity(entry: CronEntry): RichActivity {
 
 // ── 팀별 맞춤 요약 생성 ──────────────────────────────────────────────────────
 
-function buildTeamSummary(id: string, stats: { total: number; success: number; failed: number; rate: number }): string {
-  if (stats.total === 0) return '오늘 실행된 작업이 없습니다.';
+function buildTeamSummary(id: string, stats: { total: number; success: number; failed: number; rate: number }, keywords: string[]): string {
+  if (stats.total === 0) {
+    const upcoming = getUpcomingTasks(keywords);
+    if (upcoming.length > 0) {
+      return `오늘은 아직 실행된 작업이 없어요. 다음 예정: ${upcoming[0].taskKo} (${upcoming[0].time})`;
+    }
+    return '오늘은 아직 예정된 작업이 없어요.';
+  }
 
   const disk = getDiskUsage();
   const bot = getDiscordBotStatus();
 
   switch (id) {
     case 'ceo': {
-      const failedNames = getFailedTaskNames(['board-meeting', 'ceo-daily-digest', 'council']);
       if (stats.failed === 0) {
-        return `오늘 이사회와 경영 점검이 정상 진행되었습니다. ${stats.success}건 완료.`;
+        return '오늘 이사회와 경영 점검을 마쳤어요. 모두 정상입니다.';
       }
-      return `오늘 ${stats.total}건 중 ${stats.failed}건 실패. 실패 항목: ${failedNames.map(taskDisplayName).join(', ')}`;
+      const failedNames = getFailedTaskNames(['board-meeting', 'ceo-daily-digest', 'council']);
+      return `오늘 일부 업무에서 문제가 있었어요. ${failedNames.map(taskDisplayName).join(', ')}에서 오류가 발생했습니다.`;
     }
     case 'infra-lead': {
       const parts: string[] = [];
-      parts.push(disk.percent > 0 ? `디스크 ${disk.percent}% 사용중` : '디스크 정보 없음');
-      parts.push(bot.running ? `봇 실행중 (PID ${bot.pid})` : '봇 미실행 — 확인 필요');
+      if (disk.percent >= 90) {
+        parts.push(`디스크가 ${disk.percent}%나 차서 정리가 시급해요`);
+      } else if (disk.percent >= 80) {
+        parts.push(`디스크 ${disk.percent}% 사용중, 여유가 줄고 있어요`);
+      } else {
+        parts.push(`디스크 ${disk.percent}% 사용중, 여유 있어요`);
+      }
+      parts.push(bot.running ? '봇은 정상 실행중' : '봇이 멈춰 있어요, 재시작이 필요해요');
       if (stats.failed > 0) {
         const failedNames = getFailedTaskNames(['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard']);
-        parts.push(`크론 ${stats.failed}건 실패: ${failedNames.map(taskDisplayName).join(', ')}`);
+        parts.push(`${failedNames.map(taskDisplayName).join(', ')}에서 문제가 생겼어요`);
       } else {
-        parts.push(`크론 ${stats.success}건 모두 성공`);
+        parts.push('자동 점검은 모두 통과했어요');
       }
-      return parts.join(', ');
+      return parts.join('. ') + '.';
     }
     case 'trend-lead': {
       if (stats.failed === 0) {
-        return `오늘 시장·트렌드 분석 ${stats.success}건 완료. 모두 정상 전송되었습니다.`;
+        return '오늘 시장과 트렌드 분석을 모두 마쳤어요. 정상 전송됐습니다.';
       }
       const failedNames = getFailedTaskNames(['trend', 'market-alert', 'news', 'tqqq', 'stock', 'macro']);
-      return `${stats.success}건 완료, ${stats.failed}건 실패 (${failedNames.map(taskDisplayName).join(', ')})`;
+      return `대부분 완료했지만, ${failedNames.map(taskDisplayName).join(', ')}에서 문제가 있었어요.`;
     }
     case 'record-lead': {
       if (stats.failed === 0) {
-        return `오늘 기록 정리 및 아카이빙 ${stats.success}건 완료. 정상입니다.`;
+        return '오늘 대화 기록 정리와 아카이빙을 마쳤어요. 정상입니다.';
       }
-      return `기록 작업 ${stats.success}건 완료, ${stats.failed}건 실패. 확인이 필요합니다.`;
+      return '기록 정리 중 일부 문제가 있었어요. 확인이 필요합니다.';
     }
     case 'career-lead': {
-      if (stats.total === 0) return '이번 주 커리어 분석 작업이 아직 없습니다.';
-      if (stats.failed === 0) return `커리어 관련 작업 ${stats.success}건 완료. 정상입니다.`;
-      return `커리어 작업 ${stats.failed}건 실패. 확인이 필요합니다.`;
+      if (stats.failed === 0) return '커리어 관련 분석을 마쳤어요. 정상입니다.';
+      return '커리어 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
     }
     case 'brand-lead': {
-      if (stats.total === 0) return '이번 주 브랜드 작업이 아직 없습니다.';
-      if (stats.failed === 0) return `브랜드·콘텐츠 작업 ${stats.success}건 완료. 정상입니다.`;
-      return `브랜드 작업 ${stats.failed}건 실패. 확인이 필요합니다.`;
+      if (stats.failed === 0) return '브랜드와 콘텐츠 작업을 마쳤어요. 정상입니다.';
+      return '브랜드 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
     }
     case 'audit-lead': {
       const cbs = getCircuitBreakerStatus();
       const parts: string[] = [];
       if (stats.failed === 0) {
-        parts.push(`감사·품질 점검 ${stats.success}건 모두 정상`);
+        parts.push('감사와 품질 점검을 마쳤어요. 모두 정상');
       } else {
-        parts.push(`${stats.failed}건 실패 발견`);
+        parts.push(`품질 점검 중 ${stats.failed}건에서 문제를 발견했어요`);
       }
       if (cbs.length > 0) {
-        parts.push(`서킷 브레이커 ${cbs.length}건 격리중`);
+        parts.push(`${cbs.length}개 작업이 반복 실패로 일시 중단됐어요`);
       }
-      return parts.join(', ');
+      return parts.join('. ') + '.';
     }
     case 'academy-lead': {
-      if (stats.total === 0) return '이번 주 학습 작업이 아직 없습니다.';
-      if (stats.failed === 0) return `학습 지원 작업 ${stats.success}건 완료. 정상입니다.`;
-      return `학습 작업 ${stats.failed}건 실패. 확인이 필요합니다.`;
+      if (stats.failed === 0) return '학습 지원 작업을 마쳤어요. 정상입니다.';
+      return '학습 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
     }
     default: {
-      if (stats.failed === 0) return `오늘 ${stats.success}건 작업 모두 정상 완료되었습니다.`;
-      return `오늘 ${stats.total}건 중 ${stats.failed}건 실패. 확인이 필요합니다.`;
+      if (stats.failed === 0) return '오늘 맡은 작업을 모두 마쳤어요. 정상입니다.';
+      return `오늘 작업 중 ${stats.failed}건에서 문제가 있었어요. 확인이 필요합니다.`;
     }
   }
 }
@@ -484,7 +518,7 @@ function buildTeamLeadBriefing(id: string, entity: TeamLeadEntity) {
   const upcoming = getUpcomingTasks(entity.keywords);
   const boardMinutes = getLatestBoardMinutes(entity.keywords);
   const status = getStatusColor(stats.rate);
-  const summary = buildTeamSummary(id, stats);
+  const summary = buildTeamSummary(id, stats, entity.keywords);
 
   return {
     type: 'team-lead',
@@ -516,22 +550,34 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
       const failedNames = getFailedTaskNames([]);
       const failedDisplay = failedNames.slice(0, 10).map(taskDisplayName);
 
+      // 최근 성공한 작업 이름도 수집
+      const successNames = recentRaw
+        .filter(r => r.result === 'SUCCESS')
+        .map(r => taskDisplayName(r.task))
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 5);
+
       let summary: string;
       if (stats.total === 0) {
-        summary = '오늘 실행된 작업이 없습니다.';
+        const upcoming = getUpcomingTasks([]);
+        if (upcoming.length > 0) {
+          summary = `오늘은 아직 실행된 작업이 없어요. 다음 예정: ${upcoming[0].taskKo} (${upcoming[0].time})`;
+        } else {
+          summary = '오늘은 아직 실행된 자동화 작업이 없어요.';
+        }
       } else if (stats.failed === 0) {
-        summary = `자동 작업 스케줄러: 오늘 ${stats.total}개 작업 실행, 모두 성공했습니다.`;
+        summary = `오늘 자동화 작업 ${stats.total}건을 모두 마쳤어요. 최근 완료: ${successNames.join(', ')}`;
       } else {
-        summary = `자동 작업 스케줄러: 오늘 ${stats.total}개 작업 실행, ${stats.success}개 성공, ${stats.failed}개 실패. 실패 작업: ${failedDisplay.join(', ')}`;
+        summary = `오늘 ${stats.total}건 중 ${stats.failed}건에서 문제가 생겼어요. 실패: ${failedDisplay.join(', ')}`;
       }
 
       const healthAssessment = stats.rate >= 95
-        ? '전체적으로 안정적입니다.'
+        ? '전체적으로 안정적이에요.'
         : stats.rate >= 80
-          ? '일부 실패가 있지만 대부분 정상 동작중입니다.'
+          ? '일부 실패가 있지만 대부분 잘 돌아가고 있어요.'
           : stats.rate >= 60
-            ? '실패율이 높습니다. 원인 파악이 필요합니다.'
-            : '심각한 상태입니다. 즉시 점검이 필요합니다.';
+            ? '실패가 좀 많아요. 원인을 살펴봐야 해요.'
+            : '상태가 심각해요. 바로 점검이 필요합니다.';
 
       return {
         type: 'system-metric', id, name: entity.name, icon: entity.icon,
@@ -541,7 +587,7 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
         healthAssessment,
         currentValue: { ...stats, failedTasks: failedDisplay },
         recentEvents,
-        alerts: stats.failed > 5 ? [`실패 ${stats.failed}건 — 점검 필요`] : [],
+        alerts: stats.failed > 5 ? [`${stats.failed}건 실패 — 바로 점검이 필요해요`] : [],
       };
     }
     case 'discord-bot': {
@@ -551,22 +597,22 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
         description: entity.description,
         status: bot.running ? 'GREEN' as const : 'RED' as const,
         summary: bot.running
-          ? `Discord 봇이 정상 실행중입니다 (PID ${bot.pid}). 24시간 대화 가능 상태.`
-          : 'Discord 봇 프로세스가 감지되지 않습니다. 재시작이 필요합니다.',
+          ? '디스코드 봇이 잘 돌아가고 있어요. 언제든 대화할 수 있어요.'
+          : '디스코드 봇이 멈춰 있어요. 재시작이 필요합니다.',
         currentValue: bot,
         recentEvents: [],
-        alerts: bot.running ? [] : ['봇 프로세스 미감지 — 재시작 필요'],
+        alerts: bot.running ? [] : ['봇이 멈춰 있어요 — 재시작이 필요합니다'],
       };
     }
     case 'disk-storage': {
       const disk = getDiskUsage();
       let summary: string;
       if (disk.percent >= 90) {
-        summary = `디스크 용량 위험! ${disk.percent}% 사용중 (${disk.used} / ${disk.total}). 즉시 정리가 필요합니다.`;
+        summary = `디스크가 거의 꽉 찼어요 (${disk.percent}%, ${disk.used}/${disk.total}). 지금 정리가 필요해요.`;
       } else if (disk.percent >= 80) {
-        summary = `디스크 ${disk.percent}% 사용중 (${disk.used} / ${disk.total}). 여유 공간이 줄어들고 있습니다.`;
+        summary = `디스크 ${disk.percent}% 사용중이에요 (${disk.used}/${disk.total}). 여유가 줄고 있어요.`;
       } else {
-        summary = `디스크 ${disk.percent}% 사용중 (${disk.used} / ${disk.total}). 여유 있습니다.`;
+        summary = `디스크 ${disk.percent}% 사용중이에요 (${disk.used}/${disk.total}). 넉넉해요.`;
       }
       return {
         type: 'system-metric', id, name: entity.name, icon: entity.icon,
@@ -575,17 +621,17 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
         summary,
         currentValue: disk,
         recentEvents: [],
-        alerts: disk.percent >= 90 ? [`디스크 ${disk.percent}% — 즉시 정리 필요`] : [],
+        alerts: disk.percent >= 90 ? [`디스크 ${disk.percent}% — 지금 정리가 필요해요`] : [],
       };
     }
     case 'circuit-breaker': {
       const cbs = getCircuitBreakerStatus();
       let summary: string;
       if (cbs.length === 0) {
-        summary = '격리된 태스크가 없습니다. 모든 작업이 정상 실행중입니다.';
+        summary = '문제로 중단된 작업이 없어요. 모두 잘 돌아가고 있어요.';
       } else {
-        const names = cbs.map(cb => `${cb.taskKo} (${cb.failures}회 실패)`).join(', ');
-        summary = `${cbs.length}건의 태스크가 격리 상태입니다: ${names}`;
+        const names = cbs.map(cb => `${cb.taskKo}(${cb.failures}회 실패)`).join(', ');
+        summary = `${cbs.length}개 작업이 반복 실패로 일시 중단됐어요: ${names}`;
       }
       return {
         type: 'system-metric', id, name: entity.name, icon: entity.icon,
@@ -594,16 +640,16 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
         summary,
         currentValue: { openCount: cbs.length, items: cbs },
         recentEvents: [],
-        alerts: cbs.map(cb => `${cb.taskKo}: ${cb.failures}회 연속 실패로 격리됨`),
+        alerts: cbs.map(cb => `${cb.taskKo}: ${cb.failures}회 연속 실패로 일시 중단`),
       };
     }
     case 'rag-memory': {
       const ragLog = readSafe(path.join(JARVIS, 'logs', 'rag-index.log')).split('\n').filter(Boolean).slice(-5);
       let summary: string;
       if (ragLog.length > 0) {
-        summary = `RAG 장기기억이 정상 동작중입니다. 최근 ${ragLog.length}건 인덱싱 완료.`;
+        summary = `장기기억 시스템이 잘 돌아가고 있어요. 최근 ${ragLog.length}건 기억을 저장했어요.`;
       } else {
-        summary = '최근 인덱싱 기록이 없습니다.';
+        summary = '최근에 저장된 기억이 없어요.';
       }
       return {
         type: 'system-metric', id, name: entity.name, icon: entity.icon,
@@ -628,11 +674,11 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
       const devStatus = failedCount > 2 ? 'RED' as const : failedCount > 0 ? 'YELLOW' as const : 'GREEN' as const;
       let summary: string;
       if (recentRaw.length === 0) {
-        summary = '최근 개발 태스크 실행 기록이 없습니다.';
+        summary = '최근에 실행된 개발 작업이 없어요.';
       } else if (failedCount === 0) {
-        summary = `최근 개발 태스크 ${recentRaw.length}건 모두 정상 처리되었습니다.`;
+        summary = `최근 개발 작업 ${recentRaw.length}건을 모두 잘 처리했어요.`;
       } else {
-        summary = `최근 개발 태스크 ${recentRaw.length}건 중 ${failedCount}건 실패. 자비스 코더 점검이 필요합니다.`;
+        summary = `최근 개발 작업 ${recentRaw.length}건 중 ${failedCount}건에서 문제가 생겼어요. 코더를 점검해야 해요.`;
       }
       return {
         type: 'system-metric', id, name: entity.name, icon: entity.icon,
@@ -641,7 +687,7 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
         summary,
         currentValue: { recentCount: recentRaw.length, failedCount },
         recentEvents: recent,
-        alerts: failedCount > 0 ? [`최근 ${failedCount}건 실패 — 자비스 코더 점검 필요`] : [],
+        alerts: failedCount > 0 ? [`최근 ${failedCount}건 실패 — 코더 점검이 필요해요`] : [],
       };
     }
     default:
