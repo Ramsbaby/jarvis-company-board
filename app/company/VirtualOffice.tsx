@@ -744,32 +744,49 @@ export default function VirtualOffice() {
     };
   }, [loadStatuses, openBriefing, closePopup]);
 
-  // ── 메시지 전송 ──────────────────────────────────────────────
+  // ── 채팅 히스토리 ──────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string; created_at: number }>>([]);
+
+  const loadChatHistory = useCallback(async (teamId: string) => {
+    try {
+      const res = await fetch(`/api/game/chat/${teamId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setChatMessages(data.messages || []);
+    } catch { /* skip */ }
+  }, []);
+
+  useEffect(() => {
+    if (briefing) {
+      const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
+      loadChatHistory(room?.entityId || briefing.id);
+    } else {
+      setChatMessages([]);
+    }
+  }, [briefing, loadChatHistory]);
+
+  // ── 메시지 전송 (인앱 대화) ──────────────────────────────────
   const sendMessage = async () => {
     if (!chatInput.trim() || !briefing) return;
     setChatLoading(true);
     setChatResp('');
     const msg = chatInput;
     setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: msg, created_at: Math.floor(Date.now() / 1000) }]);
 
     try {
-      // Try entity briefing API for detailed info
-      const room = ROOMS.find(r => r.id === briefing.id);
-      const entityId = room?.entityId || briefing.id;
-
-      if (entityId) {
-        const res = await fetch(`/api/entity/${entityId}/briefing`);
-        if (res.ok) {
-          const data = await res.json();
-          const channel = data.discordChannel || 'jarvis';
-          setChatResp(`✅ "${msg}" → Discord #${channel}로 전달됨`);
-          setChatLoading(false);
-          return;
-        }
-      }
-      setChatResp(`✅ "${msg}" → Discord #jarvis로 전달됨`);
+      const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
+      const teamId = room?.entityId || briefing.id;
+      const res = await fetch('/api/game/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, message: msg }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.content, created_at: data.created_at }]);
     } catch {
-      setChatResp('❌ 전송 실패');
+      setChatResp('❌ 응답 실패');
     }
     setChatLoading(false);
   };
@@ -970,15 +987,46 @@ export default function VirtualOffice() {
                   </div>
                 )}
 
-                {/* Message input */}
+                {/* 인앱 채팅 */}
                 <div style={{ marginTop: 16 }}>
-                  <h4 style={{ color: '#8b949e', fontSize: 13, margin: '0 0 8px', fontWeight: 600 }}>💬 메시지</h4>
+                  <h4 style={{ color: '#8b949e', fontSize: 13, margin: '0 0 8px', fontWeight: 600 }}>💬 대화하기</h4>
+                  {/* 채팅 히스토리 */}
+                  <div style={{
+                    background: '#0d1117', border: '1px solid #21262d', borderRadius: 8,
+                    padding: 10, maxHeight: 200, overflowY: 'auto', marginBottom: 8,
+                    minHeight: chatMessages.length > 0 ? 80 : 40,
+                  }}>
+                    {chatMessages.length === 0 && (
+                      <div style={{ fontSize: 11, color: '#484f58', textAlign: 'center', padding: 8 }}>
+                        {briefing.name}에게 질문해보세요
+                      </div>
+                    )}
+                    {chatMessages.map((m, i) => (
+                      <div key={i} style={{
+                        display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
+                        marginBottom: 6,
+                      }}>
+                        <div style={{
+                          maxWidth: '80%', padding: '6px 10px', borderRadius: 10,
+                          fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                          background: m.role === 'user' ? '#238636' : '#21262d',
+                          color: '#e6edf3',
+                        }}>
+                          {m.content}
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div style={{ fontSize: 11, color: '#8b949e', padding: 4 }}>응답 작성 중...</div>
+                    )}
+                  </div>
+                  {/* 입력 */}
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input
                       value={chatInput}
                       onChange={e => setChatInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
-                      placeholder={`${briefing.name}에게 메시지...`}
+                      onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) sendMessage(); }}
+                      placeholder={`${briefing.name}에게 질문...`}
                       style={{
                         flex: 1, background: '#0d1117',
                         border: '1px solid #21262d', borderRadius: 8,
@@ -999,12 +1047,7 @@ export default function VirtualOffice() {
                     >전송</button>
                   </div>
                   {chatResp && (
-                    <div style={{
-                      marginTop: 8, fontSize: 12,
-                      color: chatResp.startsWith('✅') ? '#3fb950' : '#f85149',
-                    }}>
-                      {chatResp}
-                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: '#f85149' }}>{chatResp}</div>
                   )}
                 </div>
               </>

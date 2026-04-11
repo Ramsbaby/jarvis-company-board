@@ -257,6 +257,18 @@ export function getDb(): Database.Database {
       CREATE INDEX IF NOT EXISTS idx_persona_gen_num ON persona_generations(generation_number);
     `);
 
+    // game_chat: 인앱 채팅 (팀 에이전트와 1:1 대화)
+    _db!.exec(`
+      CREATE TABLE IF NOT EXISTS game_chat (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_chat_team ON game_chat(team_id, created_at);
+    `);
+
     // persona_generation_members: 세대별 멤버 (채용/해고 상태 + 시스템 프롬프트 스냅샷)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS persona_generation_members (
