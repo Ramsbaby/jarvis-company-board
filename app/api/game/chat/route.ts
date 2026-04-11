@@ -46,20 +46,39 @@ export async function POST(req: NextRequest) {
 
     let assistantContent: string;
     try {
+      // --dangerously-skip-permissions: standalone 서버 환경에서 permission prompt 방지
+      // cwd를 /tmp로 설정: CLAUDE.md 자동 로드 방지
       assistantContent = execFileSync('claude', [
         '-p', message,
         '--output-format', 'text',
         '--system-prompt', fullPrompt,
+        '--dangerously-skip-permissions',
       ], {
         timeout: 60_000,
         encoding: 'utf8',
         maxBuffer: 1024 * 1024,
-        env: { ...process.env, TERM: 'dumb' },
+        cwd: '/tmp',
+        env: { ...process.env, TERM: 'dumb', HOME: process.env.HOME || '/Users/ramsbaby' },
       }).trim();
+
+      // Claude 기본 시스템 프롬프트 응답 필터링 (세션 이어하기 응답 제거)
+      if (assistantContent.includes('이전 세션') || assistantContent.includes('이어서')) {
+        assistantContent = execFileSync('claude', [
+          '-p', `[${systemPrompt}]\n\n사용자 질문: ${message}`,
+          '--output-format', 'text',
+          '--dangerously-skip-permissions',
+        ], {
+          timeout: 60_000,
+          encoding: 'utf8',
+          maxBuffer: 1024 * 1024,
+          cwd: '/tmp',
+          env: { ...process.env, TERM: 'dumb', HOME: process.env.HOME || '/Users/ramsbaby' },
+        }).trim();
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      assistantContent = `잠시 응답을 생성하지 못했습니다. 다시 시도해주세요.`;
-      console.error('[game-chat] claude error:', errMsg.slice(0, 200));
+      assistantContent = `잠시 응답을 처리하지 못했어요. (${errMsg.slice(0, 80)})`;
+      console.error('[game-chat] claude error:', errMsg.slice(0, 300));
     }
 
     // 어시스턴트 응답 저장
