@@ -82,8 +82,41 @@ const TASK_NAMES: Record<string, string> = {
   'daily-usage-check': '일일 사용량 체크',
 };
 
+// tasks.json에서 name/description을 읽어 TASK_NAMES / FRIENDLY_SUCCESS 폴백으로 사용
+// 5초 TTL 캐시 — 같은 리퀘스트 생명주기 동안은 한 번만 파싱
+interface TaskJsonEntry { id: string; name?: string; description?: string }
+let _taskMapCache: { loadedAt: number; names: Record<string, string>; desc: Record<string, string> } | null = null;
+const TASKS_JSON_TTL_MS = 5000;
+
+function loadTasksJsonMap(): { names: Record<string, string>; desc: Record<string, string> } {
+  const now = Date.now();
+  if (_taskMapCache && (now - _taskMapCache.loadedAt) < TASKS_JSON_TTL_MS) {
+    return { names: _taskMapCache.names, desc: _taskMapCache.desc };
+  }
+  const names: Record<string, string> = {};
+  const desc: Record<string, string> = {};
+  try {
+    const parsed = readJsonSafe<{ tasks?: TaskJsonEntry[] }>(TASKS_FILE, { tasks: [] });
+    const list = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    for (const t of list) {
+      if (!t || typeof t.id !== 'string') continue;
+      if (typeof t.name === 'string' && t.name.trim()) names[t.id] = t.name.trim();
+      if (typeof t.description === 'string' && t.description.trim()) desc[t.id] = t.description.trim();
+    }
+  } catch { /* fall through — 폴백은 정적 상수 */ }
+  _taskMapCache = { loadedAt: now, names, desc };
+  return { names, desc };
+}
+
 function taskDisplayName(taskId: string): string {
+  const dyn = loadTasksJsonMap().names[taskId];
+  if (dyn) return dyn;
   return TASK_NAMES[taskId] || taskId;
+}
+
+function taskFriendlyDescription(taskId: string): string | null {
+  const dyn = loadTasksJsonMap().desc[taskId];
+  return dyn || null;
 }
 
 // ── 엔티티 레지스트리 ────────────────────────────────────────────────────────
@@ -403,10 +436,13 @@ function toRichActivity(entry: CronEntry): RichActivity {
 
   if (entry.result === 'SUCCESS') {
     const friendly = FRIENDLY_SUCCESS[entry.task];
+    const dynDesc = taskFriendlyDescription(entry.task);
     if (typeof friendly === 'function') {
       description = friendly();
     } else if (friendly) {
       description = friendly;
+    } else if (dynDesc) {
+      description = dynDesc;
     } else {
       description = `${name}을(를) 완료했어요. 이상 없음.`;
     }
@@ -511,6 +547,26 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
 
 // ── 브리핑 빌더 ──────────────────────────────────────────────────────────────
 
+function getCbsForKeywords(keywords: string[]): string[] {
+  try {
+    if (!existsSync(CB_DIR)) return [];
+    const files = readdirSync(CB_DIR).filter(f => f.endsWith('.json'));
+    const alerts: string[] = [];
+    for (const f of files) {
+      const taskId = f.replace('.json', '');
+      if (!keywords.some(kw => taskId.includes(kw))) continue;
+      try {
+        const cb = JSON.parse(readFileSync(path.join(CB_DIR, f), 'utf8'));
+        if (cb.state === 'OPEN' || (cb.failures && cb.failures >= 3)) {
+          const name = taskDisplayName(taskId);
+          alerts.push(`${name}: ${cb.failures || '?'}회 연속 실패로 일시 중단`);
+        }
+      } catch { /* skip */ }
+    }
+    return alerts;
+  } catch { return []; }
+}
+
 function buildTeamLeadBriefing(id: string, entity: TeamLeadEntity) {
   const stats = getCronStats24h(entity.keywords);
   const recentRaw = parseCronLog(entity.keywords, 10);
@@ -519,6 +575,13 @@ function buildTeamLeadBriefing(id: string, entity: TeamLeadEntity) {
   const boardMinutes = getLatestBoardMinutes(entity.keywords);
   const status = getStatusColor(stats.rate);
   const summary = buildTeamSummary(id, stats, entity.keywords);
+
+  const cbAlerts = getCbsForKeywords(entity.keywords);
+  const failedTaskNames = getFailedTaskNames(entity.keywords).slice(0, 5).map(taskDisplayName);
+  const alertsList = [
+    ...cbAlerts,
+    ...(stats.failed > 0 && failedTaskNames.length > 0 ? [`최근 실패: ${failedTaskNames.join(', ')}`] : []),
+  ];
 
   return {
     type: 'team-lead',
@@ -530,11 +593,18 @@ function buildTeamLeadBriefing(id: string, entity: TeamLeadEntity) {
     schedule: entity.schedule,
     summary,
     recentActivity,
+    stats: {
+      total: stats.total,
+      success: stats.total - stats.failed,
+      failed: stats.failed,
+      rate: stats.rate,
+    },
     metrics: {
       cronSuccessRate: stats.rate,
       totalToday: stats.total,
       failedToday: stats.failed,
     },
+    alerts: alertsList,
     upcoming,
     lastBoardMinutes: boardMinutes,
     discordChannel: entity.discordChannel,
