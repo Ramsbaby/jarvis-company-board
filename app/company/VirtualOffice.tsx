@@ -576,7 +576,7 @@ export default function VirtualOffice() {
         ctx!.save();
         ctx!.shadowBlur = 12;
         ctx!.shadowColor = 'rgba(0,0,0,0.12)';
-        ctx!.fillStyle = '#f5f6f8';
+        ctx!.fillStyle = '#f8f9fb';
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
 
@@ -740,46 +740,84 @@ export default function VirtualOffice() {
         ctx!.fillRect(rx, ry, rw, rh);
       }
 
-      // 벽 — 밝은 회색 (teamColor 침투 금지)
-      ctx!.fillStyle = '#c0c4cc';
-      ctx!.fillRect(rx, ry, rw, 5);          // 상단 벽
-      ctx!.fillRect(rx, ry + rh - 5, rw, 5); // 하단 벽
-      ctx!.fillRect(rx, ry, 5, rh);          // 좌측 벽
-      ctx!.fillRect(rx + rw - 5, ry, 5, rh); // 우측 벽
-      // 상단 하이라이트
-      ctx!.fillStyle = '#d8dce4';
-      ctx!.fillRect(rx, ry, rw, 3);
-      ctx!.strokeStyle = '#d8dce4';
-      ctx!.lineWidth = 1;
-      ctx!.strokeRect(rx + 2, ry + 2, rw - 4, rh - 4);
+      // 벽 + 문 — closed room만 벽 그림, pod는 이미 위에서 return
+      const isClosed = r.wallStyle === 'closed';
+      if (isClosed) {
+        // ── Closed room: 두꺼운 벽 + 드롭 섀도 ──
+        ctx!.save();
+        ctx!.shadowColor = 'rgba(0,0,0,0.22)';
+        ctx!.shadowBlur = 14;
+        ctx!.shadowOffsetX = 3;
+        ctx!.shadowOffsetY = 3;
+        ctx!.fillStyle = '#a8acb8';
+        ctx!.fillRect(rx, ry, rw, rh);
+        ctx!.restore();
 
-      // 유리창 — 상단 벽에 반투명 파란색 패널 (#58a6ff)
-      if (r.type !== 'cron') {
-        const windowCount = Math.max(1, Math.floor(r.w / 3));
-        const windowW = T * 1.2;
-        for (let i = 0; i < windowCount; i++) {
-          const wx = rx + T * 1.2 + i * T * 2.2;
-          const wy = ry;
-          ctx!.fillStyle = '#58a6ff25';
-          ctx!.fillRect(wx, wy, windowW, 5);
-          ctx!.strokeStyle = '#58a6ff40';
-          ctx!.lineWidth = 0.5;
-          ctx!.strokeRect(wx, wy, windowW, 5);
+        // 벽 본체 (안쪽)
+        ctx!.fillStyle = '#a8acb8';
+        ctx!.fillRect(rx, ry, rw, 5);
+        ctx!.fillRect(rx, ry + rh - 5, rw, 5);
+        ctx!.fillRect(rx, ry, 5, rh);
+        ctx!.fillRect(rx + rw - 5, ry, 5, rh);
+        // 상단 하이라이트
+        ctx!.fillStyle = '#d8dce4';
+        ctx!.fillRect(rx + 1, ry + 1, rw - 2, 2);
+        // 내부 테두리
+        ctx!.strokeStyle = '#d0d4dc';
+        ctx!.lineWidth = 1;
+        ctx!.strokeRect(rx + 5, ry + 5, rw - 10, rh - 10);
+
+        // 유리창 — 상단 벽
+        if (r.type !== 'cron') {
+          const windowCount = Math.max(1, Math.floor(r.w / 3));
+          const windowW = T * 1.2;
+          for (let i = 0; i < windowCount; i++) {
+            const wx = rx + T * 1.2 + i * T * 2.2;
+            ctx!.fillStyle = '#58a6ff25';
+            ctx!.fillRect(wx, ry, windowW, 5);
+            ctx!.strokeStyle = '#58a6ff40';
+            ctx!.lineWidth = 0.5;
+            ctx!.strokeRect(wx, ry, windowW, 5);
+          }
         }
-      }
 
-      // 문 — 하단 중앙 (#58a6ff 하이라이트)
-      const doorX = (r.x + Math.floor(r.w / 2)) * T - camX;
-      if (r.type === 'cron') {
-        ctx!.fillStyle = '#a0a4b0';
-        ctx!.fillRect(doorX - T, ry - 2, T * 3, 8);
-        ctx!.fillStyle = '#58a6ff80';
-        ctx!.fillRect(doorX - T, ry, T * 3, 3);
+        // 문 — 하단 중앙
+        const doorX = (r.x + Math.floor(r.w / 2)) * T - camX;
+        if (r.type === 'cron') {
+          // 크론센터: 좌측 문
+          const doorY = (r.y + Math.floor(r.h / 2)) * T - camY;
+          ctx!.fillStyle = '#a0a4b0';
+          ctx!.fillRect(rx - 2, doorY - T, 8, T * 3);
+          ctx!.fillStyle = '#58a6ff80';
+          ctx!.fillRect(rx, doorY - T, 3, T * 3);
+        } else {
+          ctx!.fillStyle = '#a0a4b0';
+          ctx!.fillRect(doorX - T / 2, ry + rh - 6, T * 1.5, 8);
+          ctx!.fillStyle = '#58a6ff';
+          ctx!.fillRect(doorX - T / 2, ry + rh - 3, T * 1.5, 3);
+        }
       } else {
-        ctx!.fillStyle = '#a0a4b0';
-        ctx!.fillRect(doorX - T / 2, ry + rh - 6, T * 1.5, 8);
-        ctx!.fillStyle = '#58a6ff';
-        ctx!.fillRect(doorX - T / 2, ry + rh - 3, T * 1.5, 3);
+        // ── Pod (오픈 데스크): 벽 없음, 카펫 테두리 + 약한 그림자 ──
+        ctx!.save();
+        ctx!.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx!.shadowBlur = 6;
+        ctx!.shadowOffsetX = 1;
+        ctx!.shadowOffsetY = 2;
+        ctx!.strokeStyle = r.teamColor + '60';
+        ctx!.lineWidth = 3;
+        ctx!.beginPath();
+        ctx!.roundRect(rx + 2, ry + 2, rw - 4, rh - 4, 4);
+        ctx!.stroke();
+        ctx!.restore();
+        // Pod 내부 글로우 (팀색 은은하게)
+        const podGlow = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.6);
+        podGlow.addColorStop(0, r.teamColor + '12');
+        podGlow.addColorStop(1, 'transparent');
+        ctx!.fillStyle = podGlow;
+        ctx!.fillRect(rx + 4, ry + 4, rw - 8, rh - 8);
+        // 카펫 하이라이트 (상단 엣지)
+        ctx!.fillStyle = r.teamColor + '15';
+        ctx!.fillRect(rx + 4, ry + 2, rw - 8, 2);
       }
 
       // Draw furniture
@@ -1606,7 +1644,7 @@ export default function VirtualOffice() {
           if (inRoom) continue; // Room floors are drawn by drawRoom
 
           // Corridor tiles — 밝은 오피스 바닥재 스타일 (82×26 레이아웃)
-          const isOfficeHCorridor = x < 50 && ((y >= 8 && y <= 9) || (y >= 16 && y <= 24));
+          const isOfficeHCorridor = x < 50 && ((y >= 8 && y <= 9) || (y >= 16 && y <= 17));
           const isBridge = x >= CORRIDOR_BRIDGE.x && x < CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w
             && y >= CORRIDOR_BRIDGE.y && y < CORRIDOR_BRIDGE.y + CORRIDOR_BRIDGE.h;
           const isServerExterior = x >= 55 && x < 80 && !isBridge;
@@ -1631,14 +1669,14 @@ export default function VirtualOffice() {
             ctx!.lineWidth = 0.5;
             ctx!.strokeRect(sx, sy, T, T);
           } else if (isOfficeHCorridor) {
-            // 오피스 복도 — 밝은 대리석 슬라브 타일
+            // 오피스 복도 — 약간 어둡게 (방과 확실히 구분)
             const tileCol = Math.floor(x / 2);
-            const baseColor = (tileCol + y) % 2 === 0 ? '#e0e2e8' : '#dcdee4';
+            const baseColor = (tileCol + y) % 2 === 0 ? '#d8dae0' : '#d4d6dc';
             ctx!.fillStyle = baseColor;
             ctx!.fillRect(sx, sy, T, T);
             // 대리석 무늬 (대각선 선)
             if ((x * 5 + y * 7) % 11 === 0) {
-              ctx!.strokeStyle = 'rgba(0,0,0,0.03)';
+              ctx!.strokeStyle = 'rgba(0,0,0,0.04)';
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
               ctx!.moveTo(sx + 5, sy + T - 5);
@@ -1646,15 +1684,15 @@ export default function VirtualOffice() {
               ctx!.stroke();
             }
             // 타일 그라우트 (경계선)
-            ctx!.strokeStyle = '#c8ccd4';
+            ctx!.strokeStyle = '#c0c4cc';
             ctx!.lineWidth = 0.8;
             if (x % 2 === 0) { ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx, sy + T); ctx!.stroke(); }
             ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx + T, sy); ctx!.stroke();
-            // 중앙 행 반사광
-            if (y === 8 || y === 16) {
+            // 복도 중앙 동선 라인 (파란 악센트 — y=8~9 메인 복도)
+            if (y === 8 || y === 9 || y === 16) {
               const refGrd = ctx!.createLinearGradient(sx, sy, sx, sy + T);
-              refGrd.addColorStop(0, 'rgba(88,166,255,0.04)');
-              refGrd.addColorStop(0.5, 'rgba(88,166,255,0.02)');
+              refGrd.addColorStop(0, 'rgba(88,166,255,0.06)');
+              refGrd.addColorStop(0.5, 'rgba(88,166,255,0.03)');
               refGrd.addColorStop(1, 'transparent');
               ctx!.fillStyle = refGrd;
               ctx!.fillRect(sx, sy, T, T);
@@ -1794,10 +1832,11 @@ export default function VirtualOffice() {
         const sry = r.y * T - camY;
         const srw = r.w * T;
         const srh = r.h * T;
-        // 남쪽 드롭 섀도
+        // 남쪽 드롭 섀도 — closed는 진하게, pod는 연하게
+        const isClosed = r.wallStyle === 'closed';
         const sdGrd = ctx!.createLinearGradient(srx, sry + srh, srx, sry + srh + T * 1.2);
-        sdGrd.addColorStop(0, 'rgba(0,0,0,0.08)');
-        sdGrd.addColorStop(0.5, 'rgba(0,0,0,0.03)');
+        sdGrd.addColorStop(0, isClosed ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.05)');
+        sdGrd.addColorStop(0.5, isClosed ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.02)');
         sdGrd.addColorStop(1, 'transparent');
         ctx!.fillStyle = sdGrd;
         ctx!.fillRect(srx + 6, sry + srh, srw - 12, T * 1.2);
@@ -1880,9 +1919,11 @@ export default function VirtualOffice() {
       ctx!.fillRect(0, 0, w, 40);
 
       ctx!.fillStyle = '#2d3748';
-      ctx!.font = 'bold 14px monospace';
+      ctx!.font = 'bold 12px monospace';
       ctx!.textAlign = 'center';
+      ctx!.letterSpacing = '3px';
       ctx!.fillText('JARVIS MAP', w / 2, 22);
+      ctx!.letterSpacing = '0px';
 
       // ── HUD: Bottom bar ──
       const gradBot = ctx!.createLinearGradient(0, h - 44, 0, h);
@@ -1957,28 +1998,18 @@ export default function VirtualOffice() {
         }
       }
 
-      // ── Vignette overlay (subtle gradient at map edges) ──
-      const vigSize = 80;
+      // ── Vignette overlay (매우 약하게 — 밝은 테마) ──
+      const vigSize = 40;
       const vigTop = ctx!.createLinearGradient(0, 0, 0, vigSize);
-      vigTop.addColorStop(0, 'rgba(200,204,212,0.3)');
+      vigTop.addColorStop(0, 'rgba(200,204,212,0.08)');
       vigTop.addColorStop(1, 'transparent');
       ctx!.fillStyle = vigTop;
       ctx!.fillRect(0, 0, w, vigSize);
       const vigBot = ctx!.createLinearGradient(0, h - vigSize, 0, h);
       vigBot.addColorStop(0, 'transparent');
-      vigBot.addColorStop(1, 'rgba(200,204,212,0.3)');
+      vigBot.addColorStop(1, 'rgba(200,204,212,0.08)');
       ctx!.fillStyle = vigBot;
       ctx!.fillRect(0, h - vigSize, w, vigSize);
-      const vigLeft = ctx!.createLinearGradient(0, 0, vigSize, 0);
-      vigLeft.addColorStop(0, 'rgba(200,204,212,0.2)');
-      vigLeft.addColorStop(1, 'transparent');
-      ctx!.fillStyle = vigLeft;
-      ctx!.fillRect(0, 0, vigSize, h);
-      const vigRight = ctx!.createLinearGradient(w - vigSize, 0, w, 0);
-      vigRight.addColorStop(0, 'transparent');
-      vigRight.addColorStop(1, 'rgba(200,204,212,0.2)');
-      ctx!.fillStyle = vigRight;
-      ctx!.fillRect(w - vigSize, 0, vigSize, h);
 
       animId = requestAnimationFrame(gameLoop);
     }

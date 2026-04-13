@@ -5,7 +5,7 @@
 
 export const T = 32; // tile size
 export const COLS = 82;
-export const ROWS = 26;
+export const ROWS = 18;
 export const MOVE_SPEED = 130; // ms per tile
 
 // ── 방 정의 ────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ export const ROOMS: RoomDef[] = [
   // ═══════════════════════════════════════════════════════════════════════
   // 대형 서버실 / 크론센터 (x:55~79) — 연결 통로(x:50~53)를 통해 진입
   // ═══════════════════════════════════════════════════════════════════════
-  { id: 'cron-center', entityId: '',             name: '크론 센터',  emoji: '⏰', description: '자비스 컴퍼니 자동화 허브. 72개 크론잡의 실시간 실행 상태를 모니터링합니다. 각 워크스테이션이 하나의 자동화 태스크를 나타냅니다.', x: 55, y: 2,  w: 25, h: 22, type: 'cron',   npcX: 67, npcY: 12, teamColor: '#6366f1', floorStyle: 'metal' },
+  { id: 'cron-center', entityId: '',             name: '크론 센터',  emoji: '⏰', description: '자비스 컴퍼니 자동화 허브. 72개 크론잡의 실시간 실행 상태를 모니터링합니다. 각 워크스테이션이 하나의 자동화 태스크를 나타냅니다.', x: 55, y: 1,  w: 25, h: 16, type: 'cron',   npcX: 67, npcY: 9, teamColor: '#6366f1', floorStyle: 'metal' },
 ];
 
 // agent-live teamId -> room id mapping
@@ -111,7 +111,7 @@ export function getCronTilePos(cronRoom: RoomDef, i: number): { tx: number; ty: 
 
 // ── 벽 타일 맵 생성 ────────────────────────────────────────────
 // ── 연결 통로 (오피스 → 서버실) ────────────────────────────────
-export const CORRIDOR_BRIDGE = { x: 50, y: 6, w: 5, h: 12 };
+export const CORRIDOR_BRIDGE = { x: 50, y: 4, w: 5, h: 10 };
 
 export function buildCollisionMap(): boolean[][] {
   const map = Array.from({ length: ROWS }, () => Array(COLS).fill(false) as boolean[]);

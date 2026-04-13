@@ -72,15 +72,18 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
     <div
       style={{
         position: 'fixed',
-        top: 82,         // BoardBanner(1줄 요약 ~60px) 아래 스택
-        right: 16,
+        top: 82,
+        right: 12,
         zIndex: 450,
-        width: 280,
+        width: 220,
+        maxHeight: '40vh',
+        overflowY: 'auto',
+        opacity: 0.9,
         display: 'flex',
         flexDirection: 'column',  // 위에서 아래 방향 확장
         gap: 10,
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-        pointerEvents: 'auto',
+        pointerEvents: 'none',
       }}
     >
       {/* 오늘 예정 크론 카드 */}
@@ -93,6 +96,7 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
             backdropFilter: 'blur(10px)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
             overflow: 'hidden',
+            pointerEvents: 'auto',
           }}
         >
           <button
@@ -171,6 +175,7 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
             backdropFilter: 'blur(10px)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
             overflow: 'hidden',
+            pointerEvents: 'auto',
           }}
         >
           <button

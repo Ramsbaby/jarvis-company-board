@@ -62,7 +62,8 @@ export default function Statusline({ isMobile }: { isMobile: boolean }) {
     <div
       style={{
         position: 'fixed',
-        top: isMobile ? 8 : 14,
+        bottom: isMobile ? 'auto' : 52,
+        top: isMobile ? 8 : 'auto',
         left: isMobile ? 8 : 14,
         zIndex: 500,
         display: 'flex',

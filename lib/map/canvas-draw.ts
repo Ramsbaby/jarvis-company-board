@@ -60,15 +60,15 @@ function drawSimplePod(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw
   const cy = ry + rh / 2;
 
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.10)';
-  ctx.shadowBlur = 4;
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 6;
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 2;
 
   // L자 데스크 (심플)
-  ctx.fillStyle = '#c8cdd4';
+  ctx.fillStyle = '#8a8f98';
   ctx.fillRect(cx - T * 1.2, cy - T * 0.3, T * 2.4, T * 0.5);
-  ctx.fillStyle = '#b0b4bc';
+  ctx.fillStyle = '#6a6f78';
   ctx.fillRect(cx - T * 1.2, cy - T * 0.3, T * 2.4, 2);  // 상단 엣지
 
   // 모니터 (중앙 1개)
@@ -79,7 +79,7 @@ function drawSimplePod(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw
   ctx.fillRect(cx + T * 0.1, cy - T * 0.85, T * 0.2, T * 0.15);
 
   // 의자 (뒤쪽)
-  ctx.fillStyle = '#4a5060';
+  ctx.fillStyle = '#3a3d46';
   ctx.beginPath();
   ctx.arc(cx, cy + T * 0.6, 5, 0, Math.PI * 2);
   ctx.fill();
@@ -94,18 +94,18 @@ function drawExecutiveFurniture(
   teamColor: string, label: string,
 ) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.10)';
-  ctx.shadowBlur = 4;
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 6;
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 2;
 
-  // L자 데스크 (넓은, 밝은 우드 그레이)
-  ctx.fillStyle = '#c8cdd4';
+  // L자 데스크 (넓은, 진한 그레이로 대비 확보)
+  ctx.fillStyle = '#8a8f98';
   ctx.fillRect(rx + T * 1.5, ry + T * 1.2, T * 3.5, T * 0.7);
-  ctx.fillStyle = '#b0b4bc';
+  ctx.fillStyle = '#6a6f78';
   ctx.fillRect(rx + T * 1.5, ry + T * 1.2, T * 3.5, 3); // 상단 엣지
   // L자 세로 파트
-  ctx.fillStyle = '#c8cdd4';
+  ctx.fillStyle = '#8a8f98';
   ctx.fillRect(rx + T * 1.5, ry + T * 1.2, T * 0.4, T * 1.5);
 
   // 대형 모니터 (teamColor tint)
@@ -116,7 +116,7 @@ function drawExecutiveFurniture(
   ctx.fillRect(rx + T * 3.1, ry + T * 0.55, T * 0.5, T * 0.25);
 
   // 가죽 의자 (데스크 뒤)
-  ctx.fillStyle = '#4a5060';
+  ctx.fillStyle = '#3a3d46';
   ctx.beginPath();
   ctx.arc(rx + T * 3.2, ry + T * 2.5, 8, 0, Math.PI * 2);
   ctx.fill();
@@ -163,22 +163,22 @@ function drawStandardFurniture(
   teamColor: string, variant: 'meeting' | 'server',
 ) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.10)';
-  ctx.shadowBlur = 4;
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 6;
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 2;
 
   // 일자 데스크
-  ctx.fillStyle = '#c8cdd4';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, T * 4, T * 0.5);
-  ctx.fillStyle = '#b0b4bc';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, T * 4, 2); // 상단 엣지
+  ctx.fillStyle = '#8a8f98';
+  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, T * 5, T * 0.5);
+  ctx.fillStyle = '#6a6f78';
+  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, T * 5, 2); // 상단 엣지
 
   // 모니터
   drawMonitor(ctx, rx + T * 2.5, ry + T * 1, T * 1, T * 0.6, teamColor + '18', '#3a3e48');
 
   // 의자
-  ctx.fillStyle = '#4a5060';
+  ctx.fillStyle = '#3a3d46';
   ctx.beginPath();
   ctx.arc(rx + T * 3.5, ry + T * 2.8, 7, 0, Math.PI * 2);
   ctx.fill();
@@ -189,7 +189,7 @@ function drawStandardFurniture(
     ctx.globalAlpha = 0.9;
     ctx.fillRect(rx + T * 5, ry + T * 0.5, T * 1.3, T * 1.5);
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = '#c0c4cc';
+    ctx.strokeStyle = '#a0a4b0';
     ctx.lineWidth = 1;
     ctx.strokeRect(rx + T * 5, ry + T * 0.5, T * 1.3, T * 1.5);
   } else {
@@ -201,11 +201,20 @@ function drawStandardFurniture(
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1;
       ctx.strokeRect(sx, ry + T * 0.5, T * 0.6, T * 2.5);
-      // LED 점
+      // LED 점 + 글로우
       for (let j = 0; j < 6; j++) {
-        ctx.fillStyle = j % 2 === 0 ? '#22c55e' : '#3b82f6';
+        const ledColor = j % 2 === 0 ? '#22c55e' : '#3b82f6';
+        const ledCx = sx + T * 0.15;
+        const ledCy = ry + T * 0.8 + j * 12;
+        // 글로우 (외곽)
+        ctx.fillStyle = (j % 2 === 0 ? 'rgba(34,197,94,0.3)' : 'rgba(59,130,246,0.3)');
         ctx.beginPath();
-        ctx.arc(sx + T * 0.15, ry + T * 0.8 + j * 12, 2, 0, Math.PI * 2);
+        ctx.arc(ledCx, ledCy, 5, 0, Math.PI * 2);
+        ctx.fill();
+        // LED 코어
+        ctx.fillStyle = ledColor;
+        ctx.beginPath();
+        ctx.arc(ledCx, ledCy, 3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
