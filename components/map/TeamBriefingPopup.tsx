@@ -46,6 +46,7 @@ export default function TeamBriefingPopup({
   chatInput, setChatInput, chatResp, sendMessage, chatEndRef,
 }: TeamBriefingPopupProps) {
   const [metricDetail, setMetricDetail] = useState<MetricItem | null>(null);
+  const [activityDetail, setActivityDetail] = useState<{ task: string; result: string; latestTime?: string; description?: string; matchedCron: CronItem | null } | null>(null);
   if (!popupOpen) return null;
   return (
     <div
@@ -774,20 +775,39 @@ export default function TeamBriefingPopup({
                       {shown.map((g, i) => {
                         const isFail = g.result === 'failed';
                         const actColor = g.result === 'success' ? '#22c55e' : g.result === 'failed' ? '#f85149' : g.result === 'running' ? '#58a6ff' : '#6b7280';
+                        // 이름으로 cronData에서 매칭되는 크론 찾기 (loose match)
+                        const normalizedName = (g.task || '').toLowerCase().replace(/[\s_]+/g, '-');
+                        const matched = cronData.find(c =>
+                          c.id === g.task ||
+                          c.name === g.task ||
+                          c.id.toLowerCase() === normalizedName ||
+                          (c.name && c.name.toLowerCase().includes((g.task || '').toLowerCase())) ||
+                          (g.task || '').toLowerCase().includes(c.id.toLowerCase())
+                        ) || null;
                         return (
-                          <div key={i} style={{
-                            padding: '10px 13px',
-                            background: isFail ? 'rgba(248,81,73,0.07)' : `linear-gradient(135deg, ${actColor}09 0%, rgba(255,255,255,0.02) 100%)`,
-                            border: `1px solid ${actColor}18`,
-                            borderLeft: `3px solid ${actColor}90`,
-                            borderRadius: 10,
-                          }}>
+                          <div
+                            key={i}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActivityDetail({ task: g.task, result: g.result, latestTime: g.latestTime, description: g.description, matchedCron: matched });
+                            }}
+                            style={{
+                              padding: '10px 13px',
+                              background: isFail ? 'rgba(248,81,73,0.07)' : `linear-gradient(135deg, ${actColor}09 0%, rgba(255,255,255,0.02) 100%)`,
+                              border: `1px solid ${actColor}18`,
+                              borderLeft: `3px solid ${actColor}90`,
+                              borderRadius: 10,
+                              cursor: 'pointer',
+                              transition: 'transform 0.12s, background 0.15s',
+                            }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'translateX(2px)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'translateX(0)'; }}
+                          >
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <span style={{ fontSize: 13, flexShrink: 0 }}>{activityIcon(g.result)}</span>
                               <span style={{ color: '#6e7681', fontFamily: 'monospace', fontSize: 10, flexShrink: 0 }}>
                                 {(() => {
                                   const t = g.latestTime || '';
-                                  // "2026-04-13 10:10:00" → "10:10", "10:10" → "10:10"
                                   if (t.length >= 16 && t.includes(' ')) return t.slice(11, 16);
                                   if (t.length >= 5) return t.slice(0, 5);
                                   return t;
@@ -803,6 +823,7 @@ export default function TeamBriefingPopup({
                                   borderRadius: 10, padding: '1px 7px',
                                 }}>×{g.count}</span>
                               )}
+                              <span style={{ flexShrink: 0, fontSize: 11, color: '#5a6480' }}>›</span>
                             </div>
                             {isFail && g.description && (
                               <div style={{ fontSize: 11, color: '#fca5a5', lineHeight: 1.5, marginLeft: 21, marginTop: 4, wordBreak: 'break-all' }}>
@@ -997,6 +1018,309 @@ export default function TeamBriefingPopup({
           />
         )}
 
+        {/* ── 최근 활동 드릴다운 팝오버 ── */}
+        {activityDetail && (
+          <ActivityDetailPopover
+            detail={activityDetail}
+            onClose={() => setActivityDetail(null)}
+            isMobile={isMobile}
+          />
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+/* ── 최근 활동 드릴다운 팝오버 ── */
+type ActivityDetail = { task: string; result: string; latestTime?: string; description?: string; matchedCron: CronItem | null };
+function ActivityDetailPopover({ detail, onClose, isMobile }: { detail: ActivityDetail; onClose: () => void; isMobile: boolean }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryResult, setRetryResult] = useState<{ success: boolean; message: string; stdout?: string; stderr?: string } | null>(null);
+
+  const handleRetry = async () => {
+    if (!detail.matchedCron) return;
+    setRetrying(true);
+    setRetryResult(null);
+    try {
+      const res = await fetch('/api/crons/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cronId: detail.matchedCron.id }),
+      });
+      const data = await res.json();
+      setRetryResult(data);
+    } catch (e) {
+      setRetryResult({ success: false, message: `요청 실패: ${String(e)}` });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const accent = detail.result === 'success' ? '#22c55e' : detail.result === 'failed' ? '#f85149' : '#d29922';
+  const cron = detail.matchedCron;
+  const timeFmt = (s?: string) => {
+    if (!s) return '—';
+    try { return new Date(s).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return s; }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10001,
+        background: 'rgba(4,6,16,0.85)',
+        display: 'flex',
+        alignItems: isMobile ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        backdropFilter: 'blur(10px)',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: isMobile ? '100%' : '88vw',
+          maxWidth: isMobile ? '100%' : 620,
+          maxHeight: isMobile ? '90dvh' : '88vh',
+          overflowY: 'auto',
+          background: 'linear-gradient(165deg, #0f1326 0%, #080b18 100%)',
+          borderRadius: isMobile ? '20px 20px 0 0' : 18,
+          border: `1px solid ${accent}33`,
+          padding: isMobile ? '22px 18px 32px' : '24px 26px',
+          color: '#e6edf3',
+          fontFamily: '-apple-system, sans-serif',
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: accent, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
+              최근 활동 상세
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#edf2ff', lineHeight: 1.2 }}>
+              {detail.task.replace(/-/g, ' ').replace(/_/g, ' ')}
+            </div>
+            <div style={{ fontSize: 11, color: '#6e7681', marginTop: 4 }}>
+              {detail.latestTime && <span>🕐 {timeFmt(detail.latestTime)}</span>}
+              {cron?.scheduleHuman && <span style={{ marginLeft: 10 }}>⏱️ {cron.scheduleHuman}</span>}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+              color: '#8094b0', cursor: 'pointer', borderRadius: 10, width: 32, height: 32,
+              flexShrink: 0, fontSize: 14,
+            }}
+            aria-label="닫기"
+          >✕</button>
+        </div>
+
+        {/* Status pill */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '5px 12px', borderRadius: 20, marginBottom: 16,
+          background: accent + '18', border: `1px solid ${accent}40`,
+          fontSize: 12, fontWeight: 700, color: accent,
+        }}>
+          {detail.result === 'success' ? '✅ 성공' : detail.result === 'failed' ? '❌ 실패' : detail.result === 'running' ? '🔄 실행중' : '○ ' + detail.result}
+        </div>
+
+        {!cron && (
+          <div style={{
+            marginBottom: 14, padding: 14, borderRadius: 10,
+            background: 'rgba(210,153,34,0.08)', border: '1px solid rgba(210,153,34,0.3)',
+            fontSize: 12, color: '#fbbf24', lineHeight: 1.6,
+          }}>
+            ⚠️ 이 활동과 매칭되는 크론을 찾을 수 없습니다. cron.log에만 흔적이 있거나 태스크 이름이 변경됐을 수 있어요.
+          </div>
+        )}
+
+        {cron && (
+          <>
+            {/* 설명 */}
+            {cron.description && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: '#6e7681', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
+                  📋 하는 일
+                </div>
+                <div style={{
+                  padding: '10px 13px', borderRadius: 9, fontSize: 12, color: '#c9d1d9', lineHeight: 1.65,
+                  background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  {cron.description}
+                </div>
+              </div>
+            )}
+
+            {/* 마지막 실행 세부 */}
+            <div style={{ marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[
+                ['⚡ 소요', cron.lastDuration || '—'],
+                ['🕐 마지막', timeFmt(cron.lastRun || undefined).slice(0, 11)],
+                ['🏷️ 우선순위', cron.priority || 'normal'],
+              ].map(([label, val], i) => (
+                <div key={i} style={{
+                  padding: '9px 10px', borderRadius: 9, textAlign: 'center',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                }}>
+                  <div style={{ fontSize: 9, color: '#6e7681', marginBottom: 3 }}>{label}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#c9d1d9' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* 실패 시: outputSummary / lastMessage 강조 */}
+            {detail.result === 'failed' && (cron.outputSummary || cron.lastMessage) && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: '#f85149', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                  🚨 실패 원인 (최근)
+                </div>
+                <pre style={{
+                  margin: 0, padding: '10px 13px', borderRadius: 9,
+                  fontSize: 11, color: '#fca5a5', lineHeight: 1.55,
+                  background: 'rgba(248,81,73,0.07)', border: '1px solid rgba(248,81,73,0.22)',
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  maxHeight: 160, overflowY: 'auto',
+                  fontFamily: 'ui-monospace, monospace',
+                }}>{cron.outputSummary || cron.lastMessage}</pre>
+              </div>
+            )}
+
+            {/* 최근 실행 이력 (recentRuns) */}
+            {cron.recentRuns && cron.recentRuns.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: '#6e7681', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                  📜 최근 {Math.min(cron.recentRuns.length, 10)}회 실행
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {cron.recentRuns.slice(0, 10).map((run, i) => {
+                    const rc = run.status === 'success' ? '#22c55e' : run.status === 'failed' ? '#f85149' : run.status === 'running' ? '#58a6ff' : '#6b7280';
+                    return (
+                      <div key={i} style={{
+                        padding: '6px 10px', borderRadius: 7,
+                        background: rc + '0d', border: `1px solid ${rc}20`,
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        fontSize: 11,
+                      }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: rc, flexShrink: 0 }} />
+                        <span style={{ color: '#6e7681', fontFamily: 'monospace', fontSize: 10, flexShrink: 0 }}>
+                          {timeFmt(run.timestamp)}
+                        </span>
+                        <span style={{ color: '#c9d1d9', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {run.message?.slice(0, 90) || run.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* CEO 가이드 (상태별) */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, color: '#6e7681', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                💡 지금 할 수 있는 일
+              </div>
+              <ul style={{
+                margin: 0, paddingLeft: 18, fontSize: 12, color: '#c9d1d9', lineHeight: 1.7,
+              }}>
+                {detail.result === 'failed' ? (
+                  <>
+                    <li>바로 재실행 버튼을 눌러 일회성 오류인지 확인</li>
+                    <li>오류 메시지를 복사해서 팀장에게 원인을 물어보기</li>
+                    <li>연속 실패라면 서킷 브레이커가 곧 발동될 수 있음</li>
+                  </>
+                ) : detail.result === 'success' ? (
+                  <>
+                    <li>정상 작동 중 — 최근 실행 이력을 확인해 패턴 파악</li>
+                    <li>필요 시 {cron.scheduleHuman || '스케줄'} 전 즉시 한 번 더 실행 가능</li>
+                  </>
+                ) : (
+                  <>
+                    <li>실행 상태를 확인 중 — 최근 이력 참고</li>
+                    <li>문제 있어 보이면 재실행 후 로그 확인</li>
+                  </>
+                )}
+              </ul>
+            </div>
+
+            {/* 재실행 결과 */}
+            {retryResult && (
+              <div style={{
+                marginBottom: 12, padding: '10px 13px', borderRadius: 10,
+                background: retryResult.success ? 'rgba(34,197,94,0.08)' : 'rgba(248,81,73,0.08)',
+                border: `1px solid ${retryResult.success ? '#22c55e40' : '#f8514940'}`,
+                borderLeft: `3px solid ${retryResult.success ? '#22c55e' : '#f85149'}`,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: retryResult.success ? '#22c55e' : '#f85149', marginBottom: retryResult.stdout ? 6 : 0 }}>
+                  {retryResult.message}
+                </div>
+                {retryResult.stdout && (
+                  <pre style={{
+                    margin: 0, padding: '6px 8px', borderRadius: 5,
+                    fontSize: 10, lineHeight: 1.5, color: '#a3b1c6',
+                    background: 'rgba(0,0,0,0.28)',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    maxHeight: 120, overflowY: 'auto', fontFamily: 'ui-monospace, monospace',
+                  }}>{retryResult.stdout}</pre>
+                )}
+                {retryResult.stderr && (
+                  <pre style={{
+                    marginTop: 6, padding: '6px 8px', borderRadius: 5,
+                    fontSize: 10, lineHeight: 1.5, color: '#fca5a5',
+                    background: 'rgba(0,0,0,0.28)',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    maxHeight: 120, overflowY: 'auto', fontFamily: 'ui-monospace, monospace',
+                  }}>{retryResult.stderr}</pre>
+                )}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 700, border: 'none',
+                  background: accent, color: '#fff',
+                  opacity: retrying ? 0.5 : 1,
+                }}
+              >{retrying ? '⏳ 실행 중...' : '🔄 재실행'}</button>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(`tail -n 100 ~/.jarvis/logs/cron.log | grep "\\[${cron.id}\\]"`);
+                }}
+                style={{
+                  padding: '11px 16px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 700,
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#c9d1d9',
+                }}
+              >📋 로그 명령 복사</button>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: '11px 16px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 700,
+                  background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#6b7280',
+                }}
+              >닫기</button>
+            </div>
+          </>
+        )}
+
+        {!cron && (
+          <button
+            onClick={onClose}
+            style={{
+              width: '100%', padding: '11px 0', borderRadius: 10, cursor: 'pointer',
+              fontSize: 13, fontWeight: 700, marginTop: 10,
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#c9d1d9',
+            }}
+          >닫기</button>
+        )}
       </div>
     </div>
   );

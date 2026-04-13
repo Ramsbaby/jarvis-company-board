@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
 
@@ -151,17 +151,87 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── LLM 프롬프트 전용 태스크: 자동 실행 불가 — 대체 커맨드/가이드 반환 ──
+    // ── LLM 프롬프트 전용 태스크: ask-claude.sh 를 detached 실행 ──
     if (!task.script && task.prompt) {
       const preview = task.prompt.replace(/\s+/g, ' ').trim().slice(0, 240);
+      const askClaude = path.join(JARVIS, 'bin', 'ask-claude.sh');
+
+      if (!existsSync(askClaude)) {
+        return NextResponse.json<RetryResponse>({
+          success: false,
+          message: 'ask-claude.sh 를 찾을 수 없습니다. LLM 태스크 재실행 불가.',
+          alternativeActions: buildLlmAlternatives(task),
+          promptPreview: preview + (task.prompt.length > 240 ? '…' : ''),
+          logPath: CRON_LOG,
+          logTailLines: 40,
+          stdout: tailCronLogForTask(cronId, 40),
+        });
+      }
+
+      // rate limit mark
+      lastRetry.set(cronId, now);
+
+      // ask-claude.sh 를 detached + 분리 (stdout/stderr → 전용 파일)
+      // 인자: TASK_ID PROMPT [TOOLS] [TIMEOUT] [MAX_BUDGET]
+      let pid: number | null = null;
+      let spawnError: string | null = null;
+      try {
+        const child = spawn(
+          'bash',
+          [askClaude, cronId, task.prompt, 'Read', '120'],
+          {
+            detached: true,
+            stdio: 'ignore',
+            env: { ...process.env, HOME, PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin' },
+          },
+        );
+        pid = child.pid ?? null;
+        child.unref();
+        // 에러 핸들러 — 바로 실패하는 경우 (e.g. bash 없음)
+        child.on('error', (err) => {
+          spawnError = err.message;
+        });
+      } catch (e) {
+        spawnError = e instanceof Error ? e.message : String(e);
+      }
+
+      if (spawnError || pid === null) {
+        return NextResponse.json<RetryResponse>({
+          success: false,
+          message: `백그라운드 실행 시작 실패: ${spawnError || 'PID 없음'}`,
+          alternativeActions: buildLlmAlternatives(task),
+          promptPreview: preview + (task.prompt.length > 240 ? '…' : ''),
+          logPath: CRON_LOG,
+          logTailLines: 40,
+          stdout: tailCronLogForTask(cronId, 40),
+        });
+      }
+
       return NextResponse.json<RetryResponse>({
-        success: false,
-        message: '이 태스크는 Claude 프롬프트 기반이라 자동 재실행이 안 됩니다. 아래 대체 실행 방법을 사용하세요.',
-        alternativeActions: buildLlmAlternatives(task),
+        success: true,
+        message: `🚀 LLM 태스크 백그라운드 실행 시작 (PID ${pid}) — 최대 2분 이내 cron.log에 결과 기록`,
+        runnerCommand: `bash "${askClaude}" ${cronId} "<prompt>" Read 120`,
         promptPreview: preview + (task.prompt.length > 240 ? '…' : ''),
         logPath: CRON_LOG,
-        logTailLines: 40,
-        stdout: tailCronLogForTask(cronId, 40),
+        logTailLines: 20,
+        stdout: tailCronLogForTask(cronId, 10) || '(기존 실행 이력 없음 — 결과가 곧 여기에 기록됩니다)',
+        alternativeActions: [
+          {
+            label: '실행 진행 상황 실시간 확인',
+            command: `tail -f "${CRON_LOG}" | grep "\\[${cronId}\\]"`,
+            description: '백그라운드 태스크가 진행되는 동안 cron.log를 실시간으로 팔로우합니다.',
+          },
+          {
+            label: 'Claude stderr 로그 확인',
+            command: `tail -n 50 "${path.join(JARVIS, 'logs', `claude-stderr-${cronId}.log`)}"`,
+            description: 'Claude CLI가 남긴 stderr를 확인해 실패 원인을 분석합니다.',
+          },
+          {
+            label: '수동 재실행 (동일 파라미터)',
+            command: `bash "${askClaude}" ${cronId} "<prompt>" Read 120`,
+            description: '같은 인자로 터미널에서 다시 실행합니다.',
+          },
+        ],
       });
     }
 
