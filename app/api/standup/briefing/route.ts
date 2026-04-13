@@ -6,11 +6,12 @@ import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 
 /**
- * 스탠드업홀(standup) 브리핑 — 매일 09:15 KST 전사 모닝 브리핑
+ * 스탠드업홀(standup) 브리핑 — 전사 모닝 브리핑
  *
  * 데이터 소스:
  *  - morning-standup / daily-summary / personal-schedule-daily 크론 실행 결과
  *  - ~/.jarvis/results/morning-standup/<YYYY-MM-DD>_<HHMMSS>.md (가장 최신 1건)
+ *  - ~/.jarvis/config/tasks.json 에서 morning-standup.schedule 읽어 다음 실행 시각 계산
  *
  * 인프라팀(태스크 #1)의 lib/map/rooms.ts 에서 standup 방의 entityId를
  * 이 엔드포인트로 매핑한다(해당 작업은 Wave 1 마지막에 함께 반영).
@@ -20,6 +21,7 @@ const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
 const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
 const STANDUP_RESULTS_DIR = path.join(JARVIS, 'results', 'morning-standup');
+const TASKS_FILE = path.join(JARVIS, 'config', 'tasks.json');
 
 const STANDUP_KEYWORDS = ['morning-standup', 'daily-summary', 'personal-schedule-daily'];
 
@@ -63,6 +65,46 @@ function getLatestStandupContent(): { filename: string; excerpt: string } | null
   } catch { return null; }
 }
 
+interface NextRun { schedule: string; nextRunKst: string | null }
+
+/**
+ * tasks.json 에서 morning-standup.schedule 을 읽어 다음 실행 시각을 KST 로 계산.
+ * 단순 cron 표현식 (`M H * * *` — 매일 고정 시각)만 정확히 계산하고,
+ * 복잡한 표현식은 raw schedule 만 노출 (nextRunKst=null).
+ */
+function getNextStandup(): NextRun {
+  const fallback: NextRun = { schedule: '', nextRunKst: null };
+  try {
+    if (!existsSync(TASKS_FILE)) return fallback;
+    const parsed = JSON.parse(readFileSync(TASKS_FILE, 'utf8')) as { tasks?: Array<{ id: string; schedule?: string }> };
+    const list = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    const standup = list.find(t => t.id === 'morning-standup');
+    if (!standup || !standup.schedule) return fallback;
+    const schedule = standup.schedule;
+    // 단순 매일 cron: "M H * * *"
+    const m = schedule.match(/^\s*(\d+)\s+(\d+)\s+\*\s+\*\s+\*\s*$/);
+    if (!m) return { schedule, nextRunKst: null };
+    const minute = Number(m[1]);
+    const hour = Number(m[2]);
+    if (!Number.isFinite(minute) || !Number.isFinite(hour)) return { schedule, nextRunKst: null };
+
+    // 현재 KST 시각 계산 → 오늘 또는 내일 (M H) 중 가장 가까운 미래
+    const KST_OFFSET_MS = 9 * 3600_000;
+    const nowKstMs = Date.now() + KST_OFFSET_MS;
+    const nowKst = new Date(nowKstMs);
+    const y = nowKst.getUTCFullYear();
+    const mo = nowKst.getUTCMonth();
+    const d = nowKst.getUTCDate();
+    let candidate = Date.UTC(y, mo, d, hour, minute, 0);
+    if (candidate <= nowKstMs) candidate += 24 * 3600_000;
+    // candidate 는 KST 가상 epoch — ISO 형태로 KST 라벨링
+    const c = new Date(candidate);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const nextRunKst = `${c.getUTCFullYear()}-${pad(c.getUTCMonth() + 1)}-${pad(c.getUTCDate())} ${pad(c.getUTCHours())}:${pad(c.getUTCMinutes())} KST`;
+    return { schedule, nextRunKst };
+  } catch { return fallback; }
+}
+
 // ── Route Handler ────────────────────────────────────────────────────────────
 
 interface StandupBriefing {
@@ -74,6 +116,8 @@ interface StandupBriefing {
   summary: string;
   recentActivity: CronEntry[];
   latestStandup: { filename: string; excerpt: string } | null;
+  schedule: string;
+  nextRunKst: string | null;
   updatedAt: string;
 }
 
@@ -86,6 +130,7 @@ export async function GET() {
 
   const recent = parseRecent(STANDUP_KEYWORDS, 10);
   const latest = getLatestStandupContent();
+  const next = getNextStandup();
 
   const successCount = recent.filter(r => r.result === 'SUCCESS').length;
   const failedCount = recent.filter(r => r.result === 'FAILED').length;
@@ -103,15 +148,22 @@ export async function GET() {
     summary = `최근 ${recent.length}건이 진행중이거나 확인 대기 상태예요.`;
   }
 
+  const titleTime = next.nextRunKst
+    ? `다음 실행 ${next.nextRunKst}`
+    : next.schedule
+      ? `스케줄: ${next.schedule}`
+      : '매일 모닝 브리핑';
   const data: StandupBriefing = {
     type: 'standup',
     id: 'standup',
     name: '스탠드업홀',
-    title: '매일 09:15 KST 전사 모닝 브리핑',
+    title: `전사 모닝 브리핑 — ${titleTime}`,
     avatar: '🎤',
     summary,
     recentActivity: recent,
     latestStandup: latest,
+    schedule: next.schedule,
+    nextRunKst: next.nextRunKst,
     updatedAt: new Date().toISOString(),
   };
 
