@@ -614,31 +614,84 @@ export default function VirtualOffice() {
       const rw = r.w * T, rh = r.h * T;
       const state = npcStatesRef.current[r.id];
 
-      // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분 (밝은 오피스)
+      // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분 (실제 오피스 카펫 느낌)
       if (r.wallStyle === 'pod') {
+        // 바닥 베이스 (오피스 카펫 타일)
         ctx!.save();
-        ctx!.shadowBlur = 12;
-        ctx!.shadowColor = 'rgba(0,0,0,0.08)';
-        ctx!.fillStyle = '#ffffff';
+        ctx!.shadowBlur = 10;
+        ctx!.shadowColor = 'rgba(20,30,50,0.10)';
+        ctx!.shadowOffsetY = 2;
+        ctx!.fillStyle = '#f4f3ee';
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
+        // 베이스 카펫 직조 패턴
+        ctx!.save();
+        ctx!.beginPath();
+        ctx!.rect(rx, ry, rw, rh);
+        ctx!.clip();
+        for (let gy = 0; gy < r.h; gy++) {
+          for (let gx = 0; gx < r.w; gx++) {
+            const tx = rx + gx * T;
+            const ty = ry + gy * T;
+            ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#f1efe8' : '#edebe2';
+            ctx!.fillRect(tx, ty, T, T);
+            ctx!.fillStyle = 'rgba(180,170,140,0.10)';
+            for (let i = 4; i < T; i += 8) {
+              ctx!.fillRect(tx, ty + i, T, 1);
+              ctx!.fillRect(tx + i, ty, 1, T);
+            }
+          }
+        }
+        ctx!.restore();
 
-        // 팀 컬러 러그 (40% — 강한 구분)
-        const rugMarginX = rw * 0.2;
-        const rugMarginY = rh * 0.2;
+        // ── 팀 컬러 러그 (오피스 데스크 존 표시) ──
+        const rugMarginX = rw * 0.12;
+        const rugMarginY = rh * 0.15;
         const rugX = rx + rugMarginX;
         const rugY = ry + rugMarginY;
         const rugW = rw - rugMarginX * 2;
         const rugH = rh - rugMarginY * 2;
-        ctx!.fillStyle = r.teamColor + '40';
+
+        // 러그 드롭 섀도
+        ctx!.save();
+        ctx!.shadowColor = 'rgba(30,40,60,0.25)';
+        ctx!.shadowBlur = 6;
+        ctx!.shadowOffsetX = 2;
+        ctx!.shadowOffsetY = 3;
+        // 러그 본체 (팀 컬러 베이스)
+        ctx!.fillStyle = r.teamColor + 'aa';
         ctx!.fillRect(rugX, rugY, rugW, rugH);
-        ctx!.fillStyle = r.teamColor + '20';
-        for (let sy = 0; sy < rugH; sy += 6) {
-          ctx!.fillRect(rugX, rugY + sy, rugW, 2);
+        ctx!.restore();
+
+        // 러그 내부 직조 (체커)
+        ctx!.save();
+        ctx!.beginPath();
+        ctx!.rect(rugX, rugY, rugW, rugH);
+        ctx!.clip();
+        const weaveSize = 4;
+        for (let wy = 0; wy < rugH; wy += weaveSize) {
+          for (let wx = 0; wx < rugW; wx += weaveSize) {
+            if (((Math.floor(wx / weaveSize) + Math.floor(wy / weaveSize)) % 2) === 0) {
+              ctx!.fillStyle = 'rgba(255,255,255,0.12)';
+              ctx!.fillRect(rugX + wx, rugY + wy, weaveSize, weaveSize);
+            }
+          }
         }
-        ctx!.strokeStyle = r.teamColor + '50';
-        ctx!.lineWidth = 1;
+        // 러그 가장자리 프린지 (상하)
+        ctx!.fillStyle = r.teamColor + 'e0';
+        for (let i = 0; i < rugW; i += 3) {
+          ctx!.fillRect(rugX + i, rugY - 2, 2, 2);
+          ctx!.fillRect(rugX + i, rugY + rugH, 2, 2);
+        }
+        // 러그 테두리 (어두운 선)
+        ctx!.strokeStyle = r.teamColor + 'ff';
+        ctx!.lineWidth = 1.5;
         ctx!.strokeRect(rugX + 1, rugY + 1, rugW - 2, rugH - 2);
+        // 내부 데코 선 (인셋)
+        ctx!.strokeStyle = 'rgba(255,255,255,0.30)';
+        ctx!.lineWidth = 0.8;
+        ctx!.strokeRect(rugX + 4, rugY + 4, rugW - 8, rugH - 8);
+        ctx!.restore();
 
         // 상태 indicator (LED 점)
         if (state) {
@@ -683,78 +736,179 @@ export default function VirtualOffice() {
       ctx!.fillRect(rx, ry, rw, rh);
       ctx!.restore();
 
-      // Floor based on floorStyle (밝은 오피스)
+      // Floor based on floorStyle (실제 회사처럼 — 게더타운 스타일 디테일)
       switch (r.floorStyle) {
         case 'executive': {
-          ctx!.fillStyle = '#fafbfc';
+          // 원목 플랭크 바닥 (오피스 임원실 느낌)
+          ctx!.save();
+          ctx!.beginPath();
+          ctx!.rect(rx, ry, rw, rh);
+          ctx!.clip();
+          // 베이스
+          ctx!.fillStyle = '#e4cd9a';
           ctx!.fillRect(rx, ry, rw, rh);
-          for (let y = 0; y < r.h; y++) {
-            for (let x = 0; x < r.w; x++) {
-              const offset = (y % 2) * (T / 2);
-              ctx!.fillStyle = (x + y) % 3 === 0 ? '#e8e2d808' : '#e0dace08';
-              ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              ctx!.fillStyle = '#d8d0c008';
-              ctx!.fillRect(rx + x * T + offset, ry + y * T + 6, T - 2, 1);
-              ctx!.fillRect(rx + x * T + offset, ry + y * T + 18, T - 4, 1);
-              ctx!.fillRect(rx + x * T + offset, ry + y * T + 28, T - 1, 1);
+          // 플랭크 — 2열마다 절반 오프셋
+          const plankW = T * 2.2;
+          const plankH = T * 0.85;
+          const woodTones = ['#e3cc98', '#d9bf86', '#cfb378', '#d6ba84'];
+          for (let py = 0; py < rh; py += plankH) {
+            const rowIdx = Math.floor(py / plankH);
+            const offset = (rowIdx % 2) * (plankW / 2);
+            for (let px = -plankW; px < rw + plankW; px += plankW) {
+              const x = rx + px + offset;
+              const y = ry + py;
+              const tone = woodTones[(Math.floor(px / plankW) + rowIdx * 3) % woodTones.length];
+              ctx!.fillStyle = tone;
+              ctx!.fillRect(x, y, plankW - 1, plankH - 1);
+              // 판재 하단 그림자
+              ctx!.fillStyle = 'rgba(90,60,20,0.18)';
+              ctx!.fillRect(x, y + plankH - 1, plankW, 1);
+              // 우측 엣지 라인
+              ctx!.fillStyle = 'rgba(90,60,20,0.12)';
+              ctx!.fillRect(x + plankW - 1, y, 1, plankH);
+              // 결(grain) 2줄 — 부드러운 곡선
+              ctx!.strokeStyle = 'rgba(140,90,30,0.20)';
+              ctx!.lineWidth = 0.5;
+              ctx!.beginPath();
+              ctx!.moveTo(x + 2, y + plankH * 0.35);
+              ctx!.bezierCurveTo(x + plankW * 0.3, y + plankH * 0.4, x + plankW * 0.7, y + plankH * 0.28, x + plankW - 2, y + plankH * 0.35);
+              ctx!.stroke();
+              ctx!.beginPath();
+              ctx!.moveTo(x + 2, y + plankH * 0.72);
+              ctx!.bezierCurveTo(x + plankW * 0.35, y + plankH * 0.78, x + plankW * 0.7, y + plankH * 0.68, x + plankW - 2, y + plankH * 0.72);
+              ctx!.stroke();
             }
           }
-          const grdExec = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.6);
-          grdExec.addColorStop(0, '#c9a22715');
-          grdExec.addColorStop(1, 'transparent');
+          // 샹들리에 warm glow (천장 조명 반사)
+          const grdExec = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.65);
+          grdExec.addColorStop(0, 'rgba(255,220,130,0.25)');
+          grdExec.addColorStop(0.4, 'rgba(255,200,90,0.10)');
+          grdExec.addColorStop(1, 'rgba(0,0,0,0.08)');
           ctx!.fillStyle = grdExec;
           ctx!.fillRect(rx, ry, rw, rh);
+          ctx!.restore();
           break;
         }
         case 'metal': {
+          // 서버룸/크론센터 — 레이즈드 플로어 타일 + LED 스트립
           const isCronCenter = r.id === 'cron-center';
-          ctx!.fillStyle = isCronCenter ? '#f0f1f4' : '#f4f5f7';
+          ctx!.save();
+          ctx!.beginPath();
+          ctx!.rect(rx, ry, rw, rh);
+          ctx!.clip();
+          // 어두운 베이스 (데이터센터 분위기)
+          ctx!.fillStyle = isCronCenter ? '#e0e5ee' : '#dde2eb';
           ctx!.fillRect(rx, ry, rw, rh);
-          ctx!.strokeStyle = isCronCenter ? '#c0c8d240' : '#b8c0cc40';
-          ctx!.lineWidth = 0.5;
-          for (let gx = 0; gx < r.w * 2; gx++) {
-            ctx!.beginPath();
-            ctx!.moveTo(rx + gx * (T / 2), ry);
-            ctx!.lineTo(rx + gx * (T / 2), ry + rh);
-            ctx!.stroke();
-          }
-          for (let gy = 0; gy < r.h * 2; gy++) {
-            ctx!.beginPath();
-            ctx!.moveTo(rx, ry + gy * (T / 2));
-            ctx!.lineTo(rx + rw, ry + gy * (T / 2));
-            ctx!.stroke();
-          }
-          for (let y = 0; y < r.h; y++) {
-            for (let x = 0; x < r.w; x++) {
-              if ((x + y) % 4 === 0) {
-                ctx!.fillStyle = isCronCenter ? '#dde0e808' : '#c8cdd508';
-                ctx!.fillRect(rx + x * T + 2, ry + y * T + 2, T - 4, T - 4);
+          // 60cm × 60cm 타일 (T 단위)
+          for (let gy = 0; gy < r.h; gy++) {
+            for (let gx = 0; gx < r.w; gx++) {
+              const tx = rx + gx * T;
+              const ty = ry + gy * T;
+              const checker = (gx + gy) % 2 === 0;
+              // 타일 본체
+              ctx!.fillStyle = checker ? '#e6ebf3' : '#dce2eb';
+              ctx!.fillRect(tx + 1, ty + 1, T - 2, T - 2);
+              // 타일 하이라이트 (좌상)
+              ctx!.fillStyle = 'rgba(255,255,255,0.6)';
+              ctx!.fillRect(tx + 1, ty + 1, T - 2, 1);
+              ctx!.fillRect(tx + 1, ty + 1, 1, T - 2);
+              // 타일 그림자 (우하)
+              ctx!.fillStyle = 'rgba(90,100,115,0.25)';
+              ctx!.fillRect(tx + 1, ty + T - 2, T - 2, 1);
+              ctx!.fillRect(tx + T - 2, ty + 1, 1, T - 2);
+              // 타일 중앙 4개 나사 (perforation)
+              if (!isCronCenter || (gx + gy) % 3 === 0) {
+                ctx!.fillStyle = 'rgba(100,110,125,0.5)';
+                for (const [px, py] of [[T * 0.2, T * 0.2], [T * 0.8, T * 0.2], [T * 0.2, T * 0.8], [T * 0.8, T * 0.8]] as [number, number][]) {
+                  ctx!.beginPath();
+                  ctx!.arc(tx + px, ty + py, 0.8, 0, Math.PI * 2);
+                  ctx!.fill();
+                }
               }
             }
           }
+          // LED 스트립 (가장자리) — cron-center만
+          if (isCronCenter) {
+            ctx!.fillStyle = 'rgba(88,166,255,0.25)';
+            ctx!.fillRect(rx + 4, ry + 4, rw - 8, 2);
+            ctx!.fillRect(rx + 4, ry + rh - 6, rw - 8, 2);
+            // 펄스 glow
+            const pulse = 0.3 + 0.2 * Math.sin(frameCountRef.current * 0.05);
+            ctx!.fillStyle = `rgba(88,166,255,${pulse})`;
+            ctx!.fillRect(rx + 4, ry + 4, rw - 8, 1);
+          }
+          ctx!.restore();
           break;
         }
         case 'stage': {
-          ctx!.fillStyle = '#fafbfc';
+          // 마블 바닥 (회의실 로비 느낌)
+          ctx!.save();
+          ctx!.beginPath();
+          ctx!.rect(rx, ry, rw, rh);
+          ctx!.clip();
+          // 크림 베이스
+          ctx!.fillStyle = '#f5f1e8';
           ctx!.fillRect(rx, ry, rw, rh);
-          for (let y = 0; y < r.h; y++) {
-            for (let x = 0; x < r.w; x++) {
-              ctx!.fillStyle = '#f0ece406';
-              ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              ctx!.fillStyle = '#e0dcd008';
-              ctx!.fillRect(rx + x * T, ry + y * T + T - 1, T, 1);
+          // 큰 마블 타일 (2×2)
+          const mTile = T * 2;
+          for (let gy = 0; gy < r.h; gy += 2) {
+            for (let gx = 0; gx < r.w; gx += 2) {
+              const tx = rx + gx * T;
+              const ty = ry + gy * T;
+              ctx!.fillStyle = (gx / 2 + gy / 2) % 2 === 0 ? '#f2ede1' : '#ebe5d5';
+              ctx!.fillRect(tx + 2, ty + 2, mTile - 4, mTile - 4);
+              // 마블 정맥 (veining) — 랜덤이지만 deterministic
+              const seed = (gx * 7 + gy * 13) % 100;
+              ctx!.strokeStyle = `rgba(180,165,130,${0.12 + (seed % 3) * 0.04})`;
+              ctx!.lineWidth = 0.6;
+              ctx!.beginPath();
+              ctx!.moveTo(tx + 4 + (seed % 12), ty + 6);
+              ctx!.bezierCurveTo(
+                tx + mTile * 0.4, ty + mTile * 0.3 + (seed % 5),
+                tx + mTile * 0.7 - (seed % 7), ty + mTile * 0.6,
+                tx + mTile - 6, ty + mTile - 8 + (seed % 8),
+              );
+              ctx!.stroke();
+              // 타일 그림자
+              ctx!.fillStyle = 'rgba(170,150,110,0.15)';
+              ctx!.fillRect(tx + 2, ty + mTile - 3, mTile - 4, 1);
+              ctx!.fillRect(tx + mTile - 3, ty + 2, 1, mTile - 4);
             }
           }
-          const grdStage = ctx!.createRadialGradient(rx + rw / 2, ry + rh * 0.3, 0, rx + rw / 2, ry + rh * 0.3, rw * 0.5);
-          grdStage.addColorStop(0, '#eab30818');
+          // 천장 조명 반사 (무대/프레젠테이션 느낌)
+          const grdStage = ctx!.createRadialGradient(rx + rw / 2, ry + rh * 0.3, 0, rx + rw / 2, ry + rh * 0.3, rw * 0.6);
+          grdStage.addColorStop(0, 'rgba(255,235,150,0.30)');
+          grdStage.addColorStop(0.5, 'rgba(255,220,120,0.08)');
           grdStage.addColorStop(1, 'transparent');
           ctx!.fillStyle = grdStage;
           ctx!.fillRect(rx, ry, rw, rh);
+          ctx!.restore();
           break;
         }
         default: {
-          ctx!.fillStyle = '#ffffff';
+          // 일반 카펫 타일 (코지한 오피스 카펫)
+          ctx!.save();
+          ctx!.beginPath();
+          ctx!.rect(rx, ry, rw, rh);
+          ctx!.clip();
+          ctx!.fillStyle = '#f5f4ef';
           ctx!.fillRect(rx, ry, rw, rh);
+          // 직조(weave) 패턴 — 체커
+          for (let gy = 0; gy < r.h; gy++) {
+            for (let gx = 0; gx < r.w; gx++) {
+              const tx = rx + gx * T;
+              const ty = ry + gy * T;
+              ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#eeede8' : '#f0efea';
+              ctx!.fillRect(tx, ty, T, T);
+              // 직조 라인 (십자)
+              ctx!.fillStyle = 'rgba(180,170,140,0.08)';
+              for (let i = 4; i < T; i += 8) {
+                ctx!.fillRect(tx, ty + i, T, 1);
+                ctx!.fillRect(tx + i, ty, 1, T);
+              }
+            }
+          }
+          ctx!.restore();
           break;
         }
       }
@@ -796,61 +950,147 @@ export default function VirtualOffice() {
       // 벽 + 문 — closed room만 벽 그림, pod는 이미 위에서 return (다크)
       const isClosed = r.wallStyle === 'closed';
       if (isClosed) {
-        // ── Closed room: 두꺼운 벽 + 드롭 섀도 (다크) ──
+        const WALL = 9; // 두꺼운 벽
+        // ── 드롭 섀도 (외부) ──
         ctx!.save();
-        ctx!.shadowColor = 'rgba(0,0,0,0.15)';
-        ctx!.shadowBlur = 14;
-        ctx!.shadowOffsetX = 3;
-        ctx!.shadowOffsetY = 3;
+        ctx!.shadowColor = 'rgba(20,30,50,0.22)';
+        ctx!.shadowBlur = 18;
+        ctx!.shadowOffsetX = 4;
+        ctx!.shadowOffsetY = 6;
         ctx!.fillStyle = '#e0e4ea';
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
 
-        // 벽 본체 (밝은 그레이)
-        ctx!.fillStyle = '#e0e4ea';
-        ctx!.fillRect(rx, ry, rw, 5);
-        ctx!.fillRect(rx, ry + rh - 5, rw, 5);
-        ctx!.fillRect(rx, ry, 5, rh);
-        ctx!.fillRect(rx + rw - 5, ry, 5, rh);
-        // 상단 하이라이트
-        ctx!.fillStyle = '#f0f2f5';
-        ctx!.fillRect(rx + 1, ry + 1, rw - 2, 2);
-        // 팀 컬러 스트라이프 (상단 벽)
-        ctx!.fillStyle = r.teamColor + 'cc';
-        ctx!.fillRect(rx + 5, ry + 1, rw - 10, 3);
-        // 내부 테두리
-        ctx!.strokeStyle = '#d0d5dd';
-        ctx!.lineWidth = 1;
-        ctx!.strokeRect(rx + 5, ry + 5, rw - 10, rh - 10);
+        // ── 벽 본체 (3D 베벨 스타일) ──
+        // Base fill
+        ctx!.fillStyle = '#dde2ea';
+        ctx!.fillRect(rx, ry, rw, WALL); // top
+        ctx!.fillRect(rx, ry + rh - WALL, rw, WALL); // bottom
+        ctx!.fillRect(rx, ry, WALL, rh); // left
+        ctx!.fillRect(rx + rw - WALL, ry, WALL, rh); // right
 
-        // 유리창 — 상단 벽
+        // 천장 표현 — 상단 벽에 더 진한 그림자 그라디언트 (foreground ceiling hint)
+        const ceilingGrd = ctx!.createLinearGradient(rx, ry, rx, ry + WALL + 4);
+        ceilingGrd.addColorStop(0, 'rgba(80,90,110,0.45)');
+        ceilingGrd.addColorStop(0.6, 'rgba(80,90,110,0.18)');
+        ceilingGrd.addColorStop(1, 'transparent');
+        ctx!.fillStyle = ceilingGrd;
+        ctx!.fillRect(rx, ry, rw, WALL + 4);
+
+        // Top highlight (밝은 상단 엣지 — 조명 받은 느낌)
+        ctx!.fillStyle = '#ffffff';
+        ctx!.fillRect(rx + 1, ry, rw - 2, 1);
+        ctx!.fillStyle = 'rgba(245,248,252,0.85)';
+        ctx!.fillRect(rx + 1, ry + 1, rw - 2, 1);
+
+        // Left highlight (조명 왼쪽)
+        ctx!.fillStyle = 'rgba(245,248,252,0.7)';
+        ctx!.fillRect(rx, ry + 1, 1, rh - 2);
+        ctx!.fillStyle = 'rgba(235,240,248,0.5)';
+        ctx!.fillRect(rx + 1, ry + 2, 1, rh - 4);
+
+        // Right/Bottom shadow (반대쪽)
+        ctx!.fillStyle = 'rgba(100,110,130,0.35)';
+        ctx!.fillRect(rx + rw - 1, ry + 1, 1, rh - 1);
+        ctx!.fillRect(rx + 1, ry + rh - 1, rw - 2, 1);
+        ctx!.fillStyle = 'rgba(120,130,150,0.25)';
+        ctx!.fillRect(rx + rw - 2, ry + 2, 1, rh - 3);
+        ctx!.fillRect(rx + 2, ry + rh - 2, rw - 4, 1);
+
+        // 벽 내부 face (인테리어 벽면 — 밝은 톤)
+        ctx!.fillStyle = '#eceff5';
+        ctx!.fillRect(rx + 2, ry + 3, rw - 4, WALL - 5); // top 벽 face
+        ctx!.fillRect(rx + 2, ry + rh - WALL + 2, rw - 4, WALL - 5);
+        ctx!.fillRect(rx + 2, ry + 3, WALL - 5, rh - 6);
+        ctx!.fillRect(rx + rw - WALL + 2, ry + 3, WALL - 5, rh - 6);
+
+        // 팀 컬러 스트라이프 (상단 벽 — 회사 아이덴티티)
+        ctx!.fillStyle = r.teamColor + 'd0';
+        ctx!.fillRect(rx + WALL, ry + 3, rw - WALL * 2, 2);
+        ctx!.fillStyle = r.teamColor + '60';
+        ctx!.fillRect(rx + WALL, ry + 5, rw - WALL * 2, 1);
+
+        // 내부 테두리 (방 내부 경계선)
+        ctx!.strokeStyle = 'rgba(180,190,210,0.4)';
+        ctx!.lineWidth = 1;
+        ctx!.strokeRect(rx + WALL, ry + WALL, rw - WALL * 2, rh - WALL * 2);
+
+        // 유리창 — 상단 벽 (진짜 유리 느낌: 프레임 + 반사)
         if (r.type !== 'cron') {
           const windowCount = Math.max(1, Math.floor(r.w / 3));
-          const windowW = T * 1.2;
+          const windowW = T * 1.4;
+          const windowH = WALL - 3;
           for (let i = 0; i < windowCount; i++) {
-            const wx = rx + T * 1.2 + i * T * 2.2;
-            ctx!.fillStyle = '#87CEEB30';
-            ctx!.fillRect(wx, ry, windowW, 5);
-            ctx!.strokeStyle = '#87CEEB50';
-            ctx!.lineWidth = 0.5;
-            ctx!.strokeRect(wx, ry, windowW, 5);
+            const wx = rx + T * 1.3 + i * T * 2.4;
+            // 유리창 프레임 (어두운 알루미늄)
+            ctx!.fillStyle = '#5a6370';
+            ctx!.fillRect(wx - 1, ry + 1, windowW + 2, windowH + 2);
+            // 유리 내부 (하늘 반사)
+            const glassGrd = ctx!.createLinearGradient(wx, ry + 1, wx, ry + windowH + 1);
+            glassGrd.addColorStop(0, 'rgba(135,206,235,0.9)');
+            glassGrd.addColorStop(0.5, 'rgba(176,224,230,0.7)');
+            glassGrd.addColorStop(1, 'rgba(100,170,210,0.8)');
+            ctx!.fillStyle = glassGrd;
+            ctx!.fillRect(wx, ry + 2, windowW, windowH);
+            // 반사 하이라이트
+            ctx!.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx!.fillRect(wx + 1, ry + 2, windowW * 0.25, 1);
+            ctx!.fillRect(wx + 1, ry + 2, 1, windowH * 0.6);
+            // 유리 분할 (머리부분 가로)
+            ctx!.fillStyle = 'rgba(80,90,105,0.6)';
+            ctx!.fillRect(wx + windowW / 2 - 0.5, ry + 2, 1, windowH);
           }
         }
 
-        // 문 — 하단 중앙
+        // 문 — 하단 중앙 (더 실감)
         const doorX = (r.x + Math.floor(r.w / 2)) * T - camX;
         if (r.type === 'cron') {
-          // 크론센터: 좌측 문
+          // 크론센터: 좌측 자동문 (슬라이딩)
           const doorY = (r.y + Math.floor(r.h / 2)) * T - camY;
-          ctx!.fillStyle = '#c8cdd5';
-          ctx!.fillRect(rx - 2, doorY - T, 8, T * 3);
-          ctx!.fillStyle = '#58a6ff80';
-          ctx!.fillRect(rx, doorY - T, 3, T * 3);
+          ctx!.fillStyle = '#4a5060';
+          ctx!.fillRect(rx - 2, doorY - T * 1.2, WALL + 3, T * 3);
+          // 유리 슬라이딩 도어
+          ctx!.fillStyle = 'rgba(88,166,255,0.35)';
+          ctx!.fillRect(rx, doorY - T * 1.1, WALL - 1, T * 2.8);
+          // 센터 라인 (두 문 사이)
+          ctx!.fillStyle = '#2a3240';
+          ctx!.fillRect(rx + 2, doorY + T / 2 - 0.5, WALL - 4, 1);
+          // LED 상태등 (상단)
+          ctx!.fillStyle = '#22c55e';
+          ctx!.beginPath();
+          ctx!.arc(rx + WALL / 2, doorY - T * 1.0, 1.5, 0, Math.PI * 2);
+          ctx!.fill();
         } else {
-          ctx!.fillStyle = '#c8cdd5';
-          ctx!.fillRect(doorX - T / 2, ry + rh - 6, T * 1.5, 8);
-          ctx!.fillStyle = '#58a6ff';
-          ctx!.fillRect(doorX - T / 2, ry + rh - 3, T * 1.5, 3);
+          // 일반 방: 나무 문 + 금속 손잡이
+          const dw = T * 1.5;
+          const dy = ry + rh - WALL - 1;
+          // 문틀 (어두운 프레임)
+          ctx!.fillStyle = '#5a6370';
+          ctx!.fillRect(doorX - dw / 2 - 2, dy, dw + 4, WALL + 2);
+          // 문 본체 (나무 색상)
+          const doorGrd = ctx!.createLinearGradient(doorX - dw / 2, dy, doorX + dw / 2, dy);
+          doorGrd.addColorStop(0, '#8b6f3f');
+          doorGrd.addColorStop(0.5, '#a08550');
+          doorGrd.addColorStop(1, '#7a5e30');
+          ctx!.fillStyle = doorGrd;
+          ctx!.fillRect(doorX - dw / 2, dy + 1, dw, WALL);
+          // 나무결
+          ctx!.strokeStyle = 'rgba(60,40,10,0.3)';
+          ctx!.lineWidth = 0.5;
+          for (let ln = 2; ln < WALL; ln += 3) {
+            ctx!.beginPath();
+            ctx!.moveTo(doorX - dw / 2 + 2, dy + ln);
+            ctx!.lineTo(doorX + dw / 2 - 2, dy + ln);
+            ctx!.stroke();
+          }
+          // 금속 손잡이
+          ctx!.fillStyle = '#d4c080';
+          ctx!.beginPath();
+          ctx!.arc(doorX + dw / 2 - 3, dy + WALL / 2 + 1, 1.2, 0, Math.PI * 2);
+          ctx!.fill();
+          // 문 이름 플레이트 (팀 컬러)
+          ctx!.fillStyle = r.teamColor + 'a0';
+          ctx!.fillRect(doorX - dw / 2 + 1, dy + 1, dw - 2, 1);
         }
       } else {
         // ── Pod (오픈 데스크): 벽 없음, 카펫 테두리 + 약한 그림자 (다크) ──
@@ -2294,7 +2534,23 @@ export default function VirtualOffice() {
       {viewMode === 'map' && !isMobile && <BoardBanner />}
 
       {/* 우상단 2차 정보 패널 (예정 크론 + 최근 커밋) — 모바일 숨김 */}
-      {viewMode === 'map' && !isMobile && <RightInfoPanels isMobile={isMobile} />}
+      {viewMode === 'map' && !isMobile && (
+        <RightInfoPanels
+          isMobile={isMobile}
+          onCronClick={(id) => {
+            const cron = cronDataRef.current.find(c => c.id === id)
+              || cronData.find(c => c.id === id);
+            if (cron) {
+              setCronPopup(cron);
+              setPopupOpen(true);
+            } else {
+              // cronData에 없는 경우 (LLM 전용 태스크 등) — 크론 센터 그리드를 열어 검색 가능하게
+              setCronGridOpen(true);
+              setCronSearch(id);
+            }
+          }}
+        />
+      )}
 
       {/* 좌하단 실시간 크론 이벤트 토스트 (SSE) */}
       {viewMode === 'map' && <CronToastStack isMobile={isMobile} />}

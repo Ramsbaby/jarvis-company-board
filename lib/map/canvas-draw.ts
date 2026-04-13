@@ -483,6 +483,125 @@ export function drawRoomFurniture(
 
 // Decorative elements (corridor props, signs, clock, lights)
 
+// ── 벽 아트 프레임 (그림 액자) ──
+function drawWallArt(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number, h: number, style: 'abstract' | 'team' | 'photo') {
+  // 액자 프레임
+  ctx.fillStyle = '#3a3530';
+  ctx.fillRect(cx - 1, cy - 1, w + 2, h + 2);
+  ctx.fillStyle = '#c9a227';
+  ctx.fillRect(cx, cy, w, h);
+  ctx.fillStyle = '#8b6f3f';
+  ctx.fillRect(cx + 1, cy + 1, w - 2, h - 2);
+  // 그림 내부
+  if (style === 'abstract') {
+    const grd = ctx.createLinearGradient(cx + 2, cy + 2, cx + w - 2, cy + h - 2);
+    grd.addColorStop(0, '#ef4444');
+    grd.addColorStop(0.5, '#eab308');
+    grd.addColorStop(1, '#3b82f6');
+    ctx.fillStyle = grd;
+    ctx.fillRect(cx + 2, cy + 2, w - 4, h - 4);
+    // abstract strokes
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(cx + 3, cy + 3, 3, h - 6);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(cx + w - 6, cy + 4, 3, h - 8);
+  } else if (style === 'team') {
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(cx + 2, cy + 2, w - 4, h - 4);
+    // 3 people icons (team photo style)
+    for (let i = 0; i < 3; i++) {
+      const px = cx + 4 + i * ((w - 6) / 3);
+      const py = cy + h / 2;
+      ctx.fillStyle = '#e8cfa0';
+      ctx.beginPath();
+      ctx.arc(px + 2, py - 2, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = ['#22c55e', '#3b82f6', '#ef4444'][i];
+      ctx.fillRect(px, py, 4, h / 3);
+    }
+  } else {
+    // photo — scenery
+    const grd = ctx.createLinearGradient(cx + 2, cy + 2, cx + 2, cy + h - 2);
+    grd.addColorStop(0, '#87ceeb');
+    grd.addColorStop(0.5, '#cbd5e1');
+    grd.addColorStop(1, '#16a34a');
+    ctx.fillStyle = grd;
+    ctx.fillRect(cx + 2, cy + 2, w - 4, h - 4);
+    // sun
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(cx + w - 6, cy + 5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ── 커피 스테이션 ──
+function drawCoffeeStation(ctx: CanvasRenderingContext2D, px: number, py: number) {
+  // 카운터 (목재)
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(px - 10, py - 2, 32, 14);
+  ctx.fillStyle = '#8b5a2b';
+  ctx.fillRect(px - 10, py - 2, 32, 2);
+  // 커피 머신
+  ctx.fillStyle = '#2a2d36';
+  ctx.fillRect(px - 6, py - 10, 12, 10);
+  ctx.fillStyle = '#4a5060';
+  ctx.fillRect(px - 5, py - 9, 10, 3);
+  // 머신 스크린 (파란 LED)
+  ctx.fillStyle = '#58a6ff';
+  ctx.fillRect(px - 4, py - 8, 3, 2);
+  // 커피 컵
+  ctx.fillStyle = '#f5f5f4';
+  ctx.fillRect(px - 3, py - 3, 3, 4);
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(px - 3, py - 3, 3, 1);
+  // 뜨거운 증기
+  ctx.strokeStyle = 'rgba(200,220,255,0.5)';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(px - 1.5, py - 4);
+  ctx.quadraticCurveTo(px, py - 7, px - 1, py - 9);
+  ctx.stroke();
+  // 사이드 상품 (원두 포장)
+  ctx.fillStyle = '#78350f';
+  ctx.fillRect(px + 10, py - 5, 6, 8);
+  ctx.fillStyle = '#c9a227';
+  ctx.fillRect(px + 11, py - 3, 4, 1);
+}
+
+// ── 복사기 ──
+function drawPrinter(ctx: CanvasRenderingContext2D, px: number, py: number, fc: number) {
+  // 본체
+  ctx.fillStyle = '#6a7080';
+  ctx.fillRect(px - 8, py - 4, 18, 14);
+  // 스캐너 상판
+  ctx.fillStyle = '#4a5060';
+  ctx.fillRect(px - 8, py - 6, 18, 3);
+  // 용지 출구
+  ctx.fillStyle = '#2a3240';
+  ctx.fillRect(px - 7, py + 2, 16, 2);
+  // 용지 (인쇄 중)
+  if ((fc % 120) < 60) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px - 5, py + 3, 12, 3);
+    ctx.strokeStyle = '#3a4050';
+    ctx.lineWidth = 0.4;
+    ctx.strokeRect(px - 5, py + 3, 12, 3);
+    // 프린트 라인
+    ctx.fillStyle = '#2d3340';
+    ctx.fillRect(px - 4, py + 4, 8, 0.5);
+  }
+  // 상태 LED (녹색 점멸)
+  const ledOn = (fc % 30) < 15;
+  ctx.fillStyle = ledOn ? '#22c55e' : '#0e4a20';
+  ctx.beginPath();
+  ctx.arc(px + 7, py - 3, 1, 0, Math.PI * 2);
+  ctx.fill();
+  // 컨트롤 패널
+  ctx.fillStyle = '#58a6ff40';
+  ctx.fillRect(px + 2, py - 2, 6, 2);
+}
+
 export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, camY: number, fc: number) {
 
   // Potted plants (6개 — 오피스 코너 + 로비)
@@ -494,6 +613,28 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   for (const pl of plantPositions) {
     drawPlantSmall(ctx, pl.x * T - camX, pl.y * T - camY);
   }
+
+  // ── 벽 아트 (방 입구 위쪽 복도 벽 — 5개 그림) ──
+  const artPieces: Array<{x:number; y:number; style:'abstract'|'team'|'photo'}> = [
+    { x: 5,  y: 9.5,  style: 'abstract' },
+    { x: 17, y: 9.5,  style: 'team' },
+    { x: 29, y: 9.5,  style: 'photo' },
+    { x: 41, y: 9.5,  style: 'abstract' },
+    { x: 13, y: 17.5, style: 'team' },
+    { x: 25, y: 17.5, style: 'photo' },
+    { x: 37, y: 17.5, style: 'abstract' },
+  ];
+  for (const art of artPieces) {
+    drawWallArt(ctx, art.x * T - camX, art.y * T - camY, 24, 16, art.style);
+  }
+
+  // ── 커피 스테이션 (복도 중앙) ──
+  drawCoffeeStation(ctx, 16 * T - camX, 10.8 * T - camY);
+  drawCoffeeStation(ctx, 40 * T - camX, 18.8 * T - camY);
+
+  // ── 복사기 (복도 포인트) ──
+  drawPrinter(ctx, 10 * T - camX, 18.8 * T - camY, fc);
+  drawPrinter(ctx, 48 * T - camX, 10.8 * T - camY, fc);
 
   // Water cooler #1 (Row1-Row2 복도 좌측)
   const wcx = 1 * T - camX + T / 2;

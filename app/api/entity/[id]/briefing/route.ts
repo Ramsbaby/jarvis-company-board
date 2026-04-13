@@ -149,12 +149,12 @@ const ENTITIES: Record<string, EntityDef> = {
   // ── 팀장 엔티티 ──
   // 'ceo' ENTITY 삭제됨 — 대표실(president)이 AI 경영 데이터까지 통합 흡수
   'infra-lead': {
-    type: 'team-lead', name: '인프라팀 · 박태성', title: '서버·봇·크론 관리',
+    type: 'team-lead', name: 'SRE실 · 박태성', title: '서버·봇·크론 안정성 관리',
     avatar: '⚙️', keywords: ['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics'],
     discordChannel: 'jarvis-system', schedule: '매일 09:00',
   },
   'trend-lead': {
-    type: 'team-lead', name: '정보팀 · 강나연', title: '뉴스·기술 트렌드 분석',
+    type: 'team-lead', name: '전략기획실 · 강나연', title: '뉴스·기술 트렌드 분석',
     avatar: '📡', keywords: ['trend', 'news', 'calendar-alert', 'github-monitor', 'recon'],
     discordChannel: 'jarvis', schedule: '평일 07:30',
   },
@@ -165,31 +165,37 @@ const ENTITIES: Record<string, EntityDef> = {
     discordChannel: 'jarvis-ceo', schedule: '매일',
   },
   'record-lead': {
-    type: 'team-lead', name: '기록팀 · 한소희', title: '메모리·RAG 아카이빙 (백엔드)',
+    type: 'team-lead', name: '데이터실 · 한소희', title: '메모리·RAG 아카이빙',
     avatar: '🗄️', keywords: ['record-daily', 'memory', 'session-sum', 'compact', 'rag-index'],
     discordChannel: 'jarvis-system', schedule: '매일 22:30',
   },
-  // 라이브러리 — 기록팀 백엔드의 프론트엔드. RAG/메모리 사용자 접근
+  // 자료실 — 데이터실 백엔드의 프론트엔드. RAG/메모리 사용자 접근
   'library': {
-    type: 'team-lead', name: '라이브러리 · 문지아', title: '전사 지식 베이스 프론트엔드',
+    type: 'team-lead', name: '자료실 · 문지아', title: '전사 지식 베이스 프론트엔드',
     avatar: '📖', keywords: ['rag-index', 'rag-bench'],
     discordChannel: 'jarvis-system', schedule: '상시',
   },
-  // 성장실 — 구 학습팀 + 구 커리어팀 통합
+  // 인재개발실 — 구 학습팀 + 구 커리어팀 통합
   'growth-lead': {
-    type: 'team-lead', name: '성장실 · 김서연', title: '커리어·면접·기술 학습 통합',
+    type: 'team-lead', name: '인재개발실 · 김서연', title: '커리어·면접·기술 학습 통합',
     avatar: '🌱', keywords: ['career', 'commitment', 'growth', 'job', 'resume', 'interview', 'academy', 'learning', 'study', 'lecture'],
     discordChannel: 'jarvis-ceo', schedule: '매주',
   },
   'brand-lead': {
-    type: 'team-lead', name: '브랜드팀 · 정하은', title: 'OSS·블로그·콘텐츠 전략',
+    type: 'team-lead', name: '마케팅실 · 정하은', title: 'OSS·블로그·콘텐츠 전략',
     avatar: '📣', keywords: ['brand', 'openclaw', 'blog', 'oss', 'github-star'],
     discordChannel: 'jarvis-blog', schedule: '매주 화 08:00',
   },
   'audit-lead': {
-    type: 'team-lead', name: '감사팀 · 류태환', title: '품질·감사·E2E 테스트',
+    type: 'team-lead', name: 'QA실 · 류태환', title: '품질·감사·E2E 테스트',
     avatar: '🔍', keywords: ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'],
     discordChannel: 'jarvis-system', schedule: '매일 23:00',
+  },
+  // 컨시어지 — Discord 봇 24/7 운영. 봇 품질 자가 점검, /ask 응답, auto-diagnose 포함
+  'secretary': {
+    type: 'team-lead', name: '컨시어지 · 자비스 봇', title: 'Discord 24/7 대응 · 봇 품질 자가 점검',
+    avatar: '🤵', keywords: ['bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval', 'ask-claude', 'weekly-usage-stats'],
+    discordChannel: 'jarvis', schedule: '상시',
   },
 
   // ── 시스템 메트릭 엔티티 ──
@@ -560,6 +566,25 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
     case 'academy-lead': {
       if (stats.failed === 0) return '학습 지원 작업을 마쳤어요. 정상입니다.';
       return '학습 작업 중 일부 문제가 있었어요. 확인이 필요합니다.';
+    }
+    case 'secretary': {
+      const bot = getDiscordBotStatus();
+      const parts: string[] = [];
+      if (!bot.running) {
+        parts.push('🚨 Discord 봇이 멈춰 있어요. 지금 즉시 재시작이 필요합니다');
+      } else {
+        parts.push(`Discord 봇 정상 작동 중 (PID ${bot.pid})`);
+      }
+      if (stats.total === 0) {
+        parts.push('오늘 봇 품질 자가 점검 실행 이력은 아직 없어요');
+      } else if (stats.failed === 0) {
+        parts.push(`봇 품질 자가 점검 ${stats.total}건 모두 통과`);
+      } else {
+        const failedNames = getFailedTaskNames(['bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval']);
+        parts.push(`${stats.failed}건에서 품질 이슈 발견 (${failedNames.slice(0, 3).map(taskDisplayName).join(', ')})`);
+      }
+      parts.push('/ask, /logs, /brief 슬래시 명령으로 언제든 호출 가능');
+      return parts.join('. ') + '.';
     }
     default: {
       if (stats.failed === 0) return '오늘 맡은 작업을 모두 마쳤어요. 정상입니다.';

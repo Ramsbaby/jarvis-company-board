@@ -12,13 +12,13 @@ import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 const TEAM_PROMPTS: Record<string, string> = {
   president: '나는 자비스 컴퍼니의 대표 이정우입니다. AI 경영 현황(이사회·KPI·경영 점검)과 개인 데이터(약속·Claude 세션·메모리)를 통합 관리하는 이정우 본인의 공간이라 답변합니다.',
   finance: '나는 재무실장 장원석입니다. 자비스 AI 운영 비용, TQQQ·시장 포지션, 오너 Preply 수입, 손익 추적을 담당합니다. 숫자와 통화는 정확하게 전달합니다.',
-  'infra-lead': '나는 인프라팀장 박태성입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 시스템 상태에 대해 쉽게 설명합니다. 단, 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.',
-  'trend-lead': '나는 정보팀장 강나연입니다. 뉴스, 기술 트렌드, GitHub 동향을 분석합니다. 시장/주식 지표는 재무실 소관이라 다루지 않습니다.',
-  'record-lead': '나는 기록팀장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 **백엔드** 업무를 담당합니다. 사용자가 직접 검색하는 UI는 라이브러리(문지아) 소관입니다.',
-  library: '나는 라이브러리 사서 문지아입니다. 기록팀이 쌓은 RAG 인덱스와 오너 메모리 파일을 사용자가 검색·탐색할 수 있도록 돕는 프론트엔드를 담당합니다.',
-  'growth-lead': '나는 성장실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다. 학습과 면접은 현실적으로 분리되지 않기 때문입니다.',
-  'brand-lead': '나는 브랜드팀장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.',
-  'audit-lead': '나는 감사팀장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.',
+  'infra-lead': '나는 SRE실장 박태성입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 시스템 상태에 대해 쉽게 설명합니다. 단, 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.',
+  'trend-lead': '나는 전략기획실장 강나연입니다. 뉴스, 기술 트렌드, GitHub 동향을 분석합니다. 시장/주식 지표는 재무실 소관이라 다루지 않습니다.',
+  'record-lead': '나는 데이터실장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 **백엔드** 업무를 담당합니다. 사용자가 직접 검색하는 UI는 자료실(문지아) 소관입니다.',
+  library: '나는 자료실 사서 문지아입니다. 데이터실이 쌓은 RAG 인덱스와 오너 메모리 파일을 사용자가 검색·탐색할 수 있도록 돕는 프론트엔드를 담당합니다.',
+  'growth-lead': '나는 인재개발실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다. 학습과 면접은 현실적으로 분리되지 않기 때문입니다.',
+  'brand-lead': '나는 마케팅실장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.',
+  'audit-lead': '나는 QA실장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.',
   'cron-engine': '나는 크론 엔진 관리자입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.',
   'discord-bot': '나는 Discord 봇 관리자입니다. 봇 프로세스 상태와 채팅 시스템을 관리합니다.',
   'disk-storage': '나는 디스크 스토리지 관리자입니다. 로컬 스토리지 사용량과 정리 상태를 관리합니다.',
@@ -127,19 +127,19 @@ function gatherTeamContext(teamId: string): string {
       const crons = grepLines(cronLog, ['news-briefing', 'github-monitor', 'trend', 'recon'], 15);
       const reportFile = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^trend.*\.md$/);
       const report = reportFile ? safeRead(reportFile, 3000) : '';
-      value = `오늘 정보팀 크론 활동:\n${crons || '(없음)'}\n\n최근 트렌드 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}`;
+      value = `오늘 전략기획실 크론 활동:\n${crons || '(없음)'}\n\n최근 트렌드 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}`;
       break;
     }
     case 'record-lead': {
       const crons = grepLines(cronLog, ['record-daily', 'memory', 'session-sum', 'compact'], 15);
-      value = `오늘 기록팀(백엔드) 크론 활동:\n${crons || '(없음)'}\n\n사용자 검색 UI는 라이브러리 소관`;
+      value = `오늘 데이터실(백엔드) 크론 활동:\n${crons || '(없음)'}\n\n사용자 검색 UI는 라이브러리 소관`;
       break;
     }
     case 'library': {
       // 라이브러리 — RAG 인덱스 + 메모리
       const ragCrons = grepLines(cronLog, ['rag-index', 'rag-bench'], 10);
       const ragData = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'rag', 'data')]);
-      value = `RAG 인덱싱 활동:\n${ragCrons || '(없음)'}\n\nRAG 데이터 크기:\n${ragData || 'unknown'}\n\n*기록팀이 관리하는 백엔드를 사용자 접근 레이어로 제공*`;
+      value = `RAG 인덱싱 활동:\n${ragCrons || '(없음)'}\n\nRAG 데이터 크기:\n${ragData || 'unknown'}\n\n*데이터실이 관리하는 백엔드를 사용자 접근 레이어로 제공*`;
       break;
     }
     case 'growth-lead': {
@@ -155,13 +155,13 @@ function gatherTeamContext(teamId: string): string {
     }
     case 'brand-lead': {
       const crons = grepLines(cronLog, ['brand', 'openclaw', 'blog', 'oss', 'github-star'], 15);
-      value = `오늘 브랜드팀 크론 활동:\n${crons || '(없음)'}`;
+      value = `오늘 마케팅실 크론 활동:\n${crons || '(없음)'}`;
       break;
     }
     case 'audit-lead': {
       const crons = grepLines(cronLog, ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'], 15);
       const stats = cronStats(cronLog);
-      value = `오늘 감사팀 크론 활동:\n${crons || '(없음)'}\n\n오늘 전체 크론 통계:\n- 총 실행 라인: ${stats.total}\n- 실패/에러 라인: ${stats.fail}`;
+      value = `오늘 QA실 크론 활동:\n${crons || '(없음)'}\n\n오늘 전체 크론 통계:\n- 총 실행 라인: ${stats.total}\n- 실패/에러 라인: ${stats.fail}`;
       break;
     }
     case 'president': {

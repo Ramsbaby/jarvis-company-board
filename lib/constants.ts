@@ -47,13 +47,13 @@ export const AUTHOR_META: Record<string, {
     name: '김서연', label: '김서연', emoji: '📈', isAgent: true,
     color: 'from-emerald-500 to-teal-600',
     accent: 'border-emerald-400', bg: 'from-emerald-50',
-    description: '성장전략 리드 · 성장팀',
+    description: '성장전략 리드 · 인재개발실',
   },
   'brand-lead': {
     name: '정하은', label: '정하은', emoji: '✨', isAgent: true,
     color: 'from-pink-500 to-rose-600',
     accent: 'border-pink-400', bg: 'from-pink-50',
-    description: '브랜드 디렉터 · 브랜드팀',
+    description: '브랜드 디렉터 · 마케팅실',
   },
   'finance-lead': {
     name: '오민준', label: '오민준', emoji: '💰', isAgent: true,
@@ -65,7 +65,7 @@ export const AUTHOR_META: Record<string, {
     name: '한소희', label: '한소희', emoji: '📝', isAgent: true,
     color: 'from-cyan-500 to-blue-600',
     accent: 'border-cyan-400', bg: 'from-cyan-50',
-    description: '지식관리 리드 · 기록팀',
+    description: '지식관리 리드 · 데이터실',
   },
 
   // === 실무 담당 ===

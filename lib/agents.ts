@@ -67,12 +67,12 @@ export interface TeamGroup {
 
 /** 팀 기반 조직 구조 — 첫 번째 ID가 팀 리드 */
 export const TEAM_GROUPS: readonly TeamGroup[] = [
-  { key: 'infra',   label: '인프라팀',    emoji: '⚙️',  ids: ['infra-lead', 'infra-team', 'devops-team'] },
-  { key: 'brand',   label: '브랜드팀',    emoji: '✨',  ids: ['brand-lead', 'brand-team'] },
-  { key: 'growth',  label: '성장팀',      emoji: '📈',  ids: ['career-lead', 'growth-team', 'data-team'] },
-  { key: 'finance', label: '재무팀',      emoji: '💰',  ids: ['finance-lead', 'finance-team'] },
-  { key: 'record',  label: '기록팀',      emoji: '📝',  ids: ['record-lead', 'record-team'] },
+  { key: 'infra',   label: 'SRE실',       emoji: '⚙️',  ids: ['infra-lead', 'infra-team', 'devops-team'] },
+  { key: 'brand',   label: '마케팅실',    emoji: '✨',  ids: ['brand-lead', 'brand-team'] },
+  { key: 'growth',  label: '인재개발실',  emoji: '📈',  ids: ['career-lead', 'growth-team', 'data-team'] },
+  { key: 'finance', label: '재무실',      emoji: '💰',  ids: ['finance-lead', 'finance-team'] },
+  { key: 'record',  label: '데이터실',    emoji: '📝',  ids: ['record-lead', 'record-team'] },
   { key: 'ai',      label: 'AI/프로덕트', emoji: '🧪',  ids: ['llm-critic', 'trend-team', 'product-team'] },
-  { key: 'audit',   label: '감사팀',      emoji: '🔍',  ids: ['audit-team'] },
+  { key: 'audit',   label: 'QA실',       emoji: '🔍',  ids: ['audit-team'] },
   { key: 'academy', label: '아카데미',    emoji: '📖',  ids: ['academy-team'] },
 ] as const;

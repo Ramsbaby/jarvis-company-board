@@ -20,12 +20,20 @@ interface Commit {
 
 const REFRESH_MS = 60_000;
 
+interface RightInfoPanelsProps {
+  isMobile: boolean;
+  /** 크론 항목 클릭 시 — id를 받아 VirtualOffice의 CronDetailPopup을 연다 */
+  onCronClick?: (cronId: string) => void;
+  /** 커밋 항목 클릭 시 — 현 단계는 GitHub 웹 URL을 새 창으로 연다 */
+  onCommitClick?: (commit: Commit) => void;
+}
+
 /**
  * 우상단 정보 패널 스택 — BoardBanner 아래에 붙음:
- *  1. 오늘 남은 예정 크론 (6개)
- *  2. 최근 커밋 (jarvis/jarvis-board 합쳐 10개)
+ *  1. 오늘 남은 예정 크론 (6개) → 클릭 시 CronDetailPopup
+ *  2. 최근 커밋 (jarvis/jarvis-board 합쳐 10개) → 클릭 시 GitHub
  */
-export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
+export default function RightInfoPanels({ isMobile, onCronClick, onCommitClick }: RightInfoPanelsProps) {
   const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [expanded, setExpanded] = useState<'upcoming' | 'commits' | null>(null);
@@ -134,32 +142,48 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
               maxHeight: 280,
               overflowY: 'auto',
             }}>
-              {upcoming.map((u) => (
-                <div
-                  key={u.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '7px 10px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${priorityColor(u.priority)}25`,
-                    borderLeft: `2px solid ${priorityColor(u.priority)}`,
-                    borderRadius: 7,
-                    fontSize: 11,
-                  }}
-                >
-                  <span style={{ color: '#58a6ff', fontFamily: 'monospace', fontSize: 10, minWidth: 38 }}>
-                    {u.humanTime}
-                  </span>
-                  <span style={{ color: '#c9d1d9', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {u.name}
-                  </span>
-                  <span style={{ color: '#6e7681', fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}>
-                    {fmtUntil(u.minutesUntil)}
-                  </span>
-                </div>
-              ))}
+              {upcoming.map((u) => {
+                const clickable = !!onCronClick;
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => onCronClick && onCronClick(u.id)}
+                    disabled={!clickable}
+                    title={clickable ? `${u.name} — 클릭하면 상세 팝업` : undefined}
+                    style={{
+                      all: 'unset',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '7px 10px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${priorityColor(u.priority)}25`,
+                      borderLeft: `2px solid ${priorityColor(u.priority)}`,
+                      borderRadius: 7,
+                      fontSize: 11,
+                      cursor: clickable ? 'pointer' : 'default',
+                      transition: 'background 0.12s',
+                      boxSizing: 'border-box' as const,
+                    }}
+                    onMouseEnter={e => {
+                      if (clickable) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.07)';
+                    }}
+                    onMouseLeave={e => {
+                      if (clickable) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)';
+                    }}
+                  >
+                    <span style={{ color: '#58a6ff', fontFamily: 'monospace', fontSize: 10, minWidth: 38 }}>
+                      {u.humanTime}
+                    </span>
+                    <span style={{ color: '#c9d1d9', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.name}
+                    </span>
+                    <span style={{ color: '#6e7681', fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}>
+                      {fmtUntil(u.minutesUntil)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -213,34 +237,54 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
               maxHeight: 280,
               overflowY: 'auto',
             }}>
-              {commits.map((c) => (
-                <div
-                  key={`${c.repo}-${c.sha}`}
-                  style={{
-                    padding: '7px 10px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(63, 185, 80, 0.18)',
-                    borderLeft: '2px solid #3fb950',
-                    borderRadius: 7,
-                    fontSize: 11,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                    <span style={{ color: '#3fb950', fontFamily: 'monospace', fontSize: 9, fontWeight: 700 }}>
-                      {c.sha}
-                    </span>
-                    <span style={{ color: '#6e7681', fontSize: 9 }}>
-                      {c.repo}
-                    </span>
-                    <span style={{ color: '#484f58', fontSize: 9, marginLeft: 'auto' }}>
-                      {c.ago}
-                    </span>
-                  </div>
-                  <div style={{ color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {c.subject}
-                  </div>
-                </div>
-              ))}
+              {commits.map((c) => {
+                const githubUrl = `https://github.com/ramsbaby/${c.repo}/commit/${c.sha}`;
+                const handleClick = () => {
+                  if (onCommitClick) {
+                    onCommitClick(c);
+                  } else if (typeof window !== 'undefined') {
+                    window.open(githubUrl, '_blank', 'noopener,noreferrer');
+                  }
+                };
+                return (
+                  <button
+                    key={`${c.repo}-${c.sha}`}
+                    onClick={handleClick}
+                    title={`${c.repo}@${c.sha} — 클릭 시 GitHub 커밋 페이지 열림`}
+                    style={{
+                      all: 'unset',
+                      display: 'block',
+                      padding: '7px 10px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(63, 185, 80, 0.18)',
+                      borderLeft: '2px solid #3fb950',
+                      borderRadius: 7,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      transition: 'background 0.12s',
+                      boxSizing: 'border-box' as const,
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(63, 185, 80, 0.08)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <span style={{ color: '#3fb950', fontFamily: 'monospace', fontSize: 9, fontWeight: 700 }}>
+                        {c.sha}
+                      </span>
+                      <span style={{ color: '#6e7681', fontSize: 9 }}>
+                        {c.repo}
+                      </span>
+                      <span style={{ color: '#484f58', fontSize: 9, marginLeft: 'auto' }}>
+                        {c.ago}
+                      </span>
+                    </div>
+                    <div style={{ color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.subject}
+                    </div>
+                    <div style={{ color: '#4a5370', fontSize: 9, marginTop: 2 }}>→ GitHub 열기</div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

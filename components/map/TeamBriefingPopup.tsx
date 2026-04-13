@@ -5,16 +5,21 @@
    ═══════════════════════════════════════════════════════════════════ */
 import React, { useState } from 'react';
 import { ROOMS, ROOM_TO_CRON_TEAM, statusExplanation, activityIcon } from '@/lib/map/rooms';
-import type { BriefingData, CronItem } from '@/lib/map/rooms';
+import type { BriefingData, CronItem, RoomDef } from '@/lib/map/rooms';
 import { cronToHuman } from '@/lib/map/cron-human';
 import MarkdownContent from '@/components/MarkdownContent';
+import MetricDetailModal from '@/components/map/MetricDetailModal';
 
 interface ChatMessage { role: string; content: string; created_at: number }
+
+type MetricType = 'disk' | 'memory' | 'cpu';
+type MetricItem = { label: string; value: number; color: string; icon: string; type: MetricType };
 
 interface TeamBriefingPopupProps {
   popupOpen: boolean;
   popupLoading: boolean;
   briefing: BriefingData | null;
+  activeRoom: RoomDef | null;
   isMobile: boolean;
   cronData: CronItem[];
   closePopup: () => void;
@@ -36,19 +41,20 @@ const stColor = (s: string) => {
 };
 
 export default function TeamBriefingPopup({
-  popupOpen, popupLoading, briefing, isMobile, cronData, closePopup,
+  popupOpen, popupLoading, briefing, activeRoom, isMobile, cronData, closePopup,
   chatPanelOpen, setChatPanelOpen, chatMessages, chatLoading,
   chatInput, setChatInput, chatResp, sendMessage, chatEndRef,
 }: TeamBriefingPopupProps) {
+  const [metricDetail, setMetricDetail] = useState<MetricItem | null>(null);
   if (!popupOpen) return null;
   return (
     <div
       onClick={closePopup}
       style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
+        position: 'fixed', inset: 0, zIndex: 9999,
         background: 'rgba(4,6,16,0.92)',
         display: 'flex',
-        alignItems: isMobile ? 'stretch' : 'center',
+        alignItems: isMobile ? 'flex-end' : 'center',
         justifyContent: 'center',
         backdropFilter: 'blur(12px)',
       }}
@@ -58,16 +64,21 @@ export default function TeamBriefingPopup({
         style={{
           width: isMobile ? '100%' : '92vw',
           maxWidth: isMobile ? '100%' : 680,
-          height: isMobile ? '100%' : 'auto',
-          maxHeight: isMobile ? '100%' : '92vh',
-          background: isMobile ? '#0c0f1e' : 'linear-gradient(160deg, #0e1225 0%, #090c18 100%)',
-          borderRadius: isMobile ? 0 : 22,
-          border: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
-          boxShadow: isMobile ? 'none' : '0 0 0 1px rgba(255,255,255,0.02), 0 32px 100px rgba(0,0,0,0.95)',
+          height: isMobile ? 'auto' : 'auto',
+          maxHeight: isMobile ? '92dvh' : '92vh',
+          background: isMobile
+            ? 'linear-gradient(180deg, #0e1225 0%, #090c18 100%)'
+            : 'linear-gradient(160deg, #0e1225 0%, #090c18 100%)',
+          borderRadius: isMobile ? '20px 20px 0 0' : 22,
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: isMobile
+            ? '0 -8px 40px rgba(0,0,0,0.8)'
+            : '0 0 0 1px rgba(255,255,255,0.02), 0 32px 100px rgba(0,0,0,0.95)',
           overflowY: 'auto',
-          padding: isMobile ? '16px 16px 36px' : '28px 32px',
+          padding: isMobile ? '20px 16px 40px' : '28px 32px',
           color: '#e6edf3',
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         {popupLoading ? (
@@ -411,48 +422,53 @@ export default function TeamBriefingPopup({
                     padding: '12px 14px', borderRadius: 10,
                     background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
                     fontSize: 13, color: '#c9d1d9', lineHeight: 1.65,
-                  }}>{briefing.summary}</div>
+                  }}>
+                    <MarkdownContent content={briefing.summary} variant="dark" />
+                  </div>
                 </div>
               )}
 
-              {/* ① 리소스 KPI 시각화 — summary 텍스트에서 % 수치 파싱 */}
+              {/* ① 리소스 KPI 시각화 — summary 텍스트에서 % 수치 파싱 + 클릭 드릴다운 */}
               {briefing.summary && (() => {
-                type MetricItem = { label: string; value: number; color: string; icon: string };
                 const metrics: MetricItem[] = [];
                 const diskM = briefing.summary.match(/디스크\s*(\d+)%/);
                 if (diskM) {
                   const v = parseInt(diskM[1]);
-                  metrics.push({ label: '디스크 사용률', value: v, icon: '💾',
+                  metrics.push({ label: '디스크 사용률', value: v, icon: '\uD83D\uDCBE', type: 'disk',
                     color: v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950' });
                 }
                 const memM = briefing.summary.match(/메모리\s*(\d+)%/);
                 if (memM) {
                   const v = parseInt(memM[1]);
-                  metrics.push({ label: '메모리 사용률', value: v, icon: '🧠',
+                  metrics.push({ label: '메모리 사용률', value: v, icon: '\uD83E\uDDE0', type: 'memory',
                     color: v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950' });
                 }
                 const cpuM = briefing.summary.match(/CPU\s*(\d+)%/i);
                 if (cpuM) {
                   const v = parseInt(cpuM[1]);
-                  metrics.push({ label: 'CPU 사용률', value: v, icon: '⚡',
+                  metrics.push({ label: 'CPU 사용률', value: v, icon: '\u26A1', type: 'cpu',
                     color: v >= 90 ? '#f85149' : v >= 70 ? '#d29922' : '#3fb950' });
                 }
                 if (metrics.length === 0) return null;
                 return (
                   <div style={{ marginBottom: 18 }}>
                     <div style={{ fontSize: 11, color: '#8b949e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
-                      🖥️ 리소스 현황
+                      🖥️ 리소스 현황 <span style={{ fontSize: 10, fontWeight: 400, color: '#5a6480', textTransform: 'none' }}>· 클릭하면 상세</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {metrics.map((m, i) => (
-                        <div key={i} style={{
-                          padding: '12px 14px', borderRadius: 12,
+                        <div key={i} onClick={() => setMetricDetail(m)} style={{
+                          padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
                           background: `linear-gradient(135deg, ${m.color}0d 0%, rgba(255,255,255,0.02) 100%)`,
                           border: `1px solid ${m.color}22`,
+                          transition: 'border-color 0.15s, background 0.15s',
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                             <span style={{ fontSize: 12, color: '#b8c2d8', fontWeight: 600 }}>{m.icon} {m.label}</span>
-                            <span style={{ fontSize: 18, fontWeight: 900, color: m.color, letterSpacing: -0.5 }}>{m.value}%</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 18, fontWeight: 900, color: m.color, letterSpacing: -0.5 }}>{m.value}%</span>
+                              <span style={{ fontSize: 10, color: '#5a6480' }}>\u203A</span>
+                            </div>
                           </div>
                           <div style={{ height: 7, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
                             <div style={{
@@ -462,7 +478,7 @@ export default function TeamBriefingPopup({
                             }} />
                           </div>
                           <div style={{ fontSize: 10, color: '#4a5370', marginTop: 5 }}>
-                            {m.value < 70 ? '✓ 정상 범위' : m.value < 90 ? '⚠ 주의 필요' : '🚨 위험'}
+                            {m.value < 70 ? '\u2713 정상 범위' : m.value < 90 ? '\u26A0 주의 필요' : '\uD83D\uDEA8 위험'}
                           </div>
                         </div>
                       ))}
@@ -512,6 +528,204 @@ export default function TeamBriefingPopup({
                   </div>
                 </div>
               )}
+
+              {/* ── 이 팀의 주간 성과 ── */}
+              {(() => {
+                const teamLabel = ROOM_TO_CRON_TEAM[briefing.id] || ROOM_TO_CRON_TEAM[room?.id || ''];
+                if (!teamLabel) return null;
+                const owned = cronData.filter(c => c.team === teamLabel);
+                if (owned.length === 0) return null;
+                // 7일 집계 (KST 기준)
+                const KST_OFFSET = 9 * 3600_000;
+                const WEEK_MS = 7 * 86400_000;
+                const cutoff = Date.now() - WEEK_MS;
+                let wkSuccess = 0, wkFailed = 0, wkTotal = 0;
+                for (const c of owned) {
+                  for (const r of c.recentRuns || []) {
+                    const ts = Date.parse(r.timestamp);
+                    if (isNaN(ts) || ts < cutoff) continue;
+                    wkTotal++;
+                    if (r.status === 'success') wkSuccess++;
+                    else if (r.status === 'failed') wkFailed++;
+                  }
+                }
+                if (wkTotal === 0) return null;
+                const wkRate = Math.round((wkSuccess / wkTotal) * 100);
+                void KST_OFFSET;
+                return (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 11, color: '#8b949e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+                      🏆 이번 주 성과 (7일)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                      {([
+                        ['처리', String(wkTotal), '#8b949e', '📦'],
+                        ['완료', String(wkSuccess), '#22c55e', '✅'],
+                        ['실패', String(wkFailed), wkFailed > 0 ? '#f85149' : '#4b5563', '❌'],
+                        ['성공률', `${wkRate}%`, wkRate >= 90 ? '#22c55e' : wkRate >= 70 ? '#d29922' : '#f85149', '📊'],
+                      ] as [string, string, string, string][]).map(([label, val, color, icon], i) => (
+                        <div key={i} style={{
+                          padding: '10px 6px', borderRadius: 10, textAlign: 'center',
+                          background: `linear-gradient(180deg, ${color}14 0%, rgba(255,255,255,0.02) 100%)`,
+                          border: `1px solid ${color}24`,
+                        }}>
+                          <div style={{ fontSize: 9, color: '#6e7681', marginBottom: 3 }}>{icon} {label}</div>
+                          <div style={{ fontSize: 18, fontWeight: 900, color, letterSpacing: -0.5 }}>{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── 7일 실행 추이 sparkline ── */}
+              {(() => {
+                const teamLabel = ROOM_TO_CRON_TEAM[briefing.id] || ROOM_TO_CRON_TEAM[room?.id || ''];
+                if (!teamLabel) return null;
+                const owned = cronData.filter(c => c.team === teamLabel);
+                if (owned.length === 0) return null;
+                const KST_OFFSET = 9 * 3600_000;
+                const now = Date.now();
+                const dayKey = (ts: number) => new Date(ts + KST_OFFSET).toISOString().slice(0, 10);
+                const days: { key: string; success: number; failed: number; other: number }[] = [];
+                for (let i = 6; i >= 0; i--) {
+                  days.push({ key: dayKey(now - i * 86400_000), success: 0, failed: 0, other: 0 });
+                }
+                for (const c of owned) {
+                  for (const r of c.recentRuns || []) {
+                    const ts = Date.parse(r.timestamp);
+                    if (isNaN(ts)) continue;
+                    const day = days.find(d => d.key === dayKey(ts));
+                    if (!day) continue;
+                    if (r.status === 'success') day.success++;
+                    else if (r.status === 'failed') day.failed++;
+                    else day.other++;
+                  }
+                }
+                const maxTotal = Math.max(1, ...days.map(d => d.success + d.failed + d.other));
+                const hasData = days.some(d => d.success + d.failed + d.other > 0);
+                if (!hasData) return null;
+                const weekDays = ['일','월','화','수','목','금','토'];
+                return (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 11, color: '#8b949e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+                      📈 7일 실행 추이
+                    </div>
+                    <div style={{
+                      padding: '14px 12px 8px', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 58 }}>
+                        {days.map((d, i) => {
+                          const total = d.success + d.failed + d.other;
+                          const ratio = total / maxTotal;
+                          const barH = Math.max(total > 0 ? 3 : 0, ratio * 48);
+                          const successShare = total > 0 ? d.success / total : 0;
+                          const failedShare = total > 0 ? d.failed / total : 0;
+                          const dDate = new Date(d.key + 'T00:00:00+09:00');
+                          const wd = weekDays[dDate.getDay()];
+                          const dom = d.key.slice(8);
+                          return (
+                            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }} title={`${d.key} · 성공 ${d.success} / 실패 ${d.failed}`}>
+                              <div style={{ fontSize: 8, color: failedShare > 0.3 ? '#f85149' : '#6e7681', fontWeight: 600, marginBottom: 1, height: 10 }}>
+                                {total > 0 ? total : ''}
+                              </div>
+                              <div style={{
+                                width: '100%', maxWidth: 20, height: barH,
+                                background: total === 0
+                                  ? 'rgba(255,255,255,0.04)'
+                                  : failedShare > 0
+                                    ? `linear-gradient(180deg, #f85149 0%, #f85149 ${failedShare * 100}%, #22c55e ${failedShare * 100}%, #22c55e 100%)`
+                                    : 'linear-gradient(180deg, #4ade80 0%, #22c55e 100%)',
+                                borderRadius: '3px 3px 0 0',
+                                opacity: successShare > 0 || failedShare > 0 ? 1 : 0.3,
+                              }} />
+                              <div style={{ fontSize: 9, color: '#4a5370', fontFamily: 'monospace', textAlign: 'center', lineHeight: 1.1 }}>
+                                <div>{wd}</div>
+                                <div style={{ color: '#6e7681' }}>{dom}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── 책임 크론 (이 팀이 운영하는 자동화) ── */}
+              {(() => {
+                const teamLabel = ROOM_TO_CRON_TEAM[briefing.id] || ROOM_TO_CRON_TEAM[room?.id || ''];
+                if (!teamLabel) return null;
+                const owned = cronData.filter(c => c.team === teamLabel);
+                if (owned.length === 0) return null;
+                const statusRank: Record<string, number> = { failed: 0, skipped: 1, running: 2, unknown: 3, success: 4 };
+                const sorted = [...owned].sort((a, b) => (statusRank[a.status] ?? 5) - (statusRank[b.status] ?? 5));
+                const counts = { success: 0, failed: 0, other: 0 };
+                for (const c of owned) {
+                  if (c.status === 'success') counts.success++;
+                  else if (c.status === 'failed') counts.failed++;
+                  else counts.other++;
+                }
+                const SHOW = 8;
+                return (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: '#8b949e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                        🗂️ 책임 크론 ({owned.length}개)
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
+                        <span style={{ color: '#22c55e' }}>✅ {counts.success}</span>
+                        {counts.failed > 0 && <span style={{ color: '#f85149' }}>❌ {counts.failed}</span>}
+                        {counts.other > 0 && <span style={{ color: '#d29922' }}>○ {counts.other}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {sorted.slice(0, SHOW).map((c) => {
+                        const sc = c.status === 'success' ? { bar: '#22c55e', bg: 'rgba(34,197,94,0.06)', label: '정상' }
+                          : c.status === 'failed' ? { bar: '#f85149', bg: 'rgba(248,81,73,0.09)', label: '실패' }
+                          : c.status === 'skipped' ? { bar: '#d29922', bg: 'rgba(210,153,34,0.06)', label: '건너뜀' }
+                          : c.status === 'running' ? { bar: '#58a6ff', bg: 'rgba(88,166,255,0.07)', label: '실행중' }
+                          : { bar: '#6b7280', bg: 'rgba(107,114,128,0.06)', label: '대기' };
+                        let lastRunLabel = '—';
+                        if (c.lastRun) {
+                          try {
+                            lastRunLabel = new Date(c.lastRun).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                          } catch { lastRunLabel = c.lastRun.slice(5, 16); }
+                        }
+                        return (
+                          <div key={c.id} style={{
+                            padding: '9px 12px', borderRadius: 9,
+                            background: sc.bg,
+                            border: `1px solid ${sc.bar}1f`,
+                            borderLeft: `3px solid ${sc.bar}`,
+                            display: 'flex', alignItems: 'center', gap: 10,
+                          }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: '#d8e0ed', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {c.name}
+                              </div>
+                              <div style={{ fontSize: 10, color: '#6e7681', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                {(c.scheduleHuman || c.schedule) && <span>⏱️ {c.scheduleHuman || c.schedule}</span>}
+                                {c.lastRun && <span>🕐 {lastRunLabel}</span>}
+                                {c.lastDuration && <span>⚡ {c.lastDuration}</span>}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: sc.bar, textTransform: 'uppercase', letterSpacing: 0.4, flexShrink: 0, padding: '3px 8px', borderRadius: 10, background: sc.bar + '18', border: `1px solid ${sc.bar}30` }}>
+                              {sc.label}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {sorted.length > SHOW && (
+                        <div style={{ fontSize: 11, color: '#5a6480', textAlign: 'center', paddingTop: 4 }}>
+                          +{sorted.length - SHOW}개 더 (크론 센터에서 전체 보기)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ② 최근 활동 — 중복 그룹핑 + ⑤ GREEN시 제한 */}
               {(briefing.recentActivity?.length || briefing.recentEvents?.length) ? (() => {
@@ -580,7 +794,7 @@ export default function TeamBriefingPopup({
                                 })()}
                               </span>
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#c9d1d9', fontSize: 12, fontWeight: 600, flex: 1 }}>
-                                {g.task}
+                                {g.task.replace(/-/g, ' ').replace(/_/g, ' ')}
                               </span>
                               {g.count > 1 && (
                                 <span style={{
@@ -750,9 +964,37 @@ export default function TeamBriefingPopup({
           );
         })() : (
           <div style={{ padding: 40, textAlign: 'center', color: '#8b949e' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>&#x1F3E2;</div>
-            <div style={{ fontSize: 13 }}>현재 데이터를 수집하고 있어요</div>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>{activeRoom?.emoji || '\uD83C\uDFE2'}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#e6edf3', marginBottom: 6 }}>
+              {activeRoom?.name || '알 수 없는 공간'}
+            </div>
+            {activeRoom?.description && (
+              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
+                {activeRoom.description}
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: '#5a6480', marginBottom: 12 }}>
+              브리핑 데이터를 불러오지 못했습니다
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); closePopup(); }}
+              style={{
+                padding: '8px 20px', fontSize: 12, fontWeight: 600,
+                background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                borderRadius: 8, color: '#818cf8', cursor: 'pointer',
+              }}
+            >닫기</button>
           </div>
+        )}
+
+        {/* ── 메트릭 드릴다운 모달 ── */}
+        {metricDetail && (
+          <MetricDetailModal
+            metric={metricDetail}
+            briefingSummary={briefing?.summary || ''}
+            onClose={() => setMetricDetail(null)}
+            isMobile={isMobile}
+          />
         )}
 
       </div>

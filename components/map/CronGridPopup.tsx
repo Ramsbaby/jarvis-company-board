@@ -189,7 +189,7 @@ export default function CronGridPopup({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1050,
+        zIndex: 9999,
         background: 'rgba(4,6,18,0.93)',
         backdropFilter: 'blur(12px)',
         display: 'flex',

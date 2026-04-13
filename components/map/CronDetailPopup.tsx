@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import type { CronItem } from '@/lib/map/rooms';
 import { detectTokenUsage, estimateCost, inferCronRole, inferSuggestedFix } from '@/lib/map/cron-role';
+import { getCronDeepInfo, filterCeoActionsForStatus, type CeoAction } from '@/lib/map/cron-encyclopedia';
 
 interface CronDetailPopupProps {
   cronPopup: CronItem;
@@ -396,6 +397,57 @@ export default function CronDetailPopup({
             </div>
           )}
 
+          {/* ── 딥 정보 + CEO 액션 섹션 (encyclopedia 기반) ── */}
+          {(() => {
+            const deep = getCronDeepInfo(cronPopup.id);
+            const actions = filterCeoActionsForStatus(deep.ceoActions, cronPopup.status, cronPopup.lastRun);
+            return (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
+                    📖 뭐하는 놈인지 ({deep.emoji} {deep.category})
+                  </div>
+                  <div style={{
+                    padding: '12px 14px',
+                    background: 'rgba(99,102,241,0.05)',
+                    border: '1px solid rgba(99,102,241,0.2)',
+                    borderRadius: 10,
+                    fontSize: 12,
+                    color: '#c9d1d9',
+                    lineHeight: 1.7,
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', marginBottom: 6 }}>하는 일</div>
+                    <ul style={{ paddingLeft: 16, margin: 0, marginBottom: 10 }}>
+                      {deep.whatItDoes.map((w, i) => (
+                        <li key={i} style={{ marginBottom: 3 }}>{w}</li>
+                      ))}
+                    </ul>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', marginBottom: 6 }}>언제 유용한지</div>
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      {deep.whenUseful.map((w, i) => (
+                        <li key={i} style={{ marginBottom: 3 }}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* CEO 액션 가이드 */}
+                {actions.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
+                      🧭 CEO가 지금 할 수 있는 일
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {actions.map((a, i) => (
+                        <CeoActionRow key={i} action={a} cronId={cronPopup.id} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
           {/* 액션 버튼 바 */}
           <ActionBar cronId={cronPopup.id} status={cronPopup.status} statusColor={statusColor}
             lastMessage={cronPopup.lastMessage} outputSummary={cronPopup.outputSummary}
@@ -406,14 +458,101 @@ export default function CronDetailPopup({
   );
 }
 
-/* ── 하단 액션 버튼 바 ── */
+/* ── CEO 액션 한 줄: copy 버튼이 있으면 복사 기능 ── */
+function CeoActionRow({ action, cronId }: { action: CeoAction; cronId: string }) {
+  const [copied, setCopied] = useState(false);
+  const target = action.target ? action.target.replace('__ID__', cronId) : '';
+
+  const handleCopy = () => {
+    if (action.kind !== 'copy' || !target) return;
+    navigator.clipboard.writeText(target).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const bg = action.kind === 'copy' ? 'rgba(34,197,94,0.06)' : action.kind === 'link' ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.03)';
+  const border = action.kind === 'copy' ? 'rgba(34,197,94,0.25)' : action.kind === 'link' ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.08)';
+  const accent = action.kind === 'copy' ? '#22c55e' : action.kind === 'link' ? '#60a5fa' : '#8094b0';
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      background: bg,
+      border: `1px solid ${border}`,
+      borderLeft: `3px solid ${accent}`,
+      borderRadius: 8,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#e6edf3', flex: 1 }}>{action.label}</span>
+        {action.kind === 'copy' && target && (
+          <button
+            onClick={handleCopy}
+            style={{
+              background: copied ? '#22c55e' : 'transparent',
+              border: `1px solid ${copied ? '#22c55e' : 'rgba(34,197,94,0.4)'}`,
+              color: copied ? '#0a0e1c' : '#22c55e',
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: 'pointer',
+              padding: '3px 8px',
+              borderRadius: 6,
+            }}
+          >
+            {copied ? '✓ 복사됨' : '📋 복사'}
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: '#8094b0', lineHeight: 1.5 }}>{action.description}</div>
+      {action.kind === 'copy' && target && (
+        <code style={{
+          fontSize: 10, color: '#6b7280', fontFamily: 'monospace',
+          padding: '4px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: 4,
+          wordBreak: 'break-all', marginTop: 2,
+        }}>{target}</code>
+      )}
+    </div>
+  );
+}
+
+/* ── 하단 액션 버튼 바 + 상세 재실행 결과 ── */
+
+interface RetryAltAction {
+  label: string;
+  command?: string;
+  description: string;
+}
+
+interface RetryFullResponse {
+  success: boolean;
+  message: string;
+  exitCode?: number | null;
+  stdout?: string;
+  stderr?: string;
+  logPath?: string;
+  logTailLines?: number;
+  runnerCommand?: string;
+  alternativeActions?: RetryAltAction[];
+  promptPreview?: string;
+  durationMs?: number;
+}
+
 function ActionBar({ cronId, status, statusColor, lastMessage, outputSummary, onClose }: {
   cronId: string; status: string; statusColor: string;
   lastMessage: string; outputSummary: string;
   onClose: () => void;
 }) {
   const [retrying, setRetrying] = useState(false);
-  const [retryResult, setRetryResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [retryResult, setRetryResult] = useState<RetryFullResponse | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (s: string) => {
+    setToast(s);
+    setTimeout(() => setToast(null), 1600);
+  };
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -424,10 +563,10 @@ function ActionBar({ cronId, status, statusColor, lastMessage, outputSummary, on
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cronId }),
       });
-      const data = await res.json();
-      setRetryResult({ ok: data.success, msg: data.message });
+      const data = (await res.json()) as RetryFullResponse;
+      setRetryResult(data);
     } catch (e) {
-      setRetryResult({ ok: false, msg: `요청 실패: ${String(e)}` });
+      setRetryResult({ success: false, message: `요청 실패: ${String(e)}` });
     } finally {
       setRetrying(false);
     }
@@ -436,22 +575,29 @@ function ActionBar({ cronId, status, statusColor, lastMessage, outputSummary, on
   const handleCopyLog = () => {
     const text = [lastMessage, outputSummary].filter(Boolean).join('\n---\n');
     navigator.clipboard.writeText(text || '(로그 없음)');
-    setRetryResult({ ok: true, msg: '로그가 클립보드에 복사됨' });
-    setTimeout(() => setRetryResult(null), 2000);
+    showToast('로그가 클립보드에 복사됨');
+  };
+
+  const copyText = (s: string, label = '복사됨') => {
+    navigator.clipboard.writeText(s);
+    showToast(label);
   };
 
   return (
     <div>
-      {retryResult && (
+      {toast && (
         <div style={{
-          marginBottom: 8, padding: '8px 12px', borderRadius: 8, fontSize: 12,
-          background: retryResult.ok ? '#ecfdf5' : '#fef2f2',
-          color: retryResult.ok ? '#16a34a' : '#dc2626',
-          border: `1px solid ${retryResult.ok ? '#22c55e40' : '#f8514940'}`,
-        }}>
-          {retryResult.ok ? '✅' : '❌'} {retryResult.msg}
-        </div>
+          marginBottom: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11,
+          background: 'rgba(34,197,94,0.1)', color: '#22c55e',
+          border: '1px solid rgba(34,197,94,0.3)', textAlign: 'center',
+        }}>✓ {toast}</div>
       )}
+
+      {/* 재실행 결과 상세 — 새 응답 포맷 */}
+      {retryResult && (
+        <RetryResultCard result={retryResult} onCopy={copyText} />
+      )}
+
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           onClick={handleRetry}
@@ -480,6 +626,149 @@ function ActionBar({ cronId, status, statusColor, lastMessage, outputSummary, on
           }}
         >닫기</button>
       </div>
+    </div>
+  );
+}
+
+/* ── 재실행 결과 상세 카드 — 성공/실패/LLM 3가지 변형 ── */
+function RetryResultCard({ result, onCopy }: { result: RetryFullResponse; onCopy: (s: string, label?: string) => void }) {
+  const [showStdout, setShowStdout] = useState(false);
+  const [showStderr, setShowStderr] = useState(true);
+  const ok = result.success;
+  const accent = ok ? '#22c55e' : '#f85149';
+  const bg = ok ? 'rgba(34,197,94,0.07)' : 'rgba(248,81,73,0.07)';
+
+  return (
+    <div style={{
+      marginBottom: 12,
+      padding: '12px 14px',
+      background: bg,
+      border: `1px solid ${accent}40`,
+      borderLeft: `3px solid ${accent}`,
+      borderRadius: 10,
+    }}>
+      {/* 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: accent }}>
+          {ok ? '✅' : '❌'} {result.message}
+        </span>
+        {typeof result.exitCode === 'number' && (
+          <span style={{
+            marginLeft: 'auto', fontSize: 10, fontFamily: 'monospace',
+            color: accent, background: 'rgba(0,0,0,0.25)',
+            padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+          }}>
+            exit {result.exitCode}
+          </span>
+        )}
+      </div>
+
+      {/* LLM 태스크 — 프롬프트 프리뷰 */}
+      {result.promptPreview && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, marginBottom: 4 }}>📝 프롬프트 프리뷰</div>
+          <div style={{
+            fontSize: 11, color: '#a3b1c6', lineHeight: 1.5,
+            padding: '8px 10px', background: 'rgba(0,0,0,0.25)',
+            border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          }}>{result.promptPreview}</div>
+        </div>
+      )}
+
+      {/* stderr (실패 시 펼침 기본) */}
+      {result.stderr && (
+        <details open={showStderr} onToggle={e => setShowStderr((e.target as HTMLDetailsElement).open)} style={{ marginBottom: 8 }}>
+          <summary style={{ fontSize: 10, color: '#f85149', fontWeight: 700, cursor: 'pointer', marginBottom: 4 }}>
+            🚨 stderr ({result.stderr.length.toLocaleString()} chars)
+          </summary>
+          <pre style={{
+            fontSize: 10, color: '#fca5a5', lineHeight: 1.5,
+            padding: '8px 10px', background: 'rgba(0,0,0,0.3)',
+            border: '1px solid rgba(248,81,73,0.2)', borderRadius: 6,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            maxHeight: 160, overflowY: 'auto', margin: 0, fontFamily: 'ui-monospace, monospace',
+          }}>{result.stderr}</pre>
+        </details>
+      )}
+
+      {/* stdout (기본 접힘) */}
+      {result.stdout && result.stdout !== '(stdout 없음)' && (
+        <details open={showStdout} onToggle={e => setShowStdout((e.target as HTMLDetailsElement).open)} style={{ marginBottom: 8 }}>
+          <summary style={{ fontSize: 10, color: '#8094b0', fontWeight: 700, cursor: 'pointer', marginBottom: 4 }}>
+            📤 stdout ({result.stdout.length.toLocaleString()} chars)
+          </summary>
+          <pre style={{
+            fontSize: 10, color: '#9ca3af', lineHeight: 1.5,
+            padding: '8px 10px', background: 'rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            maxHeight: 160, overflowY: 'auto', margin: 0, fontFamily: 'ui-monospace, monospace',
+          }}>{result.stdout}</pre>
+        </details>
+      )}
+
+      {/* 로그 파일 경로 */}
+      {result.logPath && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 700 }}>📁 로그 파일</span>
+          <code style={{
+            flex: 1, fontSize: 10, color: '#8094b0', fontFamily: 'monospace',
+            padding: '4px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 4,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{result.logPath}</code>
+          <button
+            onClick={() => onCopy(`tail -n 50 "${result.logPath}"`, 'tail 커맨드 복사됨')}
+            style={{
+              fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+              color: '#8094b0', padding: '3px 8px', borderRadius: 4,
+            }}
+          >tail 복사</button>
+        </div>
+      )}
+
+      {/* 대체 액션 */}
+      {result.alternativeActions && result.alternativeActions.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, marginBottom: 6 }}>
+            🛠 다음에 해볼 수 있는 것들
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {result.alternativeActions.map((a, i) => (
+              <div key={i} style={{
+                padding: '7px 9px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c9d1d9', flex: 1 }}>{a.label}</span>
+                  {a.command && (
+                    <button
+                      onClick={() => onCopy(a.command!, '커맨드 복사됨')}
+                      style={{
+                        fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                        background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
+                        color: '#22c55e', padding: '2px 6px', borderRadius: 4,
+                      }}
+                    >📋 복사</button>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: '#6b7280', lineHeight: 1.4 }}>{a.description}</div>
+                {a.command && (
+                  <code style={{
+                    display: 'block', marginTop: 3,
+                    fontSize: 9, color: '#4a5370', fontFamily: 'monospace',
+                    padding: '3px 6px', background: 'rgba(0,0,0,0.2)', borderRadius: 3,
+                    wordBreak: 'break-all',
+                  }}>{a.command}</code>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
