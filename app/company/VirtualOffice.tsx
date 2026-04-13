@@ -8,7 +8,7 @@ import {
   buildCollisionMap, aStarPath,
 } from '@/lib/map/rooms';
 import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
-import { drawRoomFurniture, drawDecorations, drawLightShafts, drawCafeCorner, drawCentralAtrium, updateAndDrawDust, initDustParticles, type DustParticle } from '@/lib/map/canvas-draw';
+import { drawRoomFurniture, drawDecorations } from '@/lib/map/canvas-draw';
 import TeamBriefingPopup from '@/components/map/TeamBriefingPopup';
 import CronGridPopup from '@/components/map/CronGridPopup';
 import CronDetailPopup from '@/components/map/CronDetailPopup';
@@ -74,7 +74,7 @@ export default function VirtualOffice() {
   const logicalSizeRef = useRef({ w: 1280, h: 800 });
   // 발자국 이펙트
   const footstepsRef = useRef<{ x: number; y: number; life: number }[]>([]);
-  const dustRef = useRef<DustParticle[] | null>(null);
+  // dustRef 제거됨 (장식 다이어트)
   // 구역 진입 토스트 (캔버스 레이어)
   const zoneToastRef = useRef<{ text: string; color: string; emoji: string; frame: number } | null>(null);
   const lastNearbyIdRef = useRef<string | null>(null);
@@ -569,39 +569,52 @@ export default function VirtualOffice() {
       const rw = r.w * T, rh = r.h * T;
       const state = npcStatesRef.current[r.id];
 
-      // 오픈 오피스 파드는 벽/깊이 그림자/문 건너뛰고 단순 카펫 존 + 가구만 그림
+      // 오픈 오피스 파드 — closed와 완전히 다른 스타일 (한 눈에 구분되도록)
       if (r.wallStyle === 'pod') {
-        // 팀 컬러 카펫 존 (경계 부드럽게, 벽 없음)
-        const podCarpet = ctx!.createRadialGradient(
-          rx + rw / 2, ry + rh / 2, 0,
-          rx + rw / 2, ry + rh / 2, Math.max(rw, rh) * 0.6,
-        );
-        podCarpet.addColorStop(0, r.teamColor + '22');
-        podCarpet.addColorStop(0.7, r.teamColor + '10');
-        podCarpet.addColorStop(1, 'transparent');
-        ctx!.fillStyle = podCarpet;
+        // 1. 단일 다크 네이비 바닥 (복도와 동일 베이스, 팀 컬러 stamp 없음)
+        ctx!.fillStyle = '#1a1f2e';
         ctx!.fillRect(rx, ry, rw, rh);
-        // 파드 경계선 (dashed, 아주 얇게) — 시각적 구분만
-        ctx!.strokeStyle = r.teamColor + '30';
-        ctx!.lineWidth = 1;
-        ctx!.setLineDash([4, 4]);
-        ctx!.strokeRect(rx + 4, ry + 4, rw - 8, rh - 8);
-        ctx!.setLineDash([]);
-        // 팀 상태 글로우 (조금 줄임)
+
+        // 2. 팀 컬러 언더글로우 (아주 subtle — 바닥에 은은히 물든 정도)
+        const grdTeam = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, Math.max(rw, rh) * 0.7);
+        grdTeam.addColorStop(0, r.teamColor + '14');
+        grdTeam.addColorStop(1, 'transparent');
+        ctx!.fillStyle = grdTeam;
+        ctx!.fillRect(rx, ry, rw, rh);
+
+        // 3. 상태 indicator (LED 점) — 우상단 구석에 점 하나로 축소
         if (state) {
-          const glowColor = state.status === 'green' ? '#3fb950' : state.status === 'red' ? '#f85149' : '#d29922';
-          const grdGlow = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.5);
-          grdGlow.addColorStop(0, glowColor + '08');
-          grdGlow.addColorStop(1, 'transparent');
-          ctx!.fillStyle = grdGlow;
-          ctx!.fillRect(rx, ry, rw, rh);
+          const stColor = state.status === 'green' ? '#3fb950' : state.status === 'red' ? '#f85149' : '#d29922';
+          ctx!.save();
+          ctx!.shadowColor = stColor;
+          ctx!.shadowBlur = 6;
+          ctx!.fillStyle = stColor;
+          ctx!.beginPath();
+          ctx!.arc(rx + rw - 8, ry + 8, 2.5, 0, Math.PI * 2);
+          ctx!.fill();
+          ctx!.restore();
         }
-        // 파드 라벨 (top-left, 작게)
-        ctx!.font = 'bold 9px monospace';
+
+        // 4. 떠있는 팀 태그 (게임 quest marker 스타일, 상단 중앙 약간 위)
+        const tagText = `${r.emoji} ${r.name}`;
+        ctx!.font = 'bold 10px -apple-system, monospace';
+        const tagW = ctx!.measureText(tagText).width + 14;
+        const tagX = rx + rw / 2 - tagW / 2;
+        const tagY = ry + 4;
+        // 태그 배경 (rounded pill, 단일 다크 네이비)
+        ctx!.fillStyle = 'rgba(13, 17, 23, 0.85)';
+        ctx!.beginPath();
+        ctx!.roundRect(tagX, tagY, tagW, 16, 8);
+        ctx!.fill();
+        // 태그 left border (team color accent)
         ctx!.fillStyle = r.teamColor;
-        ctx!.textAlign = 'left';
-        ctx!.fillText(`${r.emoji} ${r.name}`, rx + 6, ry + 12);
-        // 가구만 그림 (벽/문 없음)
+        ctx!.fillRect(tagX, tagY + 2, 2, 12);
+        // 태그 텍스트
+        ctx!.fillStyle = '#e6edf3';
+        ctx!.textAlign = 'center';
+        ctx!.fillText(tagText, rx + rw / 2, tagY + 11);
+
+        // 5. 가구 (데스크/의자/모니터) — 기존 drawRoomFurniture
         drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
         return;
       }
@@ -731,22 +744,26 @@ export default function VirtualOffice() {
         ctx!.fillRect(rx, ry, rw, rh);
       }
 
-      // Walls — thick with proper corners
-      ctx!.strokeStyle = r.teamColor + '55';
+      // Walls — 단일 그레이 팔레트 (통일성). 팀 컬러는 얇은 inner 액센트로만.
+      // 메인 벽
+      ctx!.strokeStyle = '#30363d';
       ctx!.lineWidth = 4;
       ctx!.strokeRect(rx + 2, ry + 2, rw - 4, rh - 4);
+      // 얇은 팀 컬러 inner 액센트 (1px, 방 정체성 표시)
+      ctx!.strokeStyle = r.teamColor + '60';
+      ctx!.lineWidth = 1;
+      ctx!.strokeRect(rx + 5, ry + 5, rw - 10, rh - 10);
 
-      // Wall top line for 3D depth illusion (lighter)
-      ctx!.fillStyle = r.teamColor + '40';
+      // Wall top (3D depth) — 회색 베이스
+      ctx!.fillStyle = '#30363d';
       ctx!.fillRect(rx, ry, rw, 5);
-      // Wall top highlight
-      ctx!.fillStyle = '#ffffff08';
+      ctx!.fillStyle = '#484f58';  // 상단 하이라이트
       ctx!.fillRect(rx + 4, ry, rw - 8, 2);
 
-      // Side wall shading (left darker, right lighter for depth)
-      ctx!.fillStyle = r.teamColor + '18';
+      // Side wall shading (통일 그레이)
+      ctx!.fillStyle = '#30363d40';
       ctx!.fillRect(rx, ry, 4, rh);
-      ctx!.fillStyle = r.teamColor + '0c';
+      ctx!.fillStyle = '#30363d20';
       ctx!.fillRect(rx + rw - 4, ry, 4, rh);
 
       // Glass window sections (on some walls — top wall for non-cron rooms)
@@ -1686,21 +1703,10 @@ export default function VirtualOffice() {
         ctx!.fill();
       }
 
-      // Decorations
+      // Decorations — 기본 장식(화분/조명/게시판/시계)만 유지
       drawDecorations(ctx!, camX, camY, frameCountRef.current);
-
-      // 중앙 아트리움 (대형 로비 영역) — 회사 로고 + 안내 데스크 + 분수
-      drawCentralAtrium(ctx!, camX, camY, frameCountRef.current);
-
-      // 중앙 카페 코너 (lounge area) — 바둑판 느낌 탈피
-      drawCafeCorner(ctx!, camX, camY, frameCountRef.current);
-
-      // 천장 빛줄기 (ambient diagonal light shafts)
-      drawLightShafts(ctx!, camX, camY, frameCountRef.current);
-
-      // 먼지 파티클 (ambient motes)
-      if (!dustRef.current) dustRef.current = initDustParticles(40, COLS, ROWS);
-      updateAndDrawDust(ctx!, dustRef.current, camX, camY, COLS, ROWS);
+      // 과한 장식 비활성: 중앙 아트리움, 카페 코너, 빛줄기, 먼지 파티클
+      // (함수는 보존하되 호출 안 함 — 통일성 회복 우선)
 
       // ── 시간대별 mood overlay (KST) ──
       // 캔버스 전체에 얇은 컬러 레이어로 시간감 부여 (드로잉 완료 후 맨 위)
