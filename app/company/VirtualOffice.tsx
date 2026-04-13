@@ -8,7 +8,7 @@ import {
   buildCollisionMap, aStarPath,
 } from '@/lib/map/rooms';
 import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
-import { drawRoomFurniture, drawDecorations, drawLightShafts, drawCafeCorner, updateAndDrawDust, initDustParticles, type DustParticle } from '@/lib/map/canvas-draw';
+import { drawRoomFurniture, drawDecorations, drawLightShafts, drawCafeCorner, drawCentralAtrium, updateAndDrawDust, initDustParticles, type DustParticle } from '@/lib/map/canvas-draw';
 import TeamBriefingPopup from '@/components/map/TeamBriefingPopup';
 import CronGridPopup from '@/components/map/CronGridPopup';
 import CronDetailPopup from '@/components/map/CronDetailPopup';
@@ -796,60 +796,231 @@ export default function VirtualOffice() {
       const stColor = state?.status === 'red' ? '#f85149' : state?.status === 'yellow' ? '#d29922' : '#3fb950';
       const isError = state?.status === 'red';
 
-      // Shadow (soft ellipse)
-      ctx!.fillStyle = 'rgba(0,0,0,0.3)';
+      // Shadow (soft ellipse, bigger for larger sprite)
+      ctx!.fillStyle = 'rgba(0,0,0,0.35)';
       ctx!.beginPath();
-      ctx!.ellipse(nx, ny + 15, 10, 4, 0, 0, Math.PI * 2);
+      ctx!.ellipse(nx, ny + 19, 13, 5, 0, 0, Math.PI * 2);
       ctx!.fill();
 
-      // Legs (two small rectangles)
-      ctx!.fillStyle = isError ? '#8b3a3a' : '#2a2a3e';
-      ctx!.fillRect(nx - 4, ny + 10, 3, 6);
-      ctx!.fillRect(nx + 2, ny + 10, 3, 6);
+      // Arm swing animation (walk cycle)
+      const armSwing = Math.sin(fc * 0.1 + r.npcX * 2) * 2;
 
-      // Body (team color shirt)
+      // Legs — wider stance with shoe detail
+      ctx!.fillStyle = isError ? '#8b3a3a' : '#1a1a2e';
+      ctx!.fillRect(nx - 5, ny + 12, 4, 8);     // left leg
+      ctx!.fillRect(nx + 1, ny + 12, 4, 8);     // right leg
+      // Shoes (darker)
+      ctx!.fillStyle = '#0d0d1a';
+      ctx!.fillRect(nx - 6, ny + 18, 5, 3);
+      ctx!.fillRect(nx + 1, ny + 18, 5, 3);
+
+      // Body (team color shirt) — larger 18×16
       const bodyColor = isError ? '#6b2020' : r.teamColor;
-      ctx!.fillStyle = bodyColor + 'c0';
-      ctx!.fillRect(nx - 7, ny - 2, 14, 13);
-      // Shirt highlight (left side lighter)
-      ctx!.fillStyle = '#ffffff08';
-      ctx!.fillRect(nx - 7, ny - 2, 5, 13);
-      // Collar
-      ctx!.fillStyle = bodyColor + 'e0';
-      ctx!.fillRect(nx - 3, ny - 3, 6, 2);
+      ctx!.fillStyle = bodyColor + 'd0';
+      ctx!.fillRect(nx - 9, ny - 3, 18, 16);
+      // Body outline (darker edge for pixel-art pop)
+      ctx!.strokeStyle = bodyColor;
+      ctx!.lineWidth = 1;
+      ctx!.strokeRect(nx - 9, ny - 3, 18, 16);
+      // Shirt highlight
+      ctx!.fillStyle = '#ffffff12';
+      ctx!.fillRect(nx - 9, ny - 3, 6, 16);
+      // Collar V
+      ctx!.fillStyle = '#0d0d1a';
+      ctx!.beginPath();
+      ctx!.moveTo(nx - 3, ny - 3);
+      ctx!.lineTo(nx, ny + 2);
+      ctx!.lineTo(nx + 3, ny - 3);
+      ctx!.closePath();
+      ctx!.fill();
+      // Tie (team accent)
+      ctx!.fillStyle = bodyColor;
+      ctx!.fillRect(nx - 1, ny + 2, 3, 9);
+      ctx!.fillStyle = '#fbbf2480';
+      ctx!.fillRect(nx - 1, ny + 2, 1, 9); // tie highlight
 
-      // Arms (two small lines/rects extending from body)
+      // Arms with swing — slightly offset per frame
       ctx!.fillStyle = '#f0d0a0';
-      ctx!.fillRect(nx - 9, ny + 1, 3, 8);
-      ctx!.fillRect(nx + 7, ny + 1, 3, 8);
+      ctx!.fillRect(nx - 12, ny + armSwing, 4, 11);   // left arm
+      ctx!.fillRect(nx + 8,  ny - armSwing, 4, 11);   // right arm
+      // Hand dots
+      ctx!.fillStyle = '#e0b887';
+      ctx!.fillRect(nx - 12, ny + 10 + armSwing, 4, 2);
+      ctx!.fillRect(nx + 8,  ny + 10 - armSwing, 4, 2);
 
-      // Head (skin color circle)
-      ctx!.fillStyle = isError ? '#e0b090' : '#f0d0a0';
+      // Head (skin tone circle, bigger)
+      ctx!.fillStyle = isError ? '#e0b090' : '#f5d6a8';
       ctx!.beginPath();
-      ctx!.arc(nx, ny - 8, 8, 0, Math.PI * 2);
+      ctx!.arc(nx, ny - 10, 10, 0, Math.PI * 2);
       ctx!.fill();
+      // Head outline
+      ctx!.strokeStyle = '#b88a5c';
+      ctx!.lineWidth = 1;
+      ctx!.stroke();
 
-      // Hair (team-colored)
+      // Hair (team-colored, fuller)
       const hairColor = r.teamColor;
-      ctx!.fillStyle = hairColor + 'b0';
+      ctx!.fillStyle = hairColor;
       ctx!.beginPath();
-      ctx!.arc(nx, ny - 11, 8, Math.PI + 0.3, Math.PI * 2 - 0.3);
+      ctx!.arc(nx, ny - 13, 10, Math.PI + 0.2, Math.PI * 2 - 0.2);
       ctx!.fill();
-      // Hair top (fuller)
-      ctx!.fillRect(nx - 7, ny - 16, 14, 5);
+      // Hair top bangs
+      ctx!.fillRect(nx - 9, ny - 19, 18, 5);
+      // Hair side highlights
+      ctx!.fillStyle = '#ffffff18';
+      ctx!.fillRect(nx - 8, ny - 18, 4, 4);
 
-      // Eyes (small dark pixels)
-      ctx!.fillStyle = '#222';
-      ctx!.fillRect(nx - 3, ny - 9, 2, 2);
-      ctx!.fillRect(nx + 2, ny - 9, 2, 2);
+      // Eyes (bigger, dark with white highlight)
+      ctx!.fillStyle = '#1a1a2e';
+      ctx!.fillRect(nx - 4, ny - 11, 3, 3);
+      ctx!.fillRect(nx + 1, ny - 11, 3, 3);
       // Eye whites
-      ctx!.fillStyle = '#ffffff40';
-      ctx!.fillRect(nx - 3, ny - 9, 1, 1);
-      ctx!.fillRect(nx + 2, ny - 9, 1, 1);
+      ctx!.fillStyle = '#ffffff';
+      ctx!.fillRect(nx - 4, ny - 11, 1, 1);
+      ctx!.fillRect(nx + 1, ny - 11, 1, 1);
+      // Eyebrows
+      ctx!.fillStyle = hairColor;
+      ctx!.fillRect(nx - 5, ny - 14, 4, 1);
+      ctx!.fillRect(nx + 1, ny - 14, 4, 1);
 
-      // Mouth
-      ctx!.fillStyle = '#c4907060';
-      ctx!.fillRect(nx - 1, ny - 5, 3, 1);
+      // Mouth (smile)
+      ctx!.strokeStyle = '#8b4513';
+      ctx!.lineWidth = 1;
+      ctx!.beginPath();
+      ctx!.arc(nx, ny - 6, 2, 0.2, Math.PI - 0.2);
+      ctx!.stroke();
+
+      // ── 팀별 액세서리 (head top) ───────────────
+      const accessoryY = ny - 22;
+      if (r.id === 'president') {
+        // 왕관 (gold)
+        ctx!.fillStyle = '#fbbf24';
+        ctx!.fillRect(nx - 7, accessoryY, 14, 3);
+        // 왕관 뿔 3개
+        ctx!.fillRect(nx - 6, accessoryY - 3, 2, 3);
+        ctx!.fillRect(nx - 1, accessoryY - 4, 2, 4);
+        ctx!.fillRect(nx + 4, accessoryY - 3, 2, 3);
+        // 왕관 보석
+        ctx!.fillStyle = '#f87171';
+        ctx!.fillRect(nx - 1, accessoryY + 1, 2, 1);
+      } else if (r.id === 'finance') {
+        // 안경 (gold frame)
+        ctx!.strokeStyle = '#fbbf24';
+        ctx!.lineWidth = 1;
+        ctx!.beginPath();
+        ctx!.arc(nx - 3, ny - 10, 3, 0, Math.PI * 2);
+        ctx!.stroke();
+        ctx!.beginPath();
+        ctx!.arc(nx + 3, ny - 10, 3, 0, Math.PI * 2);
+        ctx!.stroke();
+        ctx!.beginPath();
+        ctx!.moveTo(nx, ny - 10);
+        ctx!.lineTo(nx, ny - 10);
+        ctx!.stroke();
+      } else if (r.id === 'infra-lead') {
+        // 헤드셋
+        ctx!.strokeStyle = '#22c55e';
+        ctx!.lineWidth = 2;
+        ctx!.beginPath();
+        ctx!.arc(nx, ny - 13, 11, Math.PI, 0);
+        ctx!.stroke();
+        ctx!.fillStyle = '#22c55e';
+        ctx!.fillRect(nx - 11, ny - 13, 3, 4);
+        ctx!.fillRect(nx + 8,  ny - 13, 3, 4);
+        // 마이크 암
+        ctx!.strokeStyle = '#22c55e';
+        ctx!.lineWidth = 1;
+        ctx!.beginPath();
+        ctx!.moveTo(nx + 10, ny - 10);
+        ctx!.lineTo(nx + 6, ny - 6);
+        ctx!.stroke();
+      } else if (r.id === 'trend-lead') {
+        // 안테나
+        ctx!.strokeStyle = '#3b82f6';
+        ctx!.lineWidth = 1;
+        ctx!.beginPath();
+        ctx!.moveTo(nx - 2, accessoryY);
+        ctx!.lineTo(nx - 4, accessoryY - 5);
+        ctx!.stroke();
+        ctx!.beginPath();
+        ctx!.moveTo(nx + 2, accessoryY);
+        ctx!.lineTo(nx + 4, accessoryY - 5);
+        ctx!.stroke();
+        ctx!.fillStyle = '#fbbf24';
+        ctx!.fillRect(nx - 5, accessoryY - 6, 2, 2);
+        ctx!.fillRect(nx + 3, accessoryY - 6, 2, 2);
+      } else if (r.id === 'record-lead') {
+        // 클립보드 (손에 들고 있는 느낌)
+        ctx!.fillStyle = '#8b6914';
+        ctx!.fillRect(nx + 10, ny + 3, 6, 8);
+        ctx!.fillStyle = '#fef3c7';
+        ctx!.fillRect(nx + 11, ny + 4, 4, 6);
+        ctx!.fillStyle = '#92702a';
+        ctx!.fillRect(nx + 12, ny + 5, 2, 0.5);
+        ctx!.fillRect(nx + 12, ny + 7, 2, 0.5);
+      } else if (r.id === 'audit-lead') {
+        // 돋보기
+        ctx!.strokeStyle = '#dc2626';
+        ctx!.lineWidth = 2;
+        ctx!.beginPath();
+        ctx!.arc(nx + 11, ny, 4, 0, Math.PI * 2);
+        ctx!.stroke();
+        ctx!.strokeStyle = '#8b6914';
+        ctx!.beginPath();
+        ctx!.moveTo(nx + 13, ny + 2);
+        ctx!.lineTo(nx + 16, ny + 5);
+        ctx!.stroke();
+      } else if (r.id === 'library') {
+        // 책 (손에)
+        ctx!.fillStyle = '#0ea5e9';
+        ctx!.fillRect(nx + 9, ny + 2, 7, 9);
+        ctx!.fillStyle = '#0284c7';
+        ctx!.fillRect(nx + 9, ny + 2, 7, 1);
+        ctx!.fillStyle = '#fff';
+        ctx!.fillRect(nx + 11, ny + 5, 3, 1);
+        ctx!.fillRect(nx + 11, ny + 7, 3, 1);
+      } else if (r.id === 'brand-lead') {
+        // 베레 모자
+        ctx!.fillStyle = '#ea580c';
+        ctx!.beginPath();
+        ctx!.ellipse(nx, accessoryY + 1, 10, 3, 0, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.fillStyle = '#c2410c';
+        ctx!.beginPath();
+        ctx!.arc(nx + 3, accessoryY - 1, 2, 0, Math.PI * 2);
+        ctx!.fill();
+      } else if (r.id === 'growth-lead') {
+        // 새싹
+        ctx!.fillStyle = '#14b8a6';
+        ctx!.fillRect(nx - 1, accessoryY, 2, 4);
+        ctx!.beginPath();
+        ctx!.ellipse(nx - 3, accessoryY, 3, 2, 0.3, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.beginPath();
+        ctx!.ellipse(nx + 3, accessoryY, 3, 2, -0.3, 0, Math.PI * 2);
+        ctx!.fill();
+      } else if (r.id === 'standup') {
+        // 마이크
+        ctx!.fillStyle = '#eab308';
+        ctx!.fillRect(nx + 10, ny - 4, 3, 5);
+        ctx!.fillStyle = '#ca8a04';
+        ctx!.fillRect(nx + 11, ny + 1, 1, 6);
+      } else if (r.id === 'secretary') {
+        // 보우타이
+        ctx!.fillStyle = '#8b5cf6';
+        ctx!.beginPath();
+        ctx!.moveTo(nx - 4, ny + 1);
+        ctx!.lineTo(nx - 2, ny - 1);
+        ctx!.lineTo(nx - 2, ny + 3);
+        ctx!.closePath();
+        ctx!.fill();
+        ctx!.beginPath();
+        ctx!.moveTo(nx + 4, ny + 1);
+        ctx!.lineTo(nx + 2, ny - 1);
+        ctx!.lineTo(nx + 2, ny + 3);
+        ctx!.closePath();
+        ctx!.fill();
+      }
 
       // Floating status icon above head
       const iconY = ny - 26 + Math.sin(fc * 0.06) * 2;
@@ -1479,6 +1650,9 @@ export default function VirtualOffice() {
 
       // Decorations
       drawDecorations(ctx!, camX, camY, frameCountRef.current);
+
+      // 중앙 아트리움 (대형 로비 영역) — 회사 로고 + 안내 데스크 + 분수
+      drawCentralAtrium(ctx!, camX, camY, frameCountRef.current);
 
       // 중앙 카페 코너 (lounge area) — 바둑판 느낌 탈피
       drawCafeCorner(ctx!, camX, camY, frameCountRef.current);

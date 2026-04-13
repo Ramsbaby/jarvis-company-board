@@ -1045,6 +1045,94 @@ export function drawLightShafts(
 }
 
 /**
+ * 중앙 아트리움 — 대형 로비 영역. 복도 교차점(x≈18, y≈8)에 회사 로고 + 안내 데스크 + 분수
+ */
+export function drawCentralAtrium(ctx: CanvasRenderingContext2D, camX: number, camY: number, fc: number) {
+  const cx = 18 * T - camX + T / 2;
+  const cy = 8 * T - camY + T / 2;
+
+  // 대형 원형 카펫 (gold + navy 동심원)
+  const rOuter = T * 3.5;
+  const rInner = T * 2.8;
+  ctx.fillStyle = 'rgba(201, 162, 39, 0.08)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(201, 162, 39, 0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(88, 166, 255, 0.06)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(88, 166, 255, 0.2)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 중앙 회사 로고 (큰 J)
+  ctx.fillStyle = 'rgba(201, 162, 39, 0.5)';
+  ctx.font = 'bold 24px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('J', cx, cy - 2);
+  ctx.fillStyle = 'rgba(88, 166, 255, 0.35)';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillText('JARVIS COMPANY', cx, cy + 14);
+  ctx.textBaseline = 'alphabetic';
+
+  // 안내 데스크 (북쪽)
+  const dx = cx - T * 2;
+  const dy = cy - T * 2.3;
+  ctx.fillStyle = '#5a3e1b';
+  ctx.beginPath();
+  ctx.roundRect(dx, dy, T * 4, T * 0.8, 3);
+  ctx.fill();
+  ctx.fillStyle = '#4a2e10';
+  ctx.fillRect(dx, dy, T * 4, 3);
+  ctx.fillStyle = '#c9a22730';
+  ctx.fillRect(dx + 4, dy + 4, T * 4 - 8, 8);
+  ctx.fillStyle = '#c9a227';
+  ctx.font = 'bold 7px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('🔔 RECEPTION', dx + T * 2, dy + 11);
+
+  // 분수 (남쪽) — 작은 원형 + 물 애니메이션
+  const fx = cx;
+  const fy = cy + T * 2.2;
+  ctx.fillStyle = '#1e3a5f';
+  ctx.beginPath();
+  ctx.arc(fx, fy, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(fx, fy, 10, 0, Math.PI * 2);
+  ctx.stroke();
+  // 물
+  const waterPulse = Math.sin(fc * 0.08) * 1.5 + 4;
+  ctx.fillStyle = '#58a6ff80';
+  ctx.beginPath();
+  ctx.arc(fx, fy, waterPulse, 0, Math.PI * 2);
+  ctx.fill();
+  // 물 드롭
+  ctx.fillStyle = '#7dd3fc';
+  const dropY = fy - 4 - Math.abs(Math.sin(fc * 0.15)) * 5;
+  ctx.fillRect(fx - 1, dropY, 1, 1);
+  ctx.fillRect(fx + 2, dropY + 1, 1, 1);
+
+  // 코너 화분 4개 (아트리움 모서리)
+  for (let i = 0; i < 4; i++) {
+    const angle = (Math.PI / 4) + (Math.PI / 2) * i;
+    const px = cx + Math.cos(angle) * rOuter * 0.85;
+    const py = cy + Math.sin(angle) * rOuter * 0.85;
+    drawPlantSmall(ctx, px, py);
+  }
+}
+
+/**
  * 중앙 로비 카페 코너 — 소파 2개 + 원탁 + 커피 머신
  * 위치: 대략 x=18~20, y=12 (맵 중앙 열 corridor)
  */
