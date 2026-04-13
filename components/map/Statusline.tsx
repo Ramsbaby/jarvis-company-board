@@ -53,9 +53,9 @@ export default function Statusline({ isMobile }: { isMobile: boolean }) {
 
   if (err || !data) return null;
 
-  // 모바일에서는 3개만 (Claude/CPU/Cron)
+  // 모바일에서는 4개만 (5h/7d/CPU/Cron)
   const visible = isMobile
-    ? data.blocks.filter(b => ['Claude', 'CPU', 'Cron 24h'].includes(b.label))
+    ? data.blocks.filter(b => ['5h', '7d', 'CPU', 'Cron 24h'].includes(b.label))
     : data.blocks;
 
   return (

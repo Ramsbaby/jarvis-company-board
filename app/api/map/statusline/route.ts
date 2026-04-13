@@ -4,21 +4,21 @@ import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { getTodayCost, getMonthCost, getDailyCap } from '@/lib/chat-cost';
-
 /**
  * 자비스맵 통합 statusline — 좌상단에 붙는 Claude Code statusline 스타일.
  *
- * 5개 블록:
- *  1. Claude 비용 (오늘/월/상한)
- *  2. Mac Mini CPU 사용률
- *  3. Mac Mini 메모리 사용률
- *  4. Disk 사용률
- *  5. 24h 크론 성공률 (from cron.log)
+ * 블록:
+ *  1. Claude 5h (rate limit 5시간 창) — ~/.claude/usage-cache.json fiveH
+ *  2. Claude 7d (주간 할당량) — ~/.claude/usage-cache.json sevenD
+ *  3. Mac Mini CPU 사용률
+ *  4. Mac Mini 메모리 사용률
+ *  5. Disk 사용률
+ *  6. 24h 크론 성공률 (from cron.log)
  */
 
 const HOME = homedir();
 const CRON_LOG = path.join(HOME, '.jarvis', 'logs', 'cron.log');
+const CLAUDE_USAGE_CACHE = path.join(HOME, '.claude', 'usage-cache.json');
 
 interface StatuslineBlock {
   label: string;
@@ -78,6 +78,24 @@ function getDiskUsage(): { percent: number; used: string; total: string } {
   return { percent: parseInt(pct) || 0, used: used || '?', total: total || '?' };
 }
 
+// ── Claude Code 구독 사용량 (~/.claude/usage-cache.json) ───────────────
+interface ClaudeUsageCache {
+  fiveH?: { pct: number; reset: string; resetIn: string; remain: number };
+  sevenD?: { pct: number; reset: string; resetIn: string; remain: number };
+  sonnet?: { pct: number; reset: string; resetIn: string; remain: number };
+  ts?: string;
+  ok?: boolean;
+}
+
+function getClaudeUsage(): ClaudeUsageCache | null {
+  try {
+    const raw = readFileSync(CLAUDE_USAGE_CACHE, 'utf8');
+    return JSON.parse(raw) as ClaudeUsageCache;
+  } catch {
+    return null;
+  }
+}
+
 function getCron24hRate(): { rate: number; success: number; failed: number } {
   try {
     const raw = readFileSync(CRON_LOG, 'utf8');
@@ -124,26 +142,50 @@ export async function GET() {
   }
 
   try {
-    const [today, month, cap] = await Promise.all([
-      getTodayCost(),
-      getMonthCost(),
-      getDailyCap(),
-    ]);
+    const usage = getClaudeUsage();
     const cpu = getCpuUsage();
     const mem = getMemoryUsage();
     const disk = getDiskUsage();
     const cron = getCron24hRate();
 
-    const costPercent = cap > 0 ? Math.min(100, (today / cap) * 100) : 0;
+    // Claude 구독 사용량 — 사용한 % 기준 (pct 자체가 used%)
+    const fiveHPct = usage?.fiveH?.pct ?? 0;
+    const fiveHRemain = usage?.fiveH?.remain ?? 100;
+    const fiveHResetIn = usage?.fiveH?.resetIn ?? '?';
+    const fiveHReset = usage?.fiveH?.reset ?? '?';
+
+    const sevenDPct = usage?.sevenD?.pct ?? 0;
+    const sevenDRemain = usage?.sevenD?.remain ?? 100;
+    const sevenDResetIn = usage?.sevenD?.resetIn ?? '?';
+    const sevenDReset = usage?.sevenD?.reset ?? '?';
+
+    const sonnetPct = usage?.sonnet?.pct ?? 0;
+    const sonnetRemain = usage?.sonnet?.remain ?? 100;
 
     const blocks: StatuslineBlock[] = [
       {
-        label: 'Claude',
-        icon: '💰',
-        value: `$${today.toFixed(today < 0.01 ? 4 : 3)}`,
-        raw: costPercent,
-        status: statusByPercent(costPercent, 80, 95),
-        tooltip: `오늘 $${today.toFixed(4)} / 월 $${month.toFixed(3)} / 상한 $${cap.toFixed(2)} (${costPercent.toFixed(1)}%)`,
+        label: '5h',
+        icon: '⏱',
+        value: `${fiveHRemain}%`,
+        raw: fiveHPct,
+        status: statusByPercent(fiveHPct, 70, 90),
+        tooltip: `5시간 창 — ${fiveHPct}% 사용, ${fiveHRemain}% 남음 · ${fiveHResetIn} 후 리셋 (${fiveHReset})`,
+      },
+      {
+        label: '7d',
+        icon: '📅',
+        value: `${sevenDRemain}%`,
+        raw: sevenDPct,
+        status: statusByPercent(sevenDPct, 70, 90),
+        tooltip: `주간 할당량 — ${sevenDPct}% 사용, ${sevenDRemain}% 남음 · ${sevenDResetIn} 후 리셋 (${sevenDReset})`,
+      },
+      {
+        label: 'Sonnet',
+        icon: '🤖',
+        value: `${sonnetRemain}%`,
+        raw: sonnetPct,
+        status: statusByPercent(sonnetPct, 70, 90),
+        tooltip: `Sonnet 할당량 — ${sonnetPct}% 사용, ${sonnetRemain}% 남음`,
       },
       {
         label: 'CPU',
