@@ -6,6 +6,7 @@
 import React from 'react';
 import { ROOMS, ROOM_TO_CRON_TEAM, statusExplanation, activityIcon } from '@/lib/map/rooms';
 import type { BriefingData, CronItem } from '@/lib/map/rooms';
+import MarkdownContent from '@/components/MarkdownContent';
 
 interface ChatMessage { role: string; content: string; created_at: number }
 
@@ -561,15 +562,16 @@ export default function TeamBriefingPopup({
                   <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     &#x1F4DD; 최근 보고
                   </h4>
-                  <pre style={{
+                  <div style={{
                     background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
-                    borderRadius: 10, padding: 14, fontSize: 11,
-                    color: '#8b949e', whiteSpace: 'pre-wrap',
-                    maxHeight: 130, overflowY: 'auto',
-                    lineHeight: 1.6, margin: 0,
+                    borderRadius: 10, padding: 14,
+                    maxHeight: 180, overflowY: 'auto',
                   }}>
-                    {briefing.lastBoardMinutes || briefing.boardMinutes?.content || ''}
-                  </pre>
+                    <MarkdownContent
+                      content={briefing.lastBoardMinutes || briefing.boardMinutes?.content || ''}
+                      variant="dark"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -617,9 +619,14 @@ export default function TeamBriefingPopup({
                         <div style={{
                           maxWidth: '85%', padding: '8px 12px',
                           borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                          fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                          fontSize: 13, lineHeight: 1.5,
+                          whiteSpace: m.role === 'user' ? 'pre-wrap' : undefined,
                           background: m.role === 'user' ? 'linear-gradient(135deg, #238636, #1a6b2a)' : 'rgba(255,255,255,0.07)', color: '#e6edf3',
-                        }}>{m.content}</div>
+                        }}>
+                          {m.role === 'user'
+                            ? m.content
+                            : <MarkdownContent content={m.content} variant="dark" />}
+                        </div>
                         <span style={{ fontSize: 9, color: '#484f58', marginTop: 2, marginLeft: 4, marginRight: 4 }}>
                           {new Date(m.created_at * 1000).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}
                         </span>

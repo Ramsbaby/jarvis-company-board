@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
+import MarkdownContent from '@/components/MarkdownContent';
 
 type Banner = {
   date: string;
@@ -146,20 +147,14 @@ export default function BoardBanner() {
                 닫기 (Esc)
               </button>
             </div>
-            <pre style={{
+            <div style={{
               margin: 0,
               padding: '16px 20px',
               overflow: 'auto',
               flex: 1,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: 12,
-              lineHeight: 1.6,
-              color: '#e6edf3',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
             }}>
-              {banner.fullContent}
-            </pre>
+              <MarkdownContent content={banner.fullContent} variant="dark" />
+            </div>
           </div>
         </div>
       )}

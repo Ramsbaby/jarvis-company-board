@@ -10,6 +10,7 @@ import type { Element } from 'hast';
 interface MarkdownContentProps {
   content: string;
   className?: string;
+  variant?: 'light' | 'dark';
 }
 
 // Copy button component for code blocks
@@ -117,29 +118,53 @@ function preprocessContent(content: string): string {
   return out;
 }
 
-export default function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
+export default function MarkdownContent({ content, className = '', variant = 'light' }: MarkdownContentProps) {
   const processed = preprocessContent(content);
 
+  const lightTheme = `prose-light text-gray-700 text-sm leading-relaxed
+    [&>*+*]:mt-3
+    [&_h1]:text-gray-900 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
+    [&_h2]:text-gray-900 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5
+    [&_h3]:text-gray-800 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-3
+    [&_p]:text-gray-700 [&_p]:leading-relaxed
+    [&_strong]:text-gray-800 [&_strong]:font-semibold
+    [&_em]:text-gray-600 [&_em]:italic
+    [&_code]:text-indigo-700 [&_code]:bg-indigo-50 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+    [&_pre]:bg-gray-900 [&_pre]:border [&_pre]:border-gray-200 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:overflow-x-auto [&_pre]:my-3
+    [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-gray-200
+    [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1
+    [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:space-y-1
+    [&_li]:text-gray-700
+    [&_hr]:border-gray-200 [&_hr]:my-4
+    [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse
+    [&_th]:text-left [&_th]:text-gray-500 [&_th]:font-medium [&_th]:py-1.5 [&_th]:border-b [&_th]:border-gray-200
+    [&_td]:py-1.5 [&_td]:border-b [&_td]:border-gray-100 [&_td]:text-gray-600`;
+
+  const darkTheme = `prose-dark text-slate-200 text-sm leading-relaxed
+    [&>*+*]:mt-3
+    [&_h1]:text-white [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
+    [&_h2]:text-slate-100 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5
+    [&_h3]:text-slate-200 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-3
+    [&_p]:text-slate-200 [&_p]:leading-relaxed
+    [&_strong]:text-white [&_strong]:font-semibold
+    [&_em]:text-slate-300 [&_em]:italic
+    [&_code]:text-indigo-300 [&_code]:bg-indigo-950/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+    [&_pre]:bg-black/60 [&_pre]:border [&_pre]:border-slate-700 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:overflow-x-auto [&_pre]:my-3
+    [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-slate-200
+    [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1
+    [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:space-y-1
+    [&_li]:text-slate-200
+    [&_hr]:border-slate-700 [&_hr]:my-4
+    [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-3 [&_blockquote]:text-slate-400 [&_blockquote]:italic
+    [&_a]:text-indigo-300
+    [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse
+    [&_th]:text-left [&_th]:text-slate-400 [&_th]:font-medium [&_th]:py-1.5 [&_th]:border-b [&_th]:border-slate-700
+    [&_td]:py-1.5 [&_td]:border-b [&_td]:border-slate-800 [&_td]:text-slate-300`;
+
+  const themeClasses = variant === 'dark' ? darkTheme : lightTheme;
+
   return (
-    <div className={`prose-light text-gray-700 text-sm leading-relaxed
-      [&>*+*]:mt-3
-      [&_h1]:text-gray-900 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
-      [&_h2]:text-gray-900 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5
-      [&_h3]:text-gray-800 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-3
-      [&_p]:text-gray-700 [&_p]:leading-relaxed
-      [&_strong]:text-gray-800 [&_strong]:font-semibold
-      [&_em]:text-gray-600 [&_em]:italic
-      [&_code]:text-indigo-700 [&_code]:bg-indigo-50 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
-      [&_pre]:bg-gray-900 [&_pre]:border [&_pre]:border-gray-200 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:overflow-x-auto [&_pre]:my-3
-      [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-gray-200
-      [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1
-      [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:space-y-1
-      [&_li]:text-gray-700
-      [&_hr]:border-gray-200 [&_hr]:my-4
-      [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse
-      [&_th]:text-left [&_th]:text-gray-500 [&_th]:font-medium [&_th]:py-1.5 [&_th]:border-b [&_th]:border-gray-200
-      [&_td]:py-1.5 [&_td]:border-b [&_td]:border-gray-100 [&_td]:text-gray-600
-      ${className}`}>
+    <div className={`${themeClasses} ${className}`}>
       <ReactMarkdown
         remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
         rehypePlugins={[rehypeHighlight]}
