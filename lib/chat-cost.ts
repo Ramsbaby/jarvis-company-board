@@ -17,23 +17,32 @@ interface Store {
 const MAX_RECORDS = 10_000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
+// ── Model string SSoT ──
+// route.ts들이 fetch body에 쓰는 model 문자열과 RATES 키가 반드시 일치해야
+// recordCost() 가 price table을 맞추고 costUsd>0으로 append된다.
+// 두 route에서 이 상수를 import해서 사용할 것.
+export const GROQ_LLAMA_70B = 'llama-3.3-70b-versatile';
+export const CLAUDE_SONNET_4_5 = 'claude-sonnet-4-5';
+export const CLAUDE_HAIKU_4_5 = 'claude-haiku-4-5';
+export const CLAUDE_OPUS_4_5 = 'claude-opus-4-5';
+
 // USD per million tokens
 const RATES: Record<string, { input: number; output: number }> = {
-  'claude-sonnet-4-5': { input: 3, output: 15 },
-  'claude-haiku-4-5': { input: 0.8, output: 4 },
-  'claude-opus-4-5': { input: 15, output: 75 },
+  [CLAUDE_SONNET_4_5]: { input: 3, output: 15 },
+  [CLAUDE_HAIKU_4_5]: { input: 0.8, output: 4 },
+  [CLAUDE_OPUS_4_5]: { input: 15, output: 75 },
   // Groq llama-3.3-70b-versatile (Groq 공식 요율)
-  'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
+  [GROQ_LLAMA_70B]: { input: 0.59, output: 0.79 },
 };
 
 function resolveRate(model: string): { input: number; output: number } {
   if (RATES[model]) return RATES[model];
   // Loose match — llama / sonnet / haiku / opus family
   const lower = model.toLowerCase();
-  if (lower.includes('llama')) return RATES['llama-3.3-70b-versatile'];
-  if (lower.includes('haiku')) return RATES['claude-haiku-4-5'];
-  if (lower.includes('sonnet')) return RATES['claude-sonnet-4-5'];
-  return RATES['claude-opus-4-5'];
+  if (lower.includes('llama')) return RATES[GROQ_LLAMA_70B];
+  if (lower.includes('haiku')) return RATES[CLAUDE_HAIKU_4_5];
+  if (lower.includes('sonnet')) return RATES[CLAUDE_SONNET_4_5];
+  return RATES[CLAUDE_OPUS_4_5];
 }
 
 function storePath(): string {

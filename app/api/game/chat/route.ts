@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
-import { recordCost, getTodayCost, getDailyCap } from '@/lib/chat-cost';
+import { recordCost, getTodayCost, getDailyCap, GROQ_LLAMA_70B } from '@/lib/chat-cost';
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 
 const TEAM_PROMPTS: Record<string, string> = {
@@ -187,7 +187,8 @@ function gatherTeamContext(teamId: string): string {
 // 응답은 JSON이 아닌 text/event-stream (data: {"token":"..."} / data: {"done":true,"id":N}).
 
 // Groq llama-3.3-70b-versatile (OpenAI 호환 SSE 스트리밍)
-const MODEL = 'llama-3.3-70b-versatile';
+// MODEL 문자열은 lib/chat-cost.ts SSoT에서 import — typo 시 price table miss → costUsd=0 방지
+const MODEL = GROQ_LLAMA_70B;
 const MAX_TOKENS = 1200;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
