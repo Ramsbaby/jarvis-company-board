@@ -1105,11 +1105,11 @@ export default function VirtualOffice() {
       ctx!.textAlign = 'left';
       ctx!.fillText('MINIMAP', mx, my - 8);
 
-      // Rooms with abbreviated names (ceo 삭제 → 대표실은 president로 통합)
+      // Rooms with abbreviated names (academy+career → growth, finance/library 신설)
       const abbrevNames: Record<string, string> = {
-        'infra-lead': 'INF', 'trend-lead': 'TRD', 'president': '대표',
-        'record-lead': 'REC', 'audit-lead': 'AUD', 'academy-lead': 'ACM', 'brand-lead': 'BRD',
-        'career-lead': 'CAR', 'standup': 'STU', 'secretary': 'SEC', 'server-room': 'SRV',
+        'finance': '재무', 'infra-lead': 'INF', 'trend-lead': 'TRD', 'president': '대표',
+        'record-lead': 'REC', 'audit-lead': 'AUD', 'library': '라이브', 'brand-lead': 'BRD',
+        'growth-lead': '성장', 'standup': 'STU', 'secretary': 'SEC', 'server-room': 'SRV',
         'cron-center': 'CRON',
       };
 
@@ -1119,9 +1119,12 @@ export default function VirtualOffice() {
         p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h
       )?.id;
 
-      // Zone color coding: executive=gold, team=blue, infra=green, server=slate
+      // Zone color coding
       const zoneColor = (rId: string): string => {
         if (rId === 'president') return '#c9a227';
+        if (rId === 'finance') return '#10b981';
+        if (rId === 'library') return '#0ea5e9';
+        if (rId === 'growth-lead') return '#14b8a6';
         if (rId === 'server-room') return '#64748b';
         if (rId === 'cron-center') return '#6366f1';
         if (rId === 'infra-lead') return '#22c55e';

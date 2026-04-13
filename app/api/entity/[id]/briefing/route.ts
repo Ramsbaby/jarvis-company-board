@@ -7,6 +7,8 @@ import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { GET as presidentBriefingGET } from '@/app/api/president/briefing/route';
 import { GET as standupBriefingGET } from '@/app/api/standup/briefing/route';
+import { GET as financeBriefingGET } from '@/app/api/finance/briefing/route';
+import { GET as libraryBriefingGET } from '@/app/api/library/briefing/route';
 
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
@@ -152,19 +154,32 @@ const ENTITIES: Record<string, EntityDef> = {
     discordChannel: 'jarvis-system', schedule: '매일 09:00',
   },
   'trend-lead': {
-    type: 'team-lead', name: '정보팀 · 강나연', title: '뉴스·시장·기술 트렌드 분석',
-    avatar: '📡', keywords: ['trend', 'market-alert', 'news', 'tqqq', 'stock', 'macro', 'calendar-alert', 'github-monitor'],
+    type: 'team-lead', name: '정보팀 · 강나연', title: '뉴스·기술 트렌드 분석',
+    avatar: '📡', keywords: ['trend', 'news', 'calendar-alert', 'github-monitor', 'recon'],
     discordChannel: 'jarvis', schedule: '평일 07:30',
   },
+  // 재무실 — market/tqqq/cost/preply 등 돈 관련 크론 전담 (정보팀에서 분리)
+  'finance': {
+    type: 'team-lead', name: '재무실 · 장재원', title: 'AI 운영 비용 + 시장 포지션 + 개인 수입 통합',
+    avatar: '💰', keywords: ['tqqq', 'market-alert', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule'],
+    discordChannel: 'jarvis-ceo', schedule: '매일',
+  },
   'record-lead': {
-    type: 'team-lead', name: '기록팀 · 한소희', title: '일일 기록·RAG 아카이빙',
+    type: 'team-lead', name: '기록팀 · 한소희', title: '메모리·RAG 아카이빙 (백엔드)',
     avatar: '🗄️', keywords: ['record-daily', 'memory', 'session-sum', 'compact', 'rag-index'],
     discordChannel: 'jarvis-system', schedule: '매일 22:30',
   },
-  'career-lead': {
-    type: 'team-lead', name: '커리어팀 · 김서연', title: '채용·면접·커리어 전략',
-    avatar: '🚀', keywords: ['career', 'commitment', 'growth', 'job', 'resume', 'interview'],
-    discordChannel: 'jarvis-ceo', schedule: '매주 금 18:00',
+  // 라이브러리 — 기록팀 백엔드의 프론트엔드. RAG/메모리 사용자 접근
+  'library': {
+    type: 'team-lead', name: '라이브러리 · 문지아', title: '전사 지식 베이스 프론트엔드',
+    avatar: '📖', keywords: ['rag-index', 'rag-bench'],
+    discordChannel: 'jarvis-system', schedule: '상시',
+  },
+  // 성장실 — 구 학습팀 + 구 커리어팀 통합
+  'growth-lead': {
+    type: 'team-lead', name: '성장실 · 김서연', title: '커리어·면접·기술 학습 통합',
+    avatar: '🌱', keywords: ['career', 'commitment', 'growth', 'job', 'resume', 'interview', 'academy', 'learning', 'study', 'lecture'],
+    discordChannel: 'jarvis-ceo', schedule: '매주',
   },
   'brand-lead': {
     type: 'team-lead', name: '브랜드팀 · 정하은', title: 'OSS·블로그·콘텐츠 전략',
@@ -175,11 +190,6 @@ const ENTITIES: Record<string, EntityDef> = {
     type: 'team-lead', name: '감사팀 · 류태환', title: '품질·감사·E2E 테스트',
     avatar: '🔍', keywords: ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'],
     discordChannel: 'jarvis-system', schedule: '매일 23:00',
-  },
-  'academy-lead': {
-    type: 'team-lead', name: '학습팀 · 신유진', title: '학습 큐레이션·스터디',
-    avatar: '📚', keywords: ['academy', 'learning', 'study'],
-    discordChannel: 'jarvis-ceo', schedule: '매주 일 20:00',
   },
 
   // ── 시스템 메트릭 엔티티 ──
@@ -785,11 +795,11 @@ const briefingCache: Record<string, { data: unknown; ts: number }> = {};
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // president/standup 방은 전용 엔드포인트로 위임
-  // — 전사 보고/모닝 브리핑은 cron 통계가 아니라 board-minutes·tasks.json 기반이라
-  //   ENTITIES 레지스트리 대신 dedicated route 가 SSoT.
+  // 전용 엔드포인트 위임 — 단순 cron 키워드 집계로는 불충분한 룸들
   if (id === 'president') return presidentBriefingGET();
   if (id === 'standup') return standupBriefingGET();
+  if (id === 'finance') return financeBriefingGET();
+  if (id === 'library') return libraryBriefingGET();
 
   const entity = ENTITIES[id];
   if (!entity) {

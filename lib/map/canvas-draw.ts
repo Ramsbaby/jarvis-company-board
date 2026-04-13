@@ -66,6 +66,62 @@ export function drawRoomFurniture(
   cronItems: CronItem[],
 ) {
   switch (r.id) {
+    case 'finance': {
+      // 재무실 — 금고 + 차트 모니터 + 금화
+      // Rug (emerald)
+      ctx.fillStyle = '#10b98118';
+      ctx.beginPath();
+      ctx.roundRect(rx + T * 1.2, ry + T * 1.8, T * 4.5, T * 2.2, 6);
+      ctx.fill();
+      // 금고 (좌측 벽)
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(rx + T * 1, ry + T * 0.8, T * 1.2, T * 1.5);
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(rx + T * 1.1, ry + T * 0.9, T * 1.0, T * 1.3);
+      // 금고 다이얼
+      ctx.fillStyle = '#c9a227';
+      ctx.beginPath();
+      ctx.arc(rx + T * 1.6, ry + T * 1.55, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(rx + T * 1.6, ry + T * 1.55, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // 차트 모니터 (가운데 데스크)
+      ctx.fillStyle = '#5a3e1b';
+      ctx.fillRect(rx + T * 2.8, ry + T * 1.5, T * 2.5, T * 0.6);
+      drawMonitor(ctx, rx + T * 3.2, ry + T * 0.5, T * 1.5, T * 0.9, '#10b98118', '#222');
+      // 상승 차트 바 (에메랄드)
+      const barPulse = (Math.sin(fc * 0.05) + 1) * 0.5;
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(rx + T * 3.3, ry + T * 1.0, 3, T * 0.15);
+      ctx.fillRect(rx + T * 3.5, ry + T * 0.9, 3, T * 0.25);
+      ctx.fillRect(rx + T * 3.7, ry + T * 0.75, 3, T * 0.4);
+      ctx.fillRect(rx + T * 3.9, ry + T * 0.6 - barPulse * 3, 3, T * 0.55);
+      // 금화 스택 (우측)
+      for (let j = 0; j < 4; j++) {
+        ctx.fillStyle = j % 2 === 0 ? '#fbbf24' : '#d97706';
+        ctx.beginPath();
+        ctx.ellipse(rx + T * 5.5, ry + T * 2.5 - j * 3, 8, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 명패
+      ctx.fillStyle = '#10b98170';
+      ctx.fillRect(rx + T * 3.0, ry + T * 1.55, T * 1.2, 6);
+      ctx.fillStyle = '#fff';
+      ctx.font = '6px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('재무', rx + T * 3.6, ry + T * 1.55 + 5);
+      // 의자
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(rx + T * 4.0, ry + T * 2.8, 7, 0, Math.PI * 2);
+      ctx.fill();
+      // 화분
+      drawPlantSmall(ctx, rx + T * 6.3, ry + T * 3.5);
+      void cronItems;
+      break;
+    }
     case 'president': {
       // 기존 'ceo' case의 executive 디자인을 president(대표실)가 상속
       // Rug (dark red carpet)
@@ -448,6 +504,11 @@ export function drawRoomFurniture(
       drawChair(ctx, rx + T * 3, ry + T * 3.3, '#3b1111');
       break;
     }
+    case 'library': {
+      // 구 academy 자리 — 라이브러리로 대체. 기존 academy 디자인(책/책상) 재사용
+      // fall through 대신 별개 case로 두고 academy 디자인 상속
+    }
+     
     case 'academy-lead': {
       // Library shelves (tall, both walls)
       for (let side = 0; side < 2; side++) {
@@ -574,6 +635,10 @@ export function drawRoomFurniture(
       drawChair(ctx, rx + T * 2.5, ry + T * 3, '#6b2a0a');
       break;
     }
+    case 'growth-lead': {
+      // 구 career 자리 — 성장실로 대체. 기존 career 디자인 상속
+    }
+     
     case 'career-lead': {
       // Interview table (center)
       ctx.fillStyle = '#115e59';

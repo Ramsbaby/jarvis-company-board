@@ -11,11 +11,12 @@ import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 
 const TEAM_PROMPTS: Record<string, string> = {
   president: '나는 자비스 컴퍼니의 대표 이정우입니다. AI 경영 현황(이사회·KPI·경영 점검)과 개인 데이터(약속·Claude 세션·메모리)를 통합 관리하는 이정우 본인의 공간이라 답변합니다.',
-  'infra-lead': '나는 인프라팀장 박태성입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 시스템 상태에 대해 쉽게 설명합니다.',
-  'academy-lead': '나는 학습팀장 신유진입니다. 기술 학습 큐레이션 전담 — CS/아키텍처/시스템 디자인/책 요약을 관리합니다. 면접 준비는 커리어팀 소관이라 학습팀에서 다루지 않습니다.',
-  'trend-lead': '나는 정보팀장 강나연입니다. 뉴스, 시장 트렌드, 기술 동향을 분석합니다. 시장 상황을 쉽게 설명합니다.',
-  'record-lead': '나는 기록팀장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙을 담당합니다.',
-  'career-lead': '나는 커리어팀장 김서연입니다. 채용 시장 분석, 이력서, 면접 준비를 지원합니다.',
+  finance: '나는 재무실장 장재원입니다. 자비스 AI 운영 비용, TQQQ·시장 포지션, 오너 Preply 수입, 손익 추적을 담당합니다. 숫자와 통화는 정확하게 전달합니다.',
+  'infra-lead': '나는 인프라팀장 박태성입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 시스템 상태에 대해 쉽게 설명합니다. 단, 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.',
+  'trend-lead': '나는 정보팀장 강나연입니다. 뉴스, 기술 트렌드, GitHub 동향을 분석합니다. 시장/주식 지표는 재무실 소관이라 다루지 않습니다.',
+  'record-lead': '나는 기록팀장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 **백엔드** 업무를 담당합니다. 사용자가 직접 검색하는 UI는 라이브러리(문지아) 소관입니다.',
+  library: '나는 라이브러리 사서 문지아입니다. 기록팀이 쌓은 RAG 인덱스와 오너 메모리 파일을 사용자가 검색·탐색할 수 있도록 돕는 프론트엔드를 담당합니다.',
+  'growth-lead': '나는 성장실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다. 학습과 면접은 현실적으로 분리되지 않기 때문입니다.',
   'brand-lead': '나는 브랜드팀장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.',
   'audit-lead': '나는 감사팀장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.',
   'cron-engine': '나는 크론 엔진 관리자입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.',
@@ -111,26 +112,45 @@ function gatherTeamContext(teamId: string): string {
       value = `오늘 실행된 인프라 크론 (최근):\n${crons || '(없음)'}\n\n현재 시스템 상태:\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}\n\n보드 미팅 인프라 섹션:\n${infraSection || '(없음)'}`;
       break;
     }
+    case 'finance': {
+      // 재무실 — market/tqqq/cost/preply 통합
+      const marketCrons = grepLines(cronLog, ['tqqq-monitor', 'market-alert', 'finance-monitor', 'macro-briefing'], 10);
+      const costCrons = grepLines(cronLog, ['cost-monitor'], 5);
+      const preplyDir = path.join(JARVIS_HOME, 'results', 'personal-schedule-daily');
+      const preplyFile = latestFileIn(preplyDir, /\.md$/);
+      const preplyContent = preplyFile ? safeRead(preplyFile, 2000) : '';
+      value = `시장/재무 크론 최근:\n${marketCrons || '(없음)'}\n\n비용 모니터:\n${costCrons || '(없음)'}\n\nPreply 수입 (오늘):\n${tailLines(preplyContent, 15) || '(없음)'}`;
+      break;
+    }
     case 'trend-lead': {
-      const crons = grepLines(cronLog, ['news-briefing', 'market-alert', 'tqqq-monitor', 'macro-briefing', 'github-monitor', 'trend'], 15);
+      // 재무 계열 제거, 순수 트렌드/뉴스/GitHub만
+      const crons = grepLines(cronLog, ['news-briefing', 'github-monitor', 'trend', 'recon'], 15);
       const reportFile = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^trend.*\.md$/);
       const report = reportFile ? safeRead(reportFile, 3000) : '';
-      const contextBus = safeRead(path.join(JARVIS_HOME, 'state', 'context-bus.md'), 4000);
-      const trendBus = grepLines(contextBus, ['정보', 'trend', '뉴스', '시장'], 8);
-      value = `오늘 정보팀 크론 활동:\n${crons || '(없음)'}\n\n최근 트렌드 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}\n\n컨텍스트 버스 (정보 관련):\n${trendBus || '(없음)'}`;
+      value = `오늘 정보팀 크론 활동:\n${crons || '(없음)'}\n\n최근 트렌드 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}`;
       break;
     }
     case 'record-lead': {
-      const crons = grepLines(cronLog, ['record-daily', 'memory', 'session-sum', 'compact', 'rag-index'], 15);
-      const ragData = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'rag', 'data')]);
-      value = `오늘 기록팀 크론 활동:\n${crons || '(없음)'}\n\nRAG 데이터 크기:\n${ragData || 'unknown'}`;
+      const crons = grepLines(cronLog, ['record-daily', 'memory', 'session-sum', 'compact'], 15);
+      value = `오늘 기록팀(백엔드) 크론 활동:\n${crons || '(없음)'}\n\n사용자 검색 UI는 라이브러리 소관`;
       break;
     }
-    case 'career-lead': {
-      const crons = grepLines(cronLog, ['career', 'commitment', 'interview', 'job'], 15);
-      const reportFile = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^career.*\.md$/);
-      const report = reportFile ? safeRead(reportFile, 3000) : '';
-      value = `오늘 커리어팀 크론 활동:\n${crons || '(없음)'}\n\n최근 커리어 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}`;
+    case 'library': {
+      // 라이브러리 — RAG 인덱스 + 메모리
+      const ragCrons = grepLines(cronLog, ['rag-index', 'rag-bench'], 10);
+      const ragData = safeExec('du', ['-sh', path.join(JARVIS_HOME, 'rag', 'data')]);
+      value = `RAG 인덱싱 활동:\n${ragCrons || '(없음)'}\n\nRAG 데이터 크기:\n${ragData || 'unknown'}\n\n*기록팀이 관리하는 백엔드를 사용자 접근 레이어로 제공*`;
+      break;
+    }
+    case 'growth-lead': {
+      // 성장실 — 커리어 + 학습 통합
+      const careerCrons = grepLines(cronLog, ['career', 'commitment', 'interview', 'job'], 10);
+      const academyCrons = grepLines(cronLog, ['academy', 'learning', 'study'], 10);
+      const careerReport = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^career.*\.md$/);
+      const academyReport = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^academy.*\.md$/);
+      const careerContent = careerReport ? safeRead(careerReport, 2000) : '';
+      const academyContent = academyReport ? safeRead(academyReport, 2000) : '';
+      value = `커리어 크론:\n${careerCrons || '(없음)'}\n\n학습 크론:\n${academyCrons || '(없음)'}\n\n커리어 리포트:\n${tailLines(careerContent, 12) || '(없음)'}\n\n학습 리포트:\n${tailLines(academyContent, 12) || '(없음)'}`;
       break;
     }
     case 'brand-lead': {
@@ -142,13 +162,6 @@ function gatherTeamContext(teamId: string): string {
       const crons = grepLines(cronLog, ['audit', 'cron-failure', 'kpi', 'e2e', 'regression', 'doc-sync'], 15);
       const stats = cronStats(cronLog);
       value = `오늘 감사팀 크론 활동:\n${crons || '(없음)'}\n\n오늘 전체 크론 통계:\n- 총 실행 라인: ${stats.total}\n- 실패/에러 라인: ${stats.fail}`;
-      break;
-    }
-    case 'academy-lead': {
-      const crons = grepLines(cronLog, ['academy', 'learning', 'study'], 15);
-      const reportFile = latestFileIn(path.join(JARVIS_HOME, 'rag', 'teams', 'reports'), /^academy.*\.md$/);
-      const report = reportFile ? safeRead(reportFile, 3000) : '';
-      value = `오늘 학습팀 크론 활동:\n${crons || '(없음)'}\n\n최근 학습 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}`;
       break;
     }
     case 'president': {

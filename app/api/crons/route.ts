@@ -67,17 +67,20 @@ interface TeamRule {
 }
 
 const TEAM_RULES: TeamRule[] = [
-  { id: 'infra', label: '인프라팀', emoji: '⚙️', keywords: ['disk', 'system-doctor', 'system-health', 'infra', 'sync-system-metrics', 'glances', 'aggregate-metrics', 'health', 'log-cleanup', 'memory-cleanup', 'rate-limit', 'update-usage-cache', 'token-sync', 'daily-usage-check', 'cost-monitor', 'security-scan', 'scorecard-enforcer'] },
-  // 'personal-schedule' 제거 — 보람 Preply 데이터라 정보팀 업무 아님
-  { id: 'info', label: '정보팀', emoji: '📡', keywords: ['news', 'market', 'tqqq', 'trend', 'github-monitor', 'stock', 'calendar-alert', 'macro', 'finance-monitor', 'recon'] },
+  // 신설 재무실 — 돈 관련 (AI 비용 + 시장 + 개인 수입 통합). 순서 중요: 먼저 매칭
+  { id: 'finance', label: '재무실', emoji: '💰', keywords: ['tqqq', 'market', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule', 'boram'] },
+  { id: 'infra', label: '인프라팀', emoji: '⚙️', keywords: ['disk', 'system-doctor', 'system-health', 'infra', 'sync-system-metrics', 'glances', 'aggregate-metrics', 'health', 'log-cleanup', 'memory-cleanup', 'rate-limit', 'update-usage-cache', 'token-sync', 'daily-usage-check', 'security-scan', 'scorecard-enforcer'] },
+  // 정보팀 — market/tqqq/finance 계열 재무실로 이관됨. 순수 트렌드/뉴스만
+  { id: 'info', label: '정보팀', emoji: '📡', keywords: ['news', 'trend', 'github-monitor', 'calendar-alert', 'recon'] },
+  // 라이브러리 — 기록팀 업무 중 사용자 접근 레이어 (RAG 인덱스/벤치). 기록팀보다 먼저 매칭 필요
+  { id: 'library', label: '라이브러리', emoji: '📖', keywords: ['rag-index', 'rag-bench'] },
   { id: 'record', label: '기록팀', emoji: '🗄️', keywords: ['record', 'memory', 'rag', 'session', 'vault', 'gen-system-overview'] },
-  { id: 'career', label: '커리어팀', emoji: '💼', keywords: ['career', 'interview', 'commitment', 'job', 'resume', 'isg', 'growth'] },
+  // 신설 성장실 = 구 학습팀 + 구 커리어팀 통합 (면접 + 기술 학습)
+  { id: 'growth', label: '성장실', emoji: '🌱', keywords: ['career', 'interview', 'commitment', 'job', 'resume', 'isg', 'growth', 'academy', 'learning', 'study', 'lecture'] },
   { id: 'brand', label: '브랜드팀', emoji: '📣', keywords: ['brand', 'blog', 'oss', 'openclaw', 'github-star', 'stars'] },
-  { id: 'audit', label: '감사팀', emoji: '🔍', keywords: ['audit', 'e2e', 'cron-failure', 'regression', 'doc-sync', 'doc-supervisor', 'code-auditor', 'cron-auditor', 'stale-task', 'kpi', 'roi', 'bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval', 'rag-bench'] },
-  // 'boram' 제거 — 보람 일정은 학습팀 업무 아님. 학습팀은 기술 학습 큐레이션 전담(CS/아키텍처/책 요약)
-  { id: 'academy', label: '학습팀', emoji: '📚', keywords: ['academy', 'learning', 'study', 'lecture'] },
-  // CEO실 삭제 → '대표실' 단일 공간에 흡수
-  { id: 'exec', label: '대표실', emoji: '🏛️', keywords: ['board', 'ceo', 'council', 'morning-standup', 'daily-summary', 'schedule-coherence', 'monthly-review', 'connections-weekly', 'private-sync', 'dev-runner', 'jarvis-coder', 'agent-batch-commit', 'weekly-code-review', 'memory-expire', 'weekly-usage-stats'] },
+  { id: 'audit', label: '감사팀', emoji: '🔍', keywords: ['audit', 'e2e', 'cron-failure', 'regression', 'doc-sync', 'doc-supervisor', 'code-auditor', 'cron-auditor', 'stale-task', 'kpi', 'roi', 'bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval'] },
+  // 대표실 (구 CEO/임원실 + 오너 공간)
+  { id: 'exec', label: '대표실', emoji: '🏛️', keywords: ['board', 'ceo', 'council', 'morning-standup', 'daily-summary', 'schedule-coherence', 'monthly-review', 'connections-weekly', 'private-sync', 'dev-runner', 'jarvis-coder', 'agent-batch-commit', 'weekly-code-review', 'weekly-usage-stats'] },
 ];
 
 function classifyTeam(taskId: string): { label: string; emoji: string } {
