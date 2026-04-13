@@ -66,7 +66,8 @@ export function drawRoomFurniture(
   cronItems: CronItem[],
 ) {
   switch (r.id) {
-    case 'ceo': {
+    case 'president': {
+      // 기존 'ceo' case의 executive 디자인을 president(대표실)가 상속
       // Rug (dark red carpet)
       ctx.fillStyle = '#5a1a1a18';
       ctx.beginPath();
@@ -98,7 +99,7 @@ export function drawRoomFurniture(
       ctx.fillStyle = '#fff';
       ctx.font = '6px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('CEO', rx + T * 3.25, ry + T * 1.25 + 5);
+      ctx.fillText('대표', rx + T * 3.25, ry + T * 1.25 + 5);
       // Leather chair (behind desk)
       ctx.fillStyle = '#5a3322';
       ctx.beginPath();

@@ -24,14 +24,15 @@ export interface RoomDef {
 
 export const ROOMS: RoomDef[] = [
   // Row 1 (y=2)
-  { id: 'ceo',         entityId: 'ceo',         name: 'CEO실',      emoji: '👔', description: '자비스 컴퍼니 CEO(Opus). 주간 경영보고·KPI 평가·중요 판단 총괄. 매주 월 09:00 경영회의를 주재하고 전사 방향을 결정합니다.',                                                             x: 2,  y: 2,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 4,  teamColor: '#c9a227', floorStyle: 'executive' },
+  // x=2 y=2 (구 CEO실) → 빈 아트리움 / 로비 (룸 삭제, 플레이어 자유 이동 영역)
+  // CEO실 컨셉은 '대표실(president)'에 통합 — AI 경영 데이터 + 오너 개인 데이터 한 곳으로
   { id: 'infra-lead',  entityId: 'infra-lead',  name: '인프라팀',   emoji: '🖥️', description: '서버·봇·크론·디스크 안정성 관리. 매일 09:00 자동 자가진단을 실행하고 이상 감지 시 Discord #jarvis-system에 즉시 경보를 발송합니다.',                                               x: 11, y: 2,  w: 7, h: 5, type: 'team',    npcX: 14, npcY: 4,  teamColor: '#22c55e', floorStyle: 'carpet' },
   { id: 'trend-lead',  entityId: 'trend-lead',  name: '정보팀',     emoji: '📡', description: '시장·기술·뉴스 트렌드 인텔리전스. 평일 07:30 글로벌 동향 분석 리포트를 생성하고 Discord #jarvis-ceo 채널로 전송합니다.',                                                            x: 20, y: 2,  w: 7, h: 5, type: 'team',    npcX: 23, npcY: 4,  teamColor: '#3b82f6', floorStyle: 'carpet' },
-  { id: 'president',   entityId: 'president',    name: '오너 집무실', emoji: '🏛️', description: '이정우(대표) 개인 공간. 오늘 Preply 수업 일정·예정 수입·미해결 약속 트래킹. 자비스 AI 경영(CEO실)과 분리된 실인 전용 데이터 허브.',                                              x: 29, y: 2,  w: 7, h: 5, type: 'meeting', npcX: 32, npcY: 4,  teamColor: '#f59e0b', floorStyle: 'executive' },
+  { id: 'president',   entityId: 'president',    name: '대표실',     emoji: '🏛️', description: '이정우(실 대표)의 공간. 자비스 AI 경영 데이터(이사회·KPI·경영 점검) + 오너 개인 데이터(Discord 약속·Claude 세션·메모리)를 하나로 통합. 구 CEO실은 여기로 흡수됨.',                 x: 29, y: 2,  w: 7, h: 5, type: 'meeting', npcX: 32, npcY: 4,  teamColor: '#c9a227', floorStyle: 'executive' },
   // Row 2 (y=10)
   { id: 'record-lead', entityId: 'record-lead', name: '기록팀',     emoji: '📁', description: '메모리·기록 관리 및 RAG 아카이빙. 매일 23:50 전사 대화 기록을 정리하고 12만 청크 규모의 RAG 벡터 DB를 최신 상태로 유지합니다.',                                                    x: 2,  y: 10, w: 7, h: 5, type: 'team',    npcX: 5,  npcY: 12, teamColor: '#92702a', floorStyle: 'carpet' },
   { id: 'audit-lead',  entityId: 'audit-lead',  name: '감사팀',     emoji: '🔒', description: '내부감사·KPI 평가·크론 성과 추적. 매일 23:00 전사 크론 성공률을 집계하고 연속 실패 크론을 감지하여 에스컬레이션합니다.',                                                            x: 11, y: 10, w: 7, h: 5, type: 'team',    npcX: 14, npcY: 12, teamColor: '#dc2626', floorStyle: 'carpet' },
-  { id: 'academy-lead',entityId: 'academy-lead',name: '학습팀',     emoji: '📚', description: '기술 학습 지원·커리큘럼 큐레이션. 매일 20:00 이직 준비 면접 질문·기술 스터디 플랜을 생성하고 학습 진도를 관리합니다.',                                                             x: 20, y: 10, w: 7, h: 5, type: 'team',    npcX: 23, npcY: 12, teamColor: '#9333ea', floorStyle: 'carpet' },
+  { id: 'academy-lead',entityId: 'academy-lead',name: '학습팀',     emoji: '📚', description: '기술 학습 큐레이션 전담. CS·아키텍처·시스템 디자인·책/아티클 요약을 관리합니다. **면접 준비는 커리어팀 전담 — 학습팀은 개입하지 않습니다.**',                                        x: 20, y: 10, w: 7, h: 5, type: 'team',    npcX: 23, npcY: 12, teamColor: '#9333ea', floorStyle: 'carpet' },
   { id: 'brand-lead',  entityId: 'brand-lead',  name: '브랜드팀',   emoji: '🎨', description: '오픈소스 성장·기술 블로그·GitHub 활동 관리. 매주 화 08:00 브랜딩 전략 리포트를 생성하고 이슈·PR 제안으로 오픈소스 기여를 지원합니다.',                                             x: 29, y: 10, w: 7, h: 5, type: 'team',    npcX: 32, npcY: 12, teamColor: '#ea580c', floorStyle: 'carpet' },
   // Row 3 (y=18)
   { id: 'career-lead', entityId: 'career-lead', name: '커리어팀',   emoji: '💼', description: '이직 준비·채용공고 분석·커리어 전략 수립. 주간 단위로 타겟 기업 공고를 스캔하고 이력서·면접 전략을 맞춤 제안합니다.',                                                              x: 2,  y: 18, w: 7, h: 5, type: 'team',    npcX: 5,  npcY: 20, teamColor: '#0d9488', floorStyle: 'carpet' },
@@ -58,7 +59,7 @@ export const AGENT_TEAM_TO_ROOM: Record<string, string> = {
 export const ROOM_DESC: Record<string, string> = {};
 for (const r of ROOMS) { ROOM_DESC[r.id] = r.description; }
 
-// 룸 ID → 크론팀 레이블 매핑
+// 룸 ID → 크론팀 레이블 매핑 (ceo 제거, president가 대표실 흡수)
 export const ROOM_TO_CRON_TEAM: Record<string, string> = {
   'infra-lead':   '인프라팀',
   'trend-lead':   '정보팀',
@@ -68,8 +69,8 @@ export const ROOM_TO_CRON_TEAM: Record<string, string> = {
   'brand-lead':   '브랜드팀',
   'career-lead':  '커리어팀',
   'server-room':  '인프라팀',
-  'ceo':          'CEO/임원실',
-  'secretary':    'CEO/임원실',
+  'president':    '대표실',
+  'secretary':    '대표실',
 };
 
 // ── 크론센터 그리드 배치 상수 ──────────────────────────────────

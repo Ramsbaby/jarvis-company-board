@@ -145,11 +145,7 @@ type EntityDef = TeamLeadEntity | SystemMetricEntity;
 
 const ENTITIES: Record<string, EntityDef> = {
   // ── 팀장 엔티티 ──
-  ceo: {
-    type: 'team-lead', name: 'CEO (이정우)', title: '대표 · 전체 운영 총괄',
-    avatar: '👔', keywords: ['board-meeting', 'ceo-daily-digest', 'council'],
-    discordChannel: 'jarvis-ceo', schedule: '매일 08:10, 21:55',
-  },
+  // 'ceo' ENTITY 삭제됨 — 대표실(president)이 AI 경영 데이터까지 통합 흡수
   'infra-lead': {
     type: 'team-lead', name: '인프라팀 · 박태성', title: '서버·봇·크론 관리',
     avatar: '⚙️', keywords: ['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics'],
@@ -498,13 +494,7 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
   const bot = getDiscordBotStatus();
 
   switch (id) {
-    case 'ceo': {
-      if (stats.failed === 0) {
-        return '오늘 이사회와 경영 점검을 마쳤어요. 모두 정상입니다.';
-      }
-      const failedNames = getFailedTaskNames(['board-meeting', 'ceo-daily-digest', 'council']);
-      return `오늘 일부 업무에서 문제가 있었어요. ${failedNames.map(taskDisplayName).join(', ')}에서 오류가 발생했습니다.`;
-    }
+    // 'ceo' case 제거 — ENTITIES에서 삭제됨. 대표실(president)은 전용 라우트(/api/president/briefing)가 직접 처리
     case 'infra-lead': {
       const parts: string[] = [];
       if (disk.percent >= 90) {

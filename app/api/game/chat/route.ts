@@ -10,14 +10,14 @@ import { recordCost, getTodayCost, getDailyCap, GROQ_LLAMA_70B } from '@/lib/cha
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 
 const TEAM_PROMPTS: Record<string, string> = {
-  ceo: '나는 Jarvis Company의 CEO(이정우)입니다. 전체 시스템 운영 현황을 파악하고 전략적 의사결정을 내립니다. 질문에 대표로서 답변합니다.',
+  president: '나는 자비스 컴퍼니의 대표 이정우입니다. AI 경영 현황(이사회·KPI·경영 점검)과 개인 데이터(약속·Claude 세션·메모리)를 통합 관리하는 이정우 본인의 공간이라 답변합니다.',
   'infra-lead': '나는 인프라팀장 박태성입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 시스템 상태에 대해 쉽게 설명합니다.',
+  'academy-lead': '나는 학습팀장 신유진입니다. 기술 학습 큐레이션 전담 — CS/아키텍처/시스템 디자인/책 요약을 관리합니다. 면접 준비는 커리어팀 소관이라 학습팀에서 다루지 않습니다.',
   'trend-lead': '나는 정보팀장 강나연입니다. 뉴스, 시장 트렌드, 기술 동향을 분석합니다. 시장 상황을 쉽게 설명합니다.',
   'record-lead': '나는 기록팀장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙을 담당합니다.',
   'career-lead': '나는 커리어팀장 김서연입니다. 채용 시장 분석, 이력서, 면접 준비를 지원합니다.',
   'brand-lead': '나는 브랜드팀장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.',
   'audit-lead': '나는 감사팀장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.',
-  'academy-lead': '나는 학습팀장 신유진입니다. 학습 계획, 스터디 큐레이션을 관리합니다.',
   'cron-engine': '나는 크론 엔진 관리자입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.',
   'discord-bot': '나는 Discord 봇 관리자입니다. 봇 프로세스 상태와 채팅 시스템을 관리합니다.',
   'disk-storage': '나는 디스크 스토리지 관리자입니다. 로컬 스토리지 사용량과 정리 상태를 관리합니다.',
@@ -151,12 +151,14 @@ function gatherTeamContext(teamId: string): string {
       value = `오늘 학습팀 크론 활동:\n${crons || '(없음)'}\n\n최근 학습 리포트${reportFile ? ` (${path.basename(reportFile)})` : ''}:\n${tailLines(report, 20) || '(없음)'}`;
       break;
     }
-    case 'ceo': {
+    case 'president': {
+      // 대표실 — AI 경영 데이터 + 오너 개인 데이터 통합
       const minutesFile = latestFileIn(path.join(JARVIS_HOME, 'state', 'board-minutes'), /\.md$/);
       const minutes = minutesFile ? safeRead(minutesFile, 5000) : '';
       const contextBus = safeRead(path.join(JARVIS_HOME, 'state', 'context-bus.md'), 3000);
       const stats = cronStats(cronLog);
-      value = `최근 보드 미팅${minutesFile ? ` (${path.basename(minutesFile)})` : ''}:\n${tailLines(minutes, 30) || '(없음)'}\n\n컨텍스트 버스:\n${tailLines(contextBus, 20) || '(없음)'}\n\n오늘 크론 전체 통계:\n- 실행 라인: ${stats.total}\n- 실패 라인: ${stats.fail}\n- 디스크 /: ${diskUsage()}\n- Discord 봇: ${botStatus()}`;
+      const commits = grepLines(cronLog, ['board-meeting', 'ceo-daily-digest', 'council'], 8);
+      value = `자비스 AI 경영 최근 활동:\n${commits || '(없음)'}\n\n최근 보드 미팅${minutesFile ? ` (${path.basename(minutesFile)})` : ''}:\n${tailLines(minutes, 30) || '(없음)'}\n\n컨텍스트 버스:\n${tailLines(contextBus, 20) || '(없음)'}\n\n오늘 전체 통계:\n- 크론 실행: ${stats.total}\n- 실패: ${stats.fail}\n- 디스크: ${diskUsage()}\n- Discord 봇: ${botStatus()}`;
       break;
     }
     case 'cron-engine': {

@@ -342,12 +342,7 @@ export default function VirtualOffice() {
           },
           'president': {
             status: 'GREEN',
-            summary: '대표님(이정우) 전용 집무실. 자비스 컴퍼니 경영 방향 결정 · CEO 보고서 수신. 자비스 전체 시스템의 최종 의사결정권자입니다.',
-          },
-          'ceo': {
-            status: 'GREEN',
-            summary: 'CEO(자비스 Opus) 집무실. 주간 경영보고 · KPI 평가 · 중요 판단을 총괄합니다. 매주 월요일 09:00 경영회의를 주재합니다.',
-            schedule: '매주 월 09:00',
+            summary: '이정우(대표) — AI 경영 데이터와 오너 개인 데이터가 통합된 공간.',
           },
         };
         const special = specialContent[room.id] || {};
@@ -1110,9 +1105,9 @@ export default function VirtualOffice() {
       ctx!.textAlign = 'left';
       ctx!.fillText('MINIMAP', mx, my - 8);
 
-      // Rooms with abbreviated names
+      // Rooms with abbreviated names (ceo 삭제 → 대표실은 president로 통합)
       const abbrevNames: Record<string, string> = {
-        'ceo': 'CEO', 'infra-lead': 'INF', 'trend-lead': 'TRD', 'president': 'PRE',
+        'infra-lead': 'INF', 'trend-lead': 'TRD', 'president': '대표',
         'record-lead': 'REC', 'audit-lead': 'AUD', 'academy-lead': 'ACM', 'brand-lead': 'BRD',
         'career-lead': 'CAR', 'standup': 'STU', 'secretary': 'SEC', 'server-room': 'SRV',
         'cron-center': 'CRON',
@@ -1126,7 +1121,7 @@ export default function VirtualOffice() {
 
       // Zone color coding: executive=gold, team=blue, infra=green, server=slate
       const zoneColor = (rId: string): string => {
-        if (rId === 'ceo' || rId === 'president') return '#c9a227';
+        if (rId === 'president') return '#c9a227';
         if (rId === 'server-room') return '#64748b';
         if (rId === 'cron-center') return '#6366f1';
         if (rId === 'infra-lead') return '#22c55e';

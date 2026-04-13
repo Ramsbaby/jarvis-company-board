@@ -68,13 +68,16 @@ interface TeamRule {
 
 const TEAM_RULES: TeamRule[] = [
   { id: 'infra', label: '인프라팀', emoji: '⚙️', keywords: ['disk', 'system-doctor', 'system-health', 'infra', 'sync-system-metrics', 'glances', 'aggregate-metrics', 'health', 'log-cleanup', 'memory-cleanup', 'rate-limit', 'update-usage-cache', 'token-sync', 'daily-usage-check', 'cost-monitor', 'security-scan', 'scorecard-enforcer'] },
-  { id: 'info', label: '정보팀', emoji: '📡', keywords: ['news', 'market', 'tqqq', 'trend', 'github-monitor', 'stock', 'calendar-alert', 'macro', 'finance-monitor', 'recon', 'personal-schedule'] },
+  // 'personal-schedule' 제거 — 보람 Preply 데이터라 정보팀 업무 아님
+  { id: 'info', label: '정보팀', emoji: '📡', keywords: ['news', 'market', 'tqqq', 'trend', 'github-monitor', 'stock', 'calendar-alert', 'macro', 'finance-monitor', 'recon'] },
   { id: 'record', label: '기록팀', emoji: '🗄️', keywords: ['record', 'memory', 'rag', 'session', 'vault', 'gen-system-overview'] },
   { id: 'career', label: '커리어팀', emoji: '💼', keywords: ['career', 'interview', 'commitment', 'job', 'resume', 'isg', 'growth'] },
   { id: 'brand', label: '브랜드팀', emoji: '📣', keywords: ['brand', 'blog', 'oss', 'openclaw', 'github-star', 'stars'] },
   { id: 'audit', label: '감사팀', emoji: '🔍', keywords: ['audit', 'e2e', 'cron-failure', 'regression', 'doc-sync', 'doc-supervisor', 'code-auditor', 'cron-auditor', 'stale-task', 'kpi', 'roi', 'bot-quality', 'bot-self-critique', 'auto-diagnose', 'skill-eval', 'rag-bench'] },
-  { id: 'academy', label: '학습팀', emoji: '📚', keywords: ['academy', 'learning', 'study', 'lecture', 'boram'] },
-  { id: 'exec', label: 'CEO/임원실', emoji: '👔', keywords: ['board', 'ceo', 'council', 'morning-standup', 'daily-summary', 'schedule-coherence', 'monthly-review', 'connections-weekly', 'private-sync', 'dev-runner', 'jarvis-coder', 'agent-batch-commit', 'weekly-code-review', 'memory-expire', 'weekly-usage-stats'] },
+  // 'boram' 제거 — 보람 일정은 학습팀 업무 아님. 학습팀은 기술 학습 큐레이션 전담(CS/아키텍처/책 요약)
+  { id: 'academy', label: '학습팀', emoji: '📚', keywords: ['academy', 'learning', 'study', 'lecture'] },
+  // CEO실 삭제 → '대표실' 단일 공간에 흡수
+  { id: 'exec', label: '대표실', emoji: '🏛️', keywords: ['board', 'ceo', 'council', 'morning-standup', 'daily-summary', 'schedule-coherence', 'monthly-review', 'connections-weekly', 'private-sync', 'dev-runner', 'jarvis-coder', 'agent-batch-commit', 'weekly-code-review', 'memory-expire', 'weekly-usage-stats'] },
 ];
 
 function classifyTeam(taskId: string): { label: string; emoji: string } {
