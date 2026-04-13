@@ -569,20 +569,19 @@ export default function VirtualOffice() {
       const rw = r.w * T, rh = r.h * T;
       const state = npcStatesRef.current[r.id];
 
-      // 오픈 오피스 파드 — closed와 완전히 다른 스타일 (한 눈에 구분되도록)
+      // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분
       if (r.wallStyle === 'pod') {
-        // 1. 단일 다크 네이비 바닥 (복도와 동일 베이스, 팀 컬러 stamp 없음)
+        // 1. 단일 다크 네이비 바닥
         ctx!.fillStyle = '#1a1f2e';
         ctx!.fillRect(rx, ry, rw, rh);
 
-        // 2. 팀 컬러 언더글로우 (아주 subtle — 바닥에 은은히 물든 정도)
-        const grdTeam = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, Math.max(rw, rh) * 0.7);
-        grdTeam.addColorStop(0, r.teamColor + '14');
-        grdTeam.addColorStop(1, 'transparent');
-        ctx!.fillStyle = grdTeam;
-        ctx!.fillRect(rx, ry, rw, rh);
+        // 2. 팀 컬러 러그 (방 내부 60%, 중앙 배치)
+        const rugMarginX = rw * 0.2;
+        const rugMarginY = rh * 0.2;
+        ctx!.fillStyle = r.teamColor + '15';
+        ctx!.fillRect(rx + rugMarginX, ry + rugMarginY, rw - rugMarginX * 2, rh - rugMarginY * 2);
 
-        // 3. 상태 indicator (LED 점) — 우상단 구석에 점 하나로 축소
+        // 3. 상태 indicator (LED 점) — 우상단 구석
         if (state) {
           const stColor = state.status === 'green' ? '#3fb950' : state.status === 'red' ? '#f85149' : '#d29922';
           ctx!.save();
@@ -595,35 +594,31 @@ export default function VirtualOffice() {
           ctx!.restore();
         }
 
-        // 4. 떠있는 팀 태그 (게임 quest marker 스타일, 상단 중앙 약간 위)
+        // 4. 떠있는 팀 태그 (상단 중앙 pill)
         const tagText = `${r.emoji} ${r.name}`;
         ctx!.font = 'bold 10px -apple-system, monospace';
         const tagW = ctx!.measureText(tagText).width + 14;
         const tagX = rx + rw / 2 - tagW / 2;
         const tagY = ry + 4;
-        // 태그 배경 (rounded pill, 단일 다크 네이비)
         ctx!.fillStyle = 'rgba(13, 17, 23, 0.85)';
         ctx!.beginPath();
         ctx!.roundRect(tagX, tagY, tagW, 16, 8);
         ctx!.fill();
-        // 태그 left border (team color accent)
         ctx!.fillStyle = r.teamColor;
         ctx!.fillRect(tagX, tagY + 2, 2, 12);
-        // 태그 텍스트
         ctx!.fillStyle = '#e6edf3';
         ctx!.textAlign = 'center';
         ctx!.fillText(tagText, rx + rw / 2, tagY + 11);
 
-        // 5. 가구 (데스크/의자/모니터) — 기존 drawRoomFurniture
+        // 5. 가구
         drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
         return;
       }
 
-      // Closed room — 기존 로직 그대로
-      // Floor based on floorStyle
+      // ── Closed room ──────────────────────────────────────────────
+      // Floor based on floorStyle (teamColor 참조 제거)
       switch (r.floorStyle) {
-        case 'executive':
-          // Dark wood plank pattern
+        case 'executive': {
           ctx!.fillStyle = '#2a1f0e';
           ctx!.fillRect(rx, ry, rw, rh);
           for (let y = 0; y < r.h; y++) {
@@ -631,22 +626,20 @@ export default function VirtualOffice() {
               const offset = (y % 2) * (T / 2);
               ctx!.fillStyle = (x + y) % 3 === 0 ? '#33260f0a' : '#1f18080a';
               ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              // Wood grain horizontal lines
               ctx!.fillStyle = '#3d2e1508';
               ctx!.fillRect(rx + x * T + offset, ry + y * T + 6, T - 2, 1);
               ctx!.fillRect(rx + x * T + offset, ry + y * T + 18, T - 4, 1);
               ctx!.fillRect(rx + x * T + offset, ry + y * T + 28, T - 1, 1);
             }
           }
-          // Warm ambient glow
           const grdExec = ctx!.createRadialGradient(rx + rw / 2, ry + rh / 2, 0, rx + rw / 2, ry + rh / 2, rw * 0.6);
           grdExec.addColorStop(0, '#c9a22710');
           grdExec.addColorStop(1, 'transparent');
           ctx!.fillStyle = grdExec;
           ctx!.fillRect(rx, ry, rw, rh);
           break;
-        case 'metal':
-          // Metal grid for server/cron rooms
+        }
+        case 'metal': {
           ctx!.fillStyle = '#0c0f14';
           ctx!.fillRect(rx, ry, rw, rh);
           ctx!.strokeStyle = '#1e293b40';
@@ -663,7 +656,6 @@ export default function VirtualOffice() {
             ctx!.lineTo(rx + rw, ry + gy * (T / 2));
             ctx!.stroke();
           }
-          // Raised floor panels (diamond pattern)
           for (let y = 0; y < r.h; y++) {
             for (let x = 0; x < r.w; x++) {
               if ((x + y) % 4 === 0) {
@@ -673,15 +665,14 @@ export default function VirtualOffice() {
             }
           }
           break;
-        case 'stage':
-          // Polished stage floor with planks
+        }
+        case 'stage': {
           ctx!.fillStyle = '#1a1505';
           ctx!.fillRect(rx, ry, rw, rh);
           for (let y = 0; y < r.h; y++) {
             for (let x = 0; x < r.w; x++) {
               ctx!.fillStyle = '#2a200a06';
               ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              // Stage plank lines
               ctx!.fillStyle = '#33280f08';
               ctx!.fillRect(rx + x * T, ry + y * T + T - 1, T, 1);
             }
@@ -692,29 +683,19 @@ export default function VirtualOffice() {
           ctx!.fillStyle = grdStage;
           ctx!.fillRect(rx, ry, rw, rh);
           break;
-        default:
-          // Carpet floor with alternating subtle shades
+        }
+        default: {
           ctx!.fillStyle = '#1a1a2e';
           ctx!.fillRect(rx, ry, rw, rh);
-          for (let y = 0; y < r.h; y++) {
-            for (let x = 0; x < r.w; x++) {
-              // Carpet texture pattern (alternating subtle squares)
-              const shade = ((x + y) % 2 === 0) ? '06' : '04';
-              ctx!.fillStyle = r.teamColor + shade;
-              ctx!.fillRect(rx + x * T, ry + y * T, T, T);
-              // Carpet fiber dots
-              if ((x * 7 + y * 13) % 5 === 0) {
-                ctx!.fillStyle = r.teamColor + '08';
-                ctx!.fillRect(rx + x * T + 8, ry + y * T + 8, 2, 2);
-              }
-              if ((x * 11 + y * 3) % 7 === 0) {
-                ctx!.fillStyle = r.teamColor + '06';
-                ctx!.fillRect(rx + x * T + 20, ry + y * T + 14, 2, 2);
-              }
-            }
-          }
           break;
+        }
       }
+
+      // 팀 컬러 바닥 러그 (방 내부 80%, teamColor+'12')
+      const rugPadX = rw * 0.1;
+      const rugPadY = rh * 0.1;
+      ctx!.fillStyle = r.teamColor + '12';
+      ctx!.fillRect(rx + rugPadX, ry + rugPadY, rw - rugPadX * 2, rh - rugPadY * 2);
 
       // Inner shadow along walls (depth effect)
       const innerShadowSize = 8;
@@ -744,76 +725,60 @@ export default function VirtualOffice() {
         ctx!.fillRect(rx, ry, rw, rh);
       }
 
-      // Walls — 단일 그레이 팔레트 (통일성). 팀 컬러는 얇은 inner 액센트로만.
-      // 메인 벽
-      ctx!.strokeStyle = '#30363d';
-      ctx!.lineWidth = 4;
-      ctx!.strokeRect(rx + 2, ry + 2, rw - 4, rh - 4);
-      // 얇은 팀 컬러 inner 액센트 (1px, 방 정체성 표시)
-      ctx!.strokeStyle = r.teamColor + '60';
-      ctx!.lineWidth = 1;
-      ctx!.strokeRect(rx + 5, ry + 5, rw - 10, rh - 10);
-
-      // Wall top (3D depth) — 회색 베이스
+      // 벽 — #21262d 단일 (teamColor 침투 금지)
+      ctx!.fillStyle = '#21262d';
+      ctx!.fillRect(rx, ry, rw, 5);          // 상단 벽
+      ctx!.fillRect(rx, ry + rh - 5, rw, 5); // 하단 벽
+      ctx!.fillRect(rx, ry, 5, rh);          // 좌측 벽
+      ctx!.fillRect(rx + rw - 5, ry, 5, rh); // 우측 벽
+      // 상단 하이라이트
       ctx!.fillStyle = '#30363d';
-      ctx!.fillRect(rx, ry, rw, 5);
-      ctx!.fillStyle = '#484f58';  // 상단 하이라이트
-      ctx!.fillRect(rx + 4, ry, rw - 8, 2);
+      ctx!.fillRect(rx, ry, rw, 3);
+      ctx!.strokeStyle = '#30363d';
+      ctx!.lineWidth = 1;
+      ctx!.strokeRect(rx + 2, ry + 2, rw - 4, rh - 4);
 
-      // Side wall shading (통일 그레이)
-      ctx!.fillStyle = '#30363d40';
-      ctx!.fillRect(rx, ry, 4, rh);
-      ctx!.fillStyle = '#30363d20';
-      ctx!.fillRect(rx + rw - 4, ry, 4, rh);
-
-      // Glass window sections (on some walls — top wall for non-cron rooms)
-      if (r.type !== 'cron' && r.w >= 6) {
-        const windowCount = Math.floor(r.w / 3);
+      // 유리창 — 상단 벽에 반투명 파란색 패널 (#58a6ff)
+      if (r.type !== 'cron') {
+        const windowCount = Math.max(1, Math.floor(r.w / 3));
+        const windowW = T * 1.2;
         for (let i = 0; i < windowCount; i++) {
-          const wx = rx + T * 1.5 + i * T * 2.5;
-          const wy = ry + 2;
-          ctx!.fillStyle = '#58a6ff08';
-          ctx!.fillRect(wx, wy, T * 1.2, 4);
-          ctx!.strokeStyle = '#58a6ff15';
+          const wx = rx + T * 1.2 + i * T * 2.2;
+          const wy = ry;
+          ctx!.fillStyle = '#58a6ff15';
+          ctx!.fillRect(wx, wy, windowW, 5);
+          ctx!.strokeStyle = '#58a6ff30';
           ctx!.lineWidth = 0.5;
-          ctx!.strokeRect(wx, wy, T * 1.2, 4);
+          ctx!.strokeRect(wx, wy, windowW, 5);
         }
       }
 
-      // Door opening
+      // 문 — 하단 중앙 (#58a6ff 하이라이트)
       const doorX = (r.x + Math.floor(r.w / 2)) * T - camX;
       if (r.type === 'cron') {
-        // 크론센터: 위쪽 문
         ctx!.fillStyle = '#3a3a52';
         ctx!.fillRect(doorX - T, ry - 2, T * 3, 8);
-        ctx!.fillStyle = r.teamColor + '80';
+        ctx!.fillStyle = '#58a6ff80';
         ctx!.fillRect(doorX - T, ry, T * 3, 3);
-        // Door light strip
-        ctx!.fillStyle = r.teamColor + '20';
-        ctx!.fillRect(doorX - T + 4, ry + 3, T * 3 - 8, 2);
       } else {
-        // 일반: 아래쪽 문
         ctx!.fillStyle = '#3a3a52';
-        ctx!.fillRect(doorX - T, ry + rh - 6, T * 2, 8);
-        ctx!.fillStyle = r.teamColor + '80';
-        ctx!.fillRect(doorX - T, ry + rh - 3, T * 2, 3);
-        // Door light strip
-        ctx!.fillStyle = r.teamColor + '20';
-        ctx!.fillRect(doorX - T + 4, ry + rh - 6, T * 2 - 8, 2);
+        ctx!.fillRect(doorX - T / 2, ry + rh - 6, T * 1.5, 8);
+        ctx!.fillStyle = '#58a6ff';
+        ctx!.fillRect(doorX - T / 2, ry + rh - 3, T * 1.5, 3);
       }
 
-      // Draw unique furniture per room
+      // Draw furniture
       drawRoomFurniture(ctx!, r, rx, ry, rw, rh, frameCountRef.current, cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS));
 
-      // Room name plate (inside top, more refined)
+      // Room name plate
       ctx!.font = 'bold 11px monospace';
       const plateText = `${r.emoji} ${r.name}`;
       const plateW = ctx!.measureText(plateText).width + 20;
-      ctx!.fillStyle = r.teamColor + '20';
+      ctx!.fillStyle = 'rgba(13, 17, 23, 0.75)';
       ctx!.beginPath();
       ctx!.roundRect(rx + rw / 2 - plateW / 2, ry + 10, plateW, 20, 5);
       ctx!.fill();
-      ctx!.strokeStyle = r.teamColor + '35';
+      ctx!.strokeStyle = '#30363d';
       ctx!.lineWidth = 1;
       ctx!.beginPath();
       ctx!.roundRect(rx + rw / 2 - plateW / 2, ry + 10, plateW, 20, 5);
@@ -1353,11 +1318,15 @@ export default function VirtualOffice() {
         if (rId === 'finance') return '#10b981';
         if (rId === 'library') return '#0ea5e9';
         if (rId === 'growth-lead') return '#14b8a6';
-        if (rId === 'server-room') return '#64748b';
+        if (rId === 'server-room') return '#475569';
         if (rId === 'cron-center') return '#6366f1';
         if (rId === 'infra-lead') return '#22c55e';
         if (rId === 'standup') return '#eab308';
         if (rId === 'secretary') return '#8b5cf6';
+        if (rId === 'brand-lead') return '#ea580c';
+        if (rId === 'audit-lead') return '#dc2626';
+        if (rId === 'record-lead') return '#92702a';
+        if (rId === 'trend-lead') return '#3b82f6';
         return '#3b82f6';
       };
 
