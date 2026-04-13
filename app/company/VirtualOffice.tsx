@@ -1,149 +1,23 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  T, COLS, ROWS, MOVE_SPEED,
+  ROOMS, AGENT_TEAM_TO_ROOM,
+  CRON_COLS, CRON_ROWS,
+  CRON_COL_START, CRON_ROW_START, CRON_COL_SPACING, CRON_ROW_SPACING,
+  getCronTilePos, buildCollisionMap, aStarPath,
+} from '@/lib/map/rooms';
+import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
+import TeamBriefingPopup from '@/components/map/TeamBriefingPopup';
+import CronGridPopup from '@/components/map/CronGridPopup';
+import CronDetailPopup from '@/components/map/CronDetailPopup';
+import MobileControls from '@/components/map/MobileControls';
 
 /* ═══════════════════════════════════════════════════════════════════
    Jarvis MAP — Gather Town Style Virtual Office
    Pure Canvas 2D, no external game engine
    Major UX rewrite: unique room visuals, descriptions, mobile support
    ═══════════════════════════════════════════════════════════════════ */
-
-const T = 32; // tile size
-const COLS = 40;
-const ROWS = 34;
-const MOVE_SPEED = 130; // ms per tile
-
-// ── 방 정의 ────────────────────────────────────────────────────
-interface RoomDef {
-  id: string;
-  entityId: string;
-  name: string;
-  emoji: string;
-  description: string;
-  x: number; y: number; w: number; h: number;
-  type: 'team' | 'server' | 'meeting' | 'cron';
-  npcX: number; npcY: number;
-  teamColor: string;
-  floorStyle: 'executive' | 'carpet' | 'metal' | 'stage';
-}
-
-const ROOMS: RoomDef[] = [
-  // Row 1 (y=2)
-  { id: 'ceo',         entityId: 'ceo',         name: 'CEO실',      emoji: '👔', description: '전체 시스템 운영 총괄 · 이사회 주재',           x: 2,  y: 2,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 4,  teamColor: '#c9a227', floorStyle: 'executive' },
-  { id: 'infra-lead',  entityId: 'infra-lead',  name: '인프라팀',   emoji: '🖥️', description: '서버·봇·크론·디스크 관리',                     x: 11, y: 2,  w: 7, h: 5, type: 'team',    npcX: 14, npcY: 4,  teamColor: '#22c55e', floorStyle: 'carpet' },
-  { id: 'trend-lead',  entityId: 'trend-lead',  name: '정보팀',     emoji: '📡', description: '뉴스·시장·기술 트렌드 분석',                   x: 20, y: 2,  w: 7, h: 5, type: 'team',    npcX: 23, npcY: 4,  teamColor: '#3b82f6', floorStyle: 'carpet' },
-  { id: 'finance',     entityId: '',             name: '재무팀',     emoji: '📊', description: '재무 분석 · 예산 관리 · 투자 포트폴리오',      x: 29, y: 2,  w: 7, h: 5, type: 'team',    npcX: 32, npcY: 4,  teamColor: '#166534', floorStyle: 'carpet' },
-  // Row 2 (y=10)
-  { id: 'record-lead', entityId: 'record-lead', name: '기록팀',     emoji: '📁', description: '일일 기록 정리 · RAG 아카이빙',               x: 2,  y: 10, w: 7, h: 5, type: 'team',    npcX: 5,  npcY: 12, teamColor: '#92702a', floorStyle: 'carpet' },
-  { id: 'audit-lead',  entityId: 'audit-lead',  name: '감사팀',     emoji: '🔒', description: '품질 감사 · E2E 테스트 · 크론 실패 추적',     x: 11, y: 10, w: 7, h: 5, type: 'team',    npcX: 14, npcY: 12, teamColor: '#dc2626', floorStyle: 'carpet' },
-  { id: 'academy-lead',entityId: 'academy-lead',name: '학습팀',     emoji: '📚', description: '학습 큐레이션 · 스터디 계획',                 x: 20, y: 10, w: 7, h: 5, type: 'team',    npcX: 23, npcY: 12, teamColor: '#9333ea', floorStyle: 'carpet' },
-  { id: 'brand-lead',  entityId: 'brand-lead',  name: '브랜드팀',   emoji: '🎨', description: 'OSS 전략 · 블로그 · GitHub 성장',             x: 29, y: 10, w: 7, h: 5, type: 'team',    npcX: 32, npcY: 12, teamColor: '#ea580c', floorStyle: 'carpet' },
-  // Row 3 (y=18)
-  { id: 'career-lead', entityId: 'career-lead', name: '커리어팀',   emoji: '💼', description: '채용 분석 · 면접 준비 · 커리어 전략',        x: 2,  y: 18, w: 7, h: 5, type: 'team',    npcX: 5,  npcY: 20, teamColor: '#0d9488', floorStyle: 'carpet' },
-  { id: 'standup',     entityId: '',             name: '스탠드업홀', emoji: '🎤', description: '매일 09:15 모닝 브리핑',                     x: 11, y: 18, w: 7, h: 5, type: 'meeting', npcX: 14, npcY: 20, teamColor: '#eab308', floorStyle: 'stage' },
-  { id: 'ceo-digest',  entityId: '',             name: '회의실',     emoji: '🗂️', description: '이사회 · CEO 일일 요약',                     x: 20, y: 18, w: 7, h: 5, type: 'meeting', npcX: 23, npcY: 20, teamColor: '#64748b', floorStyle: 'carpet' },
-  { id: 'server-room', entityId: 'cron-engine',  name: '서버룸',     emoji: '🖥️', description: 'Mac Mini 서버 · 디스크/메모리/봇 모니터링',    x: 29, y: 18, w: 7, h: 5, type: 'server',  npcX: 32, npcY: 20, teamColor: '#475569', floorStyle: 'metal' },
-  // Row 4 — Cron Center (y=25)
-  { id: 'cron-center', entityId: '',             name: '크론 센터',   emoji: '⏰', description: '전사 크론잡 실시간 모니터링',                  x: 1,  y: 25, w: 36, h: 8, type: 'cron',    npcX: 18, npcY: 28, teamColor: '#6366f1', floorStyle: 'metal' },
-];
-
-// agent-live teamId -> room id mapping
-const AGENT_TEAM_TO_ROOM: Record<string, string> = {
-  'infra-lead': 'infra-lead',
-  'trend-team': 'trend-lead',
-  'audit-team': 'audit-lead',
-  'record-team': 'record-lead',
-  'brand-team': 'brand-lead',
-  'growth-team': 'career-lead',
-  'academy-team': 'academy-lead',
-  'bot-system': 'server-room',
-};
-
-// Room descriptions lookup for fallback display
-const ROOM_DESC: Record<string, string> = {};
-for (const r of ROOMS) { ROOM_DESC[r.id] = r.description; }
-
-// ── 벽 타일 맵 생성 ────────────────────────────────────────────
-function buildCollisionMap(): boolean[][] {
-  const map = Array.from({ length: ROWS }, () => Array(COLS).fill(false) as boolean[]);
-  for (let x = 0; x < COLS; x++) { map[0][x] = true; map[ROWS - 1][x] = true; }
-  for (let y = 0; y < ROWS; y++) { map[y][0] = true; map[y][COLS - 1] = true; }
-  for (const r of ROOMS) {
-    for (let x = r.x; x < r.x + r.w; x++) {
-      map[r.y][x] = true;
-      map[r.y + r.h - 1][x] = true;
-    }
-    for (let y = r.y; y < r.y + r.h; y++) {
-      map[y][r.x] = true;
-      map[y][r.x + r.w - 1] = true;
-    }
-    const doorX = r.x + Math.floor(r.w / 2);
-    // 크론센터는 위쪽 문, 나머지는 아래쪽 문
-    if (r.type === 'cron') {
-      map[r.y][doorX] = false;
-      map[r.y][doorX - 1] = false;
-      map[r.y][doorX + 1] = false;
-    } else {
-      map[r.y + r.h - 1][doorX] = false;
-      map[r.y + r.h - 1][doorX - 1] = false;
-    }
-  }
-  return map;
-}
-
-// ── 브리핑 타입 ────────────────────────────────────────────────
-interface BriefingData {
-  id: string;
-  name: string;
-  emoji?: string;
-  avatar?: string;
-  icon?: string;
-  status: string;
-  summary: string;
-  schedule?: string;
-  title?: string;
-  description?: string;
-  stats?: { total: number; success: number; failed: number; rate: number };
-  recentActivity?: Array<{ time: string; task: string; result: string; message: string }>;
-  recentEvents?: Array<{ time: string; task?: string; event?: string; result: string }>;
-  lastBoardMinutes?: string | null;
-  boardMinutes?: { date: string; content: string } | null;
-  alerts?: string[];
-  discordChannel?: string;
-  roomDescription?: string;
-}
-
-// ── NPC 상태 ───────────────────────────────────────────────────
-interface NpcState {
-  status: 'green' | 'yellow' | 'red';
-  task: string;
-  activity: string;
-}
-
-// ── 유틸리티: 상태 텍스트 ─────────────────────────────────────
-function statusExplanation(briefing: BriefingData): string {
-  if (briefing.status === 'GREEN') return '정상 운영 중';
-  if (briefing.status === 'RED') {
-    if (briefing.stats && briefing.stats.failed > 0) {
-      return `최근 ${briefing.stats.failed}건 실패`;
-    }
-    if (briefing.alerts && briefing.alerts.length > 0) {
-      return briefing.alerts[0];
-    }
-    return '이상 감지됨';
-  }
-  // YELLOW
-  if (briefing.stats && briefing.stats.failed > 0) {
-    return `${briefing.stats.failed}건 실패 발생 — 모니터링 중`;
-  }
-  return '일부 주의 필요';
-}
-
-function activityIcon(result: string): string {
-  const r = result.toLowerCase();
-  if (r === 'success') return '\uD83D\uDFE2'; // green circle
-  if (r === 'failed') return '\uD83D\uDD34';  // red circle
-  return '\u26A0\uFE0F'; // warning
-}
 
 // ═══════════════════════════════════════════════════════════════
 // React 컴포넌트
@@ -160,8 +34,17 @@ export default function VirtualOffice() {
   const [isMobile, setIsMobile] = useState(false);
   const [tooltipRoom, setTooltipRoom] = useState<{ room: RoomDef; x: number; y: number } | null>(null);
   const [showMobileHelp, setShowMobileHelp] = useState(false);
-  const [cronData, setCronData] = useState<Array<{ name: string; korName: string; status: string; lastRun: string; result: string; nextSchedule: string }>>([]);
-  const [cronPopup, setCronPopup] = useState<{ name: string; korName: string; status: string; lastRun: string; result: string; nextSchedule: string } | null>(null);
+  const [cronData, setCronData] = useState<CronItem[]>([]);
+  const [cronPopup, setCronPopup] = useState<CronItem | null>(null);
+  const [cronGridOpen, setCronGridOpen] = useState(false);
+  const [cronFilter, setCronFilter] = useState<'all'|'success'|'failed'|'other'>('all');
+  const [cronSearch, setCronSearch] = useState('');
+  // 인트로 — sessionStorage로 영속화 (재마운트 시에도 유지)
+  const [showIntro, setShowIntro] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return sessionStorage.getItem('jarvis-map-intro-v2') !== '1';
+  });
+  const [chatPanelOpen, setChatPanelOpen] = useState(false); // 팀장 채팅 패널 (기본 닫힘)
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // 게임 상태 refs
@@ -172,11 +55,23 @@ export default function VirtualOffice() {
   const npcStatesRef = useRef<Record<string, NpcState>>({});
   const keysRef = useRef<Set<string>>(new Set());
   const collisionMap = useRef(buildCollisionMap());
+  const pathRef = useRef<{ x: number; y: number }[]>([]); // A* 경로 큐
+  const pathTargetRef = useRef<{ x: number; y: number } | null>(null); // 목표 타일 (시각 표시)
   const popupOpenRef = useRef(false);
+  // 논리 픽셀 크기 (DPR 보정용) — CSS 좌표계와 일치
+  const logicalSizeRef = useRef({ w: 1280, h: 800 });
+  // 발자국 이펙트
+  const footstepsRef = useRef<{ x: number; y: number; life: number }[]>([]);
+  // 구역 진입 토스트 (캔버스 레이어)
+  const zoneToastRef = useRef<{ text: string; color: string; emoji: string; frame: number } | null>(null);
+  const lastNearbyIdRef = useRef<string | null>(null);
   const cameraRef = useRef({ x: 0, y: 0 });
   const frameCountRef = useRef(0);
+  const historyPushedRef = useRef(false);
+  const zoomRef = useRef(1); // 줌 레벨 (0.6 ~ 2.5)
+  const cronDataRef = useRef<CronItem[]>([]);
 
-  useEffect(() => { popupOpenRef.current = popupOpen; }, [popupOpen]);
+  useEffect(() => { popupOpenRef.current = popupOpen || cronGridOpen; }, [popupOpen, cronGridOpen]);
 
   // Mobile detection
   useEffect(() => {
@@ -193,7 +88,45 @@ export default function VirtualOffice() {
     setPopupLoading(false);
     setChatResp('');
     setChatInput('');
+    setCronGridOpen(false);
+    setCronPopup(null);
   }, []);
+
+  // cronDataRef 동기화
+  useEffect(() => { cronDataRef.current = cronData; }, [cronData]);
+
+  // 팝업 열릴 때 history push
+  useEffect(() => {
+    if (popupOpen || cronGridOpen) {
+      if (!historyPushedRef.current) {
+        history.pushState({ popup: true }, '');
+        historyPushedRef.current = true;
+      }
+    } else {
+      historyPushedRef.current = false;
+    }
+  }, [popupOpen, cronGridOpen]);
+
+  // 마운트 시 베이스 히스토리 상태 설정 — 뒤로가기 차단 기반
+  useEffect(() => {
+    history.replaceState({ jarvisMap: true }, '');
+  }, []);
+
+  // popstate (back 버튼/스와이프) — 팝업 닫기 또는 이탈 차단
+  useEffect(() => {
+    const handlePop = () => {
+      if (historyPushedRef.current) {
+        // 팝업 열려있으면 닫기
+        closePopup();
+        historyPushedRef.current = false;
+      } else {
+        // 팝업 없어도 게임 페이지 이탈 차단 — 상태 재push
+        history.pushState({ jarvisMap: true }, '');
+      }
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, [closePopup]);
 
   // ── 데이터 로드 ──────────────────────────────────────────────
   const loadStatuses = useCallback(async () => {
@@ -227,41 +160,43 @@ export default function VirtualOffice() {
 
       npcStatesRef.current = states;
 
-      // Extract cron data for cron-center
-      const crons: typeof cronData = [];
-      for (const team of data.teams || []) {
-        for (const cron of team.recentCrons || []) {
-          crons.push({
-            name: cron.task || team.teamId,
-            korName: cron.task || team.label || team.teamId,
-            status: cron.result === 'success' ? 'green' : cron.result === 'failed' ? 'red' : 'yellow',
-            lastRun: cron.time || '',
-            result: cron.result || '',
-            nextSchedule: team.schedule || '',
-          });
+      // Fetch full cron list for cron-center
+      try {
+        const cronsRes = await fetch('/api/crons');
+        if (cronsRes.ok) {
+          const cronsJson = await cronsRes.json();
+          const crons = (cronsJson.crons || []) as CronItem[];
+          setCronData(crons);
+          // cron-center 상태 계산 → npcStatesRef에 반영 (states는 이미 commit됐으므로 직접 patch)
+          const cronTotal = crons.length;
+          const cronFailed = crons.filter(c => c.status === 'failed').length;
+          const cronRate = cronTotal > 0 ? (cronTotal - cronFailed) / cronTotal : 1;
+          const cronSt = cronRate >= 0.9 ? 'green' : cronRate >= 0.7 ? 'yellow' : 'red';
+          npcStatesRef.current = {
+            ...npcStatesRef.current,
+            'cron-center': {
+              status: cronSt,
+              task: `${cronTotal}개 크론`,
+              activity: `성공률 ${Math.round(cronRate * 100)}%`,
+            },
+          };
         }
-      }
-      setCronData(crons.slice(0, 20));
+      } catch { /* skip */ }
     } catch { /* retry next interval */ }
   }, []);
 
   const openBriefing = useCallback(async (room: RoomDef) => {
-    // Cron center: show cron tiles popup, not a standard briefing
+    // Cron center: open full-screen grid popup of ALL crons (not standard briefing)
     if (room.id === 'cron-center') {
-      // If we have cron data and user clicks a specific tile, cronPopup handles that.
-      // For room-level click, just show the briefing with cron summary.
-      setPopupOpen(true);
-      setPopupLoading(false);
-      setBriefing({
-        id: room.id, name: room.name, emoji: room.emoji,
-        status: cronData.some(c => c.status === 'red') ? 'RED' : cronData.some(c => c.status === 'yellow') ? 'YELLOW' : 'GREEN',
-        summary: `${cronData.length}개 크론잡 모니터링 중`,
-        roomDescription: room.description,
-        recentActivity: cronData.map(c => ({
-          time: c.lastRun, task: c.korName, result: c.result, message: '',
-        })),
-      });
-      setChatResp('');
+      setCronGridOpen(true);
+      // Refresh crons on open
+      try {
+        const r = await fetch('/api/crons');
+        if (r.ok) {
+          const j = await r.json();
+          setCronData((j.crons || []) as CronItem[]);
+        }
+      } catch { /* keep current */ }
       return;
     }
 
@@ -309,6 +244,15 @@ export default function VirtualOffice() {
         const res = await fetch(`/api/entity/${entityId}/briefing`);
         if (res.ok) {
           const data = await res.json() as BriefingData;
+          // metrics → stats 매핑 (entity API는 metrics를 반환하지만 팝업은 stats를 읽음)
+          if (data.metrics && !data.stats) {
+            data.stats = {
+              total: data.metrics.totalToday || 0,
+              success: (data.metrics.totalToday || 0) - (data.metrics.failedToday || 0),
+              failed: data.metrics.failedToday || 0,
+              rate: data.metrics.cronSuccessRate || 0,
+            };
+          }
           if (!data.emoji && !data.avatar && !data.icon) {
             data.emoji = room.emoji;
           }
@@ -362,15 +306,33 @@ export default function VirtualOffice() {
           recentActivity: team.recentCrons || [],
         });
       } else {
-        // No matching team — show room description instead of error
+        // 특수 룸별 rich fallback
+        const specialContent: Record<string, Partial<BriefingData>> = {
+          'standup': {
+            status: 'GREEN',
+            summary: '매일 오전 09:15 KST 모닝 브리핑. 전사 시스템 상태 · 오늘 예정 크론 · 주요 이슈를 요약해 Discord #jarvis-ceo 채널로 전송합니다.',
+            schedule: '매일 09:15 KST',
+          },
+          'president': {
+            status: 'GREEN',
+            summary: '대표님(이정우) 전용 집무실. 자비스 컴퍼니 경영 방향 결정 · CEO 보고서 수신. 자비스 전체 시스템의 최종 의사결정권자입니다.',
+          },
+          'ceo': {
+            status: 'GREEN',
+            summary: 'CEO(자비스 Opus) 집무실. 주간 경영보고 · KPI 평가 · 중요 판단을 총괄합니다. 매주 월요일 09:00 경영회의를 주재합니다.',
+            schedule: '매주 월 09:00',
+          },
+        };
+        const special = specialContent[room.id] || {};
         setBriefing({
           id: room.id,
           name: room.name,
           emoji: room.emoji,
-          status: 'YELLOW',
-          summary: room.description,
+          status: special.status || 'YELLOW',
+          summary: special.summary || room.description,
           roomDescription: room.description,
-          schedule: room.id === 'standup' ? '매일 09:15 KST' : room.id === 'ceo-digest' ? '이사회 정기 소집' : undefined,
+          schedule: special.schedule,
+          ...special,
         });
       }
     } catch {
@@ -386,7 +348,7 @@ export default function VirtualOffice() {
     }
 
     setPopupLoading(false);
-  }, [cronData]);
+  }, []);
 
   // ── 게임 루프 (Canvas) ───────────────────────────────────────
   useEffect(() => {
@@ -404,6 +366,11 @@ export default function VirtualOffice() {
         if (e.key === 'Escape') closePopup();
         return;
       }
+      // 키보드 이동 시 클릭-투-무브 경로 취소
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','A','d','D','w','W','s','S'].includes(e.key)) {
+        pathRef.current = [];
+        pathTargetRef.current = null;
+      }
       keysRef.current.add(e.key);
       if ((e.key === 'e' || e.key === 'E' || e.key === ' ') && !popupOpenRef.current) {
         const nr = findNearbyRoom();
@@ -419,10 +386,40 @@ export default function VirtualOffice() {
     const onPointerDown = (e: PointerEvent) => {
       if (popupOpenRef.current) return;
       const rect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
+      const clickX = (e.clientX - rect.left) / zoomRef.current;
+      const clickY = (e.clientY - rect.top) / zoomRef.current;
       const camX = cameraRef.current.x;
       const camY = cameraRef.current.y;
+
+      // 크론 NPC 클릭 체크 — grid-based (proximity overlap 없음)
+      const cronRoom = ROOMS.find(r => r.id === 'cron-center');
+      if (cronRoom) {
+        // 크론센터 방 전체 화면 영역
+        const crRx = cronRoom.x * T - camX;
+        const crRy = cronRoom.y * T - camY;
+        const crRw = cronRoom.w * T;
+        const crRh = cronRoom.h * T;
+        if (clickX >= crRx && clickX < crRx + crRw && clickY >= crRy && clickY < crRy + crRh) {
+          // 방 내부 상대 좌표 → col/row 계산 (T/2 오프셋 보정 — 워크스테이션 center = tile*T + T/2)
+          const relX = clickX - (crRx + CRON_COL_START * T) - T / 2;
+          const relY = clickY - (crRy + CRON_ROW_START * T) - T / 2;
+          const col = Math.round(relX / (CRON_COL_SPACING * T));
+          const row = Math.round(relY / (CRON_ROW_SPACING * T));
+          if (col >= 0 && col < CRON_COLS && row >= 0 && row < CRON_ROWS) {
+            const idx = row * CRON_COLS + col;
+            const cron = cronDataRef.current[idx];
+            if (cron) {
+              setCronPopup(cron);
+              setPopupOpen(true);
+              return;
+            }
+          }
+          // 크론센터 방 안이지만 빈 영역 — 크론센터 전체 그리드 열기
+          setCronGridOpen(true);
+          setPopupOpen(true);
+          return;
+        }
+      }
 
       // First check NPC proximity (desktop/precise click)
       for (const r of ROOMS) {
@@ -446,6 +443,18 @@ export default function VirtualOffice() {
           return;
         }
       }
+
+      // 빈 바닥 클릭 → A* 이동
+      const tileX = Math.floor((clickX + camX) / T);
+      const tileY = Math.floor((clickY + camY) / T);
+      if (tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS && !cMap[tileY][tileX]) {
+        const p = playerRef.current;
+        const path = aStarPath(p.x, p.y, tileX, tileY, cMap);
+        if (path.length > 0) {
+          pathRef.current = path;
+          pathTargetRef.current = { x: tileX, y: tileY };
+        }
+      }
     };
     canvas.addEventListener('pointerdown', onPointerDown);
 
@@ -453,8 +462,8 @@ export default function VirtualOffice() {
     const onPointerMove = (e: PointerEvent) => {
       if (popupOpenRef.current) { setTooltipRoom(null); return; }
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      const mx = (e.clientX - rect.left) / zoomRef.current;
+      const my = (e.clientY - rect.top) / zoomRef.current;
       const camX = cameraRef.current.x;
       const camY = cameraRef.current.y;
 
@@ -472,9 +481,53 @@ export default function VirtualOffice() {
     };
     canvas.addEventListener('pointermove', onPointerMove);
 
+    // ── 줌: 마우스 휠 ──────────────────────────────────────────
+    const ZOOM_MIN = 0.55, ZOOM_MAX = 2.4;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.08 : 0.93;
+      zoomRef.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current * factor));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
+    // ── 줌: 핀치 제스처 (모바일 두 손가락) ─────────────────────
+    let _pinchDist = 0;
+    const onTouchStartZoom = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        _pinchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    };
+    const onTouchMoveZoom = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (_pinchDist > 0) {
+        const scale = dist / _pinchDist;
+        zoomRef.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current * scale));
+      }
+      _pinchDist = dist;
+      e.preventDefault();
+    };
+    const onTouchEndZoom = () => { _pinchDist = 0; };
+    canvas.addEventListener('touchstart', onTouchStartZoom, { passive: true });
+    canvas.addEventListener('touchmove', onTouchMoveZoom, { passive: false });
+    canvas.addEventListener('touchend', onTouchEndZoom, { passive: true });
+
+    // 더블클릭 → 줌 리셋
+    const onDblClick = () => { zoomRef.current = 1; };
+    canvas.addEventListener('dblclick', onDblClick);
+
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const lw = Math.round(rect.width);
+      const lh = Math.round(rect.height);
+      logicalSizeRef.current = { w: lw, h: lh };
+      canvas.width = lw * dpr;
+      canvas.height = lh * dpr;
     };
     resize();
     window.addEventListener('resize', resize);
@@ -1163,61 +1216,127 @@ export default function VirtualOffice() {
           break;
         }
         case 'cron-center': {
-          // Title bar
-          ctx!.fillStyle = '#6366f120';
-          ctx!.fillRect(rx + T * 1, ry + T * 0.3, T * 8, T * 0.7);
-          ctx!.fillStyle = '#a5b4fc';
-          ctx!.font = 'bold 10px monospace';
-          ctx!.textAlign = 'left';
-          ctx!.fillText('CRON MONITORING CENTER', rx + T * 1.3, ry + T * 0.75);
-          // Central control desk
-          ctx!.fillStyle = '#1e293b';
-          ctx!.fillRect(rx + T * 14, ry + T * 3.5, T * 6, T * 0.5);
-          ctx!.fillStyle = '#334155';
-          ctx!.fillRect(rx + T * 14.2, ry + T * 3, T * 2, T * 0.5);
-          ctx!.fillRect(rx + T * 17, ry + T * 3, T * 2, T * 0.5);
-          // Large status wall of monitoring tiles
-          const tileW = T * 1.5;
-          const tileH = T * 1.1;
-          const tilesPerRow = 10;
-          for (let i = 0; i < 20; i++) {
-            const col = i % tilesPerRow;
-            const row = Math.floor(i / tilesPerRow);
-            const tx = rx + T * 1.5 + col * (tileW + 6);
-            const ty = ry + T * 1.3 + row * (tileH + 6);
-            ctx!.fillStyle = '#0f172a';
-            ctx!.fillRect(tx, ty, tileW, tileH);
-            ctx!.strokeStyle = '#1e293b';
-            ctx!.lineWidth = 0.5;
-            ctx!.strokeRect(tx, ty, tileW, tileH);
-            // Status LED with blink
-            const blinkPhase = (fc + i * 11) % 80;
-            const isLit = blinkPhase > 15;
-            const ledColor = i % 7 === 0 ? '#f85149' : i % 5 === 0 ? '#d29922' : '#3fb950';
-            ctx!.fillStyle = isLit ? ledColor : ledColor + '30';
-            ctx!.beginPath();
-            ctx!.arc(tx + 8, ty + tileH / 2, 3, 0, Math.PI * 2);
-            ctx!.fill();
-            // Mini sparkline
-            ctx!.strokeStyle = ledColor + '40';
-            ctx!.lineWidth = 1;
-            ctx!.beginPath();
-            for (let s = 0; s < 5; s++) {
-              const sparkX = tx + 16 + s * 6;
-              const sparkY = ty + tileH / 2 + Math.sin(fc * 0.02 + i + s) * 4;
-              if (s === 0) ctx!.moveTo(sparkX, sparkY);
-              else ctx!.lineTo(sparkX, sparkY);
-            }
-            ctx!.stroke();
+          // ── 바닥 — 서버룸 타일 패턴 ──────────────────────────────
+          ctx!.fillStyle = '#070a12';
+          ctx!.fillRect(rx + 1, ry + 1, _rw - 2, _rh - 2);
+          // 타일 그리드 (Gather Town 서버룸 스타일)
+          ctx!.strokeStyle = '#0f1628';
+          ctx!.lineWidth = 0.5;
+          for (let gx = rx; gx < rx + _rw; gx += T) {
+            ctx!.beginPath(); ctx!.moveTo(gx, ry); ctx!.lineTo(gx, ry + _rh); ctx!.stroke();
           }
-          // Wall of status displays (bottom row)
-          for (let i = 0; i < 8; i++) {
-            const dx = rx + T * 2 + i * T * 4;
-            ctx!.fillStyle = '#6366f108';
-            ctx!.fillRect(dx, ry + T * 4.5, T * 3.5, T * 2.2);
-            ctx!.strokeStyle = '#6366f120';
-            ctx!.lineWidth = 0.5;
-            ctx!.strokeRect(dx, ry + T * 4.5, T * 3.5, T * 2.2);
+          for (let gy = ry; gy < ry + _rh; gy += T) {
+            ctx!.beginPath(); ctx!.moveTo(rx, gy); ctx!.lineTo(rx + _rw, gy); ctx!.stroke();
+          }
+          // 바닥 반사광 — 각 워크스테이션 개별 glow (전체 폭 밴드 제거)
+          // 개별 그림자는 워크스테이션 렌더링 시 처리
+
+          // ── 워크스테이션 NPC 렌더링 (Gather Town 스타일) ─────────
+          const fc = frameCountRef.current;
+          const cronItems = cronDataRef.current.slice(0, CRON_COLS * CRON_ROWS);
+
+          cronItems.forEach((cron, i) => {
+            const { tx, ty } = getCronTilePos(r, i);
+            // 월드 → 스크린 (매 프레임 신선하게 계산)
+            const snx = tx * T - (r.x * T - rx) + T / 2;   // rx = r.x*T-camX already
+            const sny = ty * T - (r.y * T - ry) + T / 2;
+
+            // 화면 밖이면 skip
+            const cw = _rw + rx;
+            const ch = _rh + ry;
+            if (snx < rx - 40 || snx > cw + 40 || sny < ry - 40 || sny > ch + 40) return;
+
+            const stColor =
+              cron.status === 'success' ? '#22c55e' :
+              cron.status === 'failed'  ? '#f85149' :
+              cron.status === 'running' ? '#58a6ff' :
+              cron.status === 'skipped' ? '#d29922' :
+              '#374151';
+
+            const pulse = 0.6 + Math.sin(fc * 0.06 + i * 0.8) * 0.4;
+
+            // ── 워크스테이션 본체 ──
+            // 바닥 그림자
+            ctx!.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx!.beginPath();
+            ctx!.ellipse(snx, sny + 14, 18, 5, 0, 0, Math.PI * 2);
+            ctx!.fill();
+
+            // 데스크 표면
+            ctx!.fillStyle = '#1a2035';
+            ctx!.fillRect(snx - 18, sny + 2, 36, 10);
+            ctx!.fillStyle = '#242b42';
+            ctx!.fillRect(snx - 18, sny + 2, 36, 2); // 데스크 하이라이트
+
+            // 모니터 스탠드
+            ctx!.fillStyle = '#1e2842';
+            ctx!.fillRect(snx - 2, sny - 14, 4, 16);
+
+            // 모니터 케이싱
+            ctx!.fillStyle = '#1a2035';
+            ctx!.beginPath();
+            ctx!.roundRect(snx - 16, sny - 30, 32, 20, 2);
+            ctx!.fill();
+
+            // 모니터 스크린 (상태색 글로우)
+            const glowA = Math.round(pulse * 40).toString(16).padStart(2, '0');
+            ctx!.fillStyle = stColor + glowA;
+            ctx!.beginPath();
+            ctx!.roundRect(snx - 14, sny - 28, 28, 16, 1);
+            ctx!.fill();
+            // 스크린 베이스 (어두운 배경)
+            ctx!.fillStyle = '#080e1a';
+            ctx!.fillRect(snx - 13, sny - 27, 26, 14);
+            // 스크린 내용 (가로 선 효과)
+            ctx!.fillStyle = stColor + '30';
+            for (let sl = 0; sl < 3; sl++) {
+              ctx!.fillRect(snx - 11, sny - 25 + sl * 4, 10 + (i % 3) * 4, 1);
+            }
+            // 상태 LED (스크린 우측 상단)
+            const ledPulse = Math.round(pulse * 70).toString(16).padStart(2, '0');
+            ctx!.beginPath();
+            ctx!.arc(snx + 10, sny - 25, 3, 0, Math.PI * 2);
+            ctx!.fillStyle = stColor + ledPulse;
+            ctx!.fill();
+            ctx!.beginPath();
+            ctx!.arc(snx + 10, sny - 25, 2, 0, Math.PI * 2);
+            ctx!.fillStyle = stColor;
+            ctx!.fill();
+
+            // 모니터 위 글로우 (상태 halo)
+            const haloR = 14 + Math.sin(fc * 0.04 + i * 0.5) * 2;
+            ctx!.beginPath();
+            ctx!.arc(snx, sny - 20, haloR, 0, Math.PI * 2);
+            ctx!.fillStyle = stColor + Math.round(pulse * 18).toString(16).padStart(2, '0');
+            ctx!.fill();
+
+            // ── 이름 라벨 (데스크 아래) ──
+            const displayName = cron.name.length > 12 ? cron.name.slice(0, 11) + '…' : cron.name;
+            ctx!.font = 'bold 8px -apple-system, BlinkMacSystemFont, sans-serif';
+            const nw = ctx!.measureText(displayName).width + 6;
+            // 라벨 배경
+            ctx!.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx!.beginPath();
+            ctx!.roundRect(snx - nw / 2, sny + 14, nw, 11, 2);
+            ctx!.fill();
+            ctx!.fillStyle = '#c9d1d9';
+            ctx!.textAlign = 'center';
+            ctx!.fillText(displayName, snx, sny + 22);
+
+            // 팀 이모지 (이름 오른쪽, 8px)
+            if (cron.teamEmoji) {
+              ctx!.font = '8px sans-serif';
+              ctx!.textAlign = 'left';
+              ctx!.fillText(cron.teamEmoji, snx + nw / 2 + 1, sny + 22);
+            }
+          });
+
+          // 빈 방 안내
+          if (cronItems.length === 0) {
+            ctx!.fillStyle = '#374151';
+            ctx!.font = '11px monospace';
+            ctx!.textAlign = 'center';
+            ctx!.fillText('크론 데이터 로딩 중...', rx + _rw / 2, ry + _rh / 2);
           }
           break;
         }
@@ -1518,6 +1637,8 @@ export default function VirtualOffice() {
     }
 
     function drawNPC(r: RoomDef, camX: number, camY: number) {
+      // cron-center는 개별 크론 NPC 카드로 대체되었으므로 단일 NPC 스킵
+      if (r.id === 'cron-center') return;
       const fc = frameCountRef.current;
       const nx = r.npcX * T - camX + T / 2;
       // Idle animation: subtle oscillation +/-1px every 30 frames
@@ -1970,11 +2091,18 @@ export default function VirtualOffice() {
       for (const lp of lightPositions) {
         const lx = lp.x * T - camX + T / 2;
         const ly = lp.y * T - camY + T / 2;
-        const lightGlow = ctx!.createRadialGradient(lx, ly, 0, lx, ly, T * 1.5);
-        lightGlow.addColorStop(0, 'rgba(255,255,240,0.03)');
+        // 바닥 조명 원 (더 풍부한 글로우)
+        const lightGlow = ctx!.createRadialGradient(lx, ly, 0, lx, ly, T * 2.2);
+        lightGlow.addColorStop(0, 'rgba(255,255,220,0.06)');
+        lightGlow.addColorStop(0.4, 'rgba(255,255,200,0.03)');
         lightGlow.addColorStop(1, 'transparent');
         ctx!.fillStyle = lightGlow;
-        ctx!.fillRect(lx - T * 1.5, ly - T * 1.5, T * 3, T * 3);
+        ctx!.fillRect(lx - T * 2.2, ly - T * 2.2, T * 4.4, T * 4.4);
+        // 천장 등기구 표시 (작은 흰 사각형)
+        ctx!.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx!.fillRect(lx - 6, ly - T * 0.4, 12, 3);
+        ctx!.fillStyle = 'rgba(255,255,200,0.25)';
+        ctx!.fillRect(lx - 4, ly - T * 0.4 + 1, 8, 1);
       }
 
       // Lobby welcome mat near entrance (top center corridor)
@@ -2015,9 +2143,9 @@ export default function VirtualOffice() {
 
       // Rooms with abbreviated names
       const abbrevNames: Record<string, string> = {
-        'ceo': 'CEO', 'infra-lead': 'INF', 'trend-lead': 'TRD', 'finance': 'FIN',
+        'ceo': 'CEO', 'infra-lead': 'INF', 'trend-lead': 'TRD', 'president': 'PRE',
         'record-lead': 'REC', 'audit-lead': 'AUD', 'academy-lead': 'ACM', 'brand-lead': 'BRD',
-        'career-lead': 'CAR', 'standup': 'STU', 'ceo-digest': 'MTG', 'server-room': 'SRV',
+        'career-lead': 'CAR', 'standup': 'STU', 'secretary': 'SEC', 'server-room': 'SRV',
         'cron-center': 'CRON',
       };
 
@@ -2029,10 +2157,12 @@ export default function VirtualOffice() {
 
       // Zone color coding: executive=gold, team=blue, infra=green, server=slate
       const zoneColor = (rId: string): string => {
-        if (rId === 'ceo' || rId === 'ceo-digest') return '#c9a227';
-        if (rId === 'server-room' || rId === 'cron-center') return '#64748b';
+        if (rId === 'ceo' || rId === 'president') return '#c9a227';
+        if (rId === 'server-room') return '#64748b';
+        if (rId === 'cron-center') return '#6366f1';
         if (rId === 'infra-lead') return '#22c55e';
         if (rId === 'standup') return '#eab308';
+        if (rId === 'secretary') return '#8b5cf6';
         return '#3b82f6';
       };
 
@@ -2060,16 +2190,51 @@ export default function VirtualOffice() {
           ctx!.fill();
         }
 
-        // Abbreviated room name (larger font)
-        const abbrev = abbrevNames[r.id] || '';
-        if (abbrev) {
+        // 크론센터: 개별 크론 점들 표시
+        if (r.id === 'cron-center') {
+          const crons = cronDataRef.current;
+          const roomPxX = mx + r.x * T * scale;
+          const roomPxY = my + r.y * T * scale;
+          const roomPxW = r.w * T * scale;
+          const roomPxH = r.h * T * scale;
+          const dotCols = Math.floor(roomPxW / 5);
+          const dotRows = Math.floor(roomPxH / 5);
+          const maxDots = dotCols * dotRows;
+          const visibleCrons = crons.slice(0, maxDots);
+          visibleCrons.forEach((cron, i) => {
+            const col = i % dotCols;
+            const row = Math.floor(i / dotCols);
+            const dotX = roomPxX + 3 + col * 5;
+            const dotY = roomPxY + 3 + row * 5;
+            const dotColor = cron.status === 'failed' ? '#f85149'
+              : cron.status === 'running' ? '#58a6ff'
+              : cron.status === 'success' ? '#3fb950'
+              : '#6b7280';
+            ctx!.fillStyle = dotColor;
+            ctx!.beginPath();
+            ctx!.arc(dotX, dotY, 1.5, 0, Math.PI * 2);
+            ctx!.fill();
+          });
+          // CRON 레이블은 하단에 작게
           ctx!.fillStyle = isCurrentRoom ? '#fff' : '#a0a8b4';
           ctx!.font = isCurrentRoom ? 'bold 7px monospace' : '6px monospace';
           ctx!.textAlign = 'center';
-          ctx!.fillText(abbrev,
+          ctx!.fillText(`CRON (${crons.length})`,
             mx + (r.x + r.w / 2) * T * scale,
-            my + (r.y + r.h / 2) * T * scale + 2
+            my + (r.y + r.h - 0.5) * T * scale
           );
+        } else {
+          // Abbreviated room name (larger font)
+          const abbrev = abbrevNames[r.id] || '';
+          if (abbrev) {
+            ctx!.fillStyle = isCurrentRoom ? '#fff' : '#a0a8b4';
+            ctx!.font = isCurrentRoom ? 'bold 7px monospace' : '6px monospace';
+            ctx!.textAlign = 'center';
+            ctx!.fillText(abbrev,
+              mx + (r.x + r.w / 2) * T * scale,
+              my + (r.y + r.h / 2) * T * scale + 2
+            );
+          }
         }
       }
 
@@ -2110,8 +2275,15 @@ export default function VirtualOffice() {
     // ── 게임 루프 ──────────────────────────────────────────────
     function gameLoop(time: number) {
       frameCountRef.current++;
-      const w = canvas!.width;
-      const h = canvas!.height;
+      // DPR + Zoom 보정: 월드 렌더링 패스
+      const _dpr = window.devicePixelRatio || 1;
+      const _zoom = zoomRef.current;
+      ctx!.setTransform(_dpr * _zoom, 0, 0, _dpr * _zoom, 0, 0);
+      const w = logicalSizeRef.current.w;
+      const h = logicalSizeRef.current.h;
+      // 줌 적용 후 세계 가시 범위 (논리 픽셀 / zoom = 월드 픽셀)
+      const wZ = w / _zoom;
+      const hZ = h / _zoom;
 
       // Movement
       if (!movingRef.current && !popupOpenRef.current && time - lastMove > MOVE_SPEED) {
@@ -2122,14 +2294,35 @@ export default function VirtualOffice() {
         else if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) { dy = -1; animRef.current.dir = 3; }
         else if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) { dy = 1; animRef.current.dir = 0; }
 
+        // 클릭-투-무브: 키 입력 없으면 경로 추종
+        if (dx === 0 && dy === 0 && pathRef.current.length > 0) {
+          const next = pathRef.current[0];
+          const p = playerRef.current;
+          dx = next.x - p.x;
+          dy = next.y - p.y;
+          // 방향 설정
+          if (dx < 0) animRef.current.dir = 1;
+          else if (dx > 0) animRef.current.dir = 2;
+          else if (dy < 0) animRef.current.dir = 3;
+          else animRef.current.dir = 0;
+        }
+
         if (dx !== 0 || dy !== 0) {
           const p = playerRef.current;
           const nx = p.x + dx, ny = p.y + dy;
           if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !cMap[ny][nx]) {
+            // 경로 추종 중이면 현재 스텝 제거
+            if (pathRef.current.length > 0 && pathRef.current[0].x === nx && pathRef.current[0].y === ny) {
+              pathRef.current = pathRef.current.slice(1);
+              if (pathRef.current.length === 0) pathTargetRef.current = null;
+            }
             movingRef.current = true;
             tweenRef.current = { sx: p.x, sy: p.y, tx: nx, ty: ny, t: 0, active: true };
             playerRef.current = { x: nx, y: ny };
             animRef.current.walking = true;
+            // 발자국 이펙트 추가
+            footstepsRef.current.push({ x: p.x, y: p.y, life: 28 });
+            if (footstepsRef.current.length > 40) footstepsRef.current.shift();
             lastMove = time;
 
             const startTime = time;
@@ -2145,6 +2338,10 @@ export default function VirtualOffice() {
               }
             };
             requestAnimationFrame(tweenLoop);
+          } else {
+            // 충돌로 경로 막힘 → 경로 초기화
+            pathRef.current = [];
+            pathTargetRef.current = null;
           }
         }
       }
@@ -2152,6 +2349,15 @@ export default function VirtualOffice() {
       // Nearby NPC detection
       const nearby = findNearbyRoom();
       setNearbyRoom(nearby);
+
+      // 구역 진입 토스트 트리거
+      const nearbyId = nearby?.id ?? null;
+      if (nearbyId !== lastNearbyIdRef.current && nearby) {
+        zoneToastRef.current = { text: nearby.name, color: nearby.teamColor, emoji: nearby.emoji || '🏢', frame: 0 };
+        lastNearbyIdRef.current = nearbyId;
+      } else if (!nearby) {
+        lastNearbyIdRef.current = null;
+      }
 
       // Camera with smooth lerp
       const p = playerRef.current;
@@ -2161,16 +2367,16 @@ export default function VirtualOffice() {
         cpx = (tw.sx + (tw.tx - tw.sx) * tw.t) * T;
         cpy = (tw.sy + (tw.ty - tw.sy) * tw.t) * T;
       }
-      const targetCamX = Math.max(0, Math.min(COLS * T - w, cpx - w / 2 + T / 2));
-      const targetCamY = Math.max(0, Math.min(ROWS * T - h, cpy - h / 2 + T / 2));
+      const targetCamX = Math.max(0, Math.min(COLS * T - wZ, cpx - wZ / 2 + T / 2));
+      const targetCamY = Math.max(0, Math.min(ROWS * T - hZ, cpy - hZ / 2 + T / 2));
       cameraRef.current.x += (targetCamX - cameraRef.current.x) * 0.12;
       cameraRef.current.y += (targetCamY - cameraRef.current.y) * 0.12;
       const camX = Math.round(cameraRef.current.x);
       const camY = Math.round(cameraRef.current.y);
 
-      // Clear
+      // Clear (월드 패스 좌표계 — wZ×hZ)
       ctx!.fillStyle = '#0d1117';
-      ctx!.fillRect(0, 0, w, h);
+      ctx!.fillRect(0, 0, wZ, hZ);
 
       // ── Outer wall border (thick with window pattern) ──
       const wallThick = 6;
@@ -2199,7 +2405,7 @@ export default function VirtualOffice() {
       for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
           const sx = x * T - camX, sy = y * T - camY;
-          if (sx > w || sy > h || sx + T < 0 || sy + T < 0) continue;
+          if (sx > wZ || sy > hZ || sx + T < 0 || sy + T < 0) continue;
 
           // Check if inside a room
           let inRoom = false;
@@ -2211,48 +2417,236 @@ export default function VirtualOffice() {
           }
           if (inRoom) continue; // Room floors are drawn by drawRoom
 
-          // Corridor tiles — lighter with subtle pattern
+          // Corridor tiles — 오피스 바닥재 스타일
           const isMainCorridor = (y >= 7 && y <= 9) || (y >= 15 && y <= 17) || (y >= 23 && y <= 25);
+          const isVertCorridor = x === 0 || x === 1 || x === 9 || x === 10 || x === 18 || x === 19 || x === 27 || x === 28 || x === 37 || x === 38 || x === 39;
           if (isMainCorridor) {
-            // Main corridor — lighter tiles with directional lines
-            ctx!.fillStyle = (x + y) % 2 === 0 ? '#3a3d50' : '#36394c';
+            // 메인 복도 — 대리석 슬라브 타일 (큰 타일, 그라우트 선)
+            const tileW = T * 2, tileH = T;
+            const tileCol = Math.floor(x / 2);
+            const baseColor = (tileCol + y) % 2 === 0 ? '#2c3050' : '#272b44';
+            ctx!.fillStyle = baseColor;
             ctx!.fillRect(sx, sy, T, T);
-            // Directional center line
+            // 대리석 무늬 (대각선 선)
+            if ((x * 5 + y * 7) % 11 === 0) {
+              ctx!.strokeStyle = 'rgba(255,255,255,0.015)';
+              ctx!.lineWidth = 0.5;
+              ctx!.beginPath();
+              ctx!.moveTo(sx + 5, sy + T - 5);
+              ctx!.lineTo(sx + T - 5, sy + 5);
+              ctx!.stroke();
+            }
+            // 타일 그라우트 (경계선)
+            ctx!.strokeStyle = '#1a1d30';
+            ctx!.lineWidth = 0.8;
+            if (x % 2 === 0) { ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx, sy + T); ctx!.stroke(); }
+            ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx + T, sy); ctx!.stroke();
+            // 중앙 행 반사광
             if (y === 8 || y === 16 || y === 24) {
-              ctx!.fillStyle = '#4a4d6015';
-              ctx!.fillRect(sx, sy + T / 2 - 1, T, 2);
+              const refGrd = ctx!.createLinearGradient(sx, sy, sx, sy + T);
+              refGrd.addColorStop(0, 'rgba(88,166,255,0.05)');
+              refGrd.addColorStop(0.5, 'rgba(88,166,255,0.02)');
+              refGrd.addColorStop(1, 'transparent');
+              ctx!.fillStyle = refGrd;
+              ctx!.fillRect(sx, sy, T, T);
+            }
+          } else if (isVertCorridor) {
+            // 수직 복도 — 세로 목재 플랭크 패턴
+            const plankShade = x % 2 === 0 ? '#232640' : '#1f2239';
+            ctx!.fillStyle = plankShade;
+            ctx!.fillRect(sx, sy, T, T);
+            // 플랭크 수직 결 선
+            ctx!.strokeStyle = '#181b2d';
+            ctx!.lineWidth = 0.6;
+            ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx, sy + T); ctx!.stroke();
+            // 미세 수평 결
+            if (y % 3 === 0) {
+              ctx!.fillStyle = 'rgba(255,255,255,0.008)';
+              ctx!.fillRect(sx + 3, sy + T / 2, T - 6, 1);
             }
           } else {
-            // Regular corridor
-            ctx!.fillStyle = (x + y) % 2 === 0 ? '#2e3044' : '#2a2c3e';
+            // 일반 오픈 영역 — 헤링본 패턴 (45도 대각선)
+            const hbBase = (x + y) % 2 === 0 ? '#212435' : '#1e2132';
+            ctx!.fillStyle = hbBase;
             ctx!.fillRect(sx, sy, T, T);
+            // 헤링본 대각선 결
+            if ((x + y) % 4 === 0) {
+              ctx!.strokeStyle = 'rgba(255,255,255,0.012)';
+              ctx!.lineWidth = 0.5;
+              ctx!.beginPath();
+              ctx!.moveTo(sx + T * 0.2, sy + T * 0.8);
+              ctx!.lineTo(sx + T * 0.8, sy + T * 0.2);
+              ctx!.stroke();
+            } else if ((x + y) % 4 === 2) {
+              ctx!.strokeStyle = 'rgba(255,255,255,0.008)';
+              ctx!.lineWidth = 0.5;
+              ctx!.beginPath();
+              ctx!.moveTo(sx + T * 0.2, sy + T * 0.2);
+              ctx!.lineTo(sx + T * 0.8, sy + T * 0.8);
+              ctx!.stroke();
+            }
+            ctx!.strokeStyle = '#191c2a20';
+            ctx!.lineWidth = 0.3;
+            ctx!.strokeRect(sx, sy, T, T);
           }
-          // Subtle grid
-          ctx!.strokeStyle = '#20223008';
-          ctx!.lineWidth = 0.5;
-          ctx!.strokeRect(sx, sy, T, T);
         }
+      }
+
+      // ── 발자국 이펙트 ──────────────────────────────────────────
+      footstepsRef.current = footstepsRef.current.filter(f => f.life > 0);
+      for (const f of footstepsRef.current) {
+        f.life--;
+        const alpha = (f.life / 28) * 0.35;
+        const fx = f.x * T - camX + T / 2;
+        const fy = f.y * T - camY + T / 2 + 10;
+        ctx!.fillStyle = `rgba(88,166,255,${alpha})`;
+        ctx!.beginPath();
+        ctx!.ellipse(fx - 3, fy, 2.5, 1.5, -0.3, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.beginPath();
+        ctx!.ellipse(fx + 3, fy, 2.5, 1.5, 0.3, 0, Math.PI * 2);
+        ctx!.fill();
       }
 
       // Decorations
       drawDecorations(camX, camY);
 
+      // ── 클릭-투-무브 목표 타일 표시 (게더타운 스타일) ──────────
+      const pt = pathTargetRef.current;
+      if (pt) {
+        const fcNow = frameCountRef.current;
+        const ptx = pt.x * T - camX;
+        const pty = pt.y * T - camY;
+        const pulse = 0.5 + Math.sin(fcNow * 0.15) * 0.5;
+        // 타일 배경 글로우
+        const tileGrd = ctx!.createRadialGradient(ptx + T / 2, pty + T / 2, 0, ptx + T / 2, pty + T / 2, T * 0.8);
+        tileGrd.addColorStop(0, `rgba(88,166,255,${0.18 * pulse})`);
+        tileGrd.addColorStop(1, 'transparent');
+        ctx!.fillStyle = tileGrd;
+        ctx!.fillRect(ptx - T * 0.3, pty - T * 0.3, T * 1.6, T * 1.6);
+        // 타일 하이라이트 테두리
+        ctx!.strokeStyle = `rgba(88,166,255,${0.5 * pulse})`;
+        ctx!.lineWidth = 1.5;
+        ctx!.strokeRect(ptx + 3, pty + 3, T - 6, T - 6);
+        // 확산 링 (2개)
+        for (let ri = 0; ri < 2; ri++) {
+          const ringProgress = ((fcNow * 0.04 + ri * 0.5) % 1);
+          const ringR = 4 + ringProgress * 14;
+          const ringAlpha = (1 - ringProgress) * 0.7;
+          ctx!.strokeStyle = `rgba(88,166,255,${ringAlpha})`;
+          ctx!.lineWidth = 1.2;
+          ctx!.beginPath();
+          ctx!.arc(ptx + T / 2, pty + T / 2, ringR, 0, Math.PI * 2);
+          ctx!.stroke();
+        }
+        // 다이아몬드 마커 (X 대신)
+        ctx!.fillStyle = `rgba(88,166,255,${0.7 + pulse * 0.3})`;
+        const cx2 = ptx + T / 2, cy2 = pty + T / 2;
+        const ds = 5 + pulse * 1.5;
+        ctx!.beginPath();
+        ctx!.moveTo(cx2, cy2 - ds);
+        ctx!.lineTo(cx2 + ds, cy2);
+        ctx!.lineTo(cx2, cy2 + ds);
+        ctx!.lineTo(cx2 - ds, cy2);
+        ctx!.closePath();
+        ctx!.fill();
+        // 경로 잔상 (최근 3칸)
+        const pathQueue = pathRef.current.slice(0, 3);
+        pathQueue.forEach((step, si) => {
+          const sa = 0.12 - si * 0.03;
+          const sx2 = step.x * T - camX + T / 2;
+          const sy2 = step.y * T - camY + T / 2;
+          ctx!.fillStyle = `rgba(88,166,255,${sa})`;
+          ctx!.beginPath();
+          ctx!.arc(sx2, sy2, 3, 0, Math.PI * 2);
+          ctx!.fill();
+        });
+      }
+
+      // ── 방 남쪽 벽 드롭 섀도우 — 복도 바닥에 투사 (3D 깊이감) ──
+      for (const r of ROOMS) {
+        if (r.type === 'cron') continue;
+        const srx = r.x * T - camX;
+        const sry = r.y * T - camY;
+        const srw = r.w * T;
+        const srh = r.h * T;
+        // 남쪽 드롭 섀도
+        const sdGrd = ctx!.createLinearGradient(srx, sry + srh, srx, sry + srh + T * 1.2);
+        sdGrd.addColorStop(0, 'rgba(0,0,0,0.28)');
+        sdGrd.addColorStop(0.5, 'rgba(0,0,0,0.1)');
+        sdGrd.addColorStop(1, 'transparent');
+        ctx!.fillStyle = sdGrd;
+        ctx!.fillRect(srx + 6, sry + srh, srw - 12, T * 1.2);
+        // 우측 드롭 섀도 (약함)
+        const seGrd = ctx!.createLinearGradient(srx + srw, sry, srx + srw + T * 0.5, sry);
+        seGrd.addColorStop(0, 'rgba(0,0,0,0.12)');
+        seGrd.addColorStop(1, 'transparent');
+        ctx!.fillStyle = seGrd;
+        ctx!.fillRect(srx + srw, sry + 8, T * 0.5, srh - 8);
+      }
+
       // Rooms
       for (const r of ROOMS) drawRoom(r, camX, camY);
+
+      // ── 근접 방 Proximity Glow (게더타운 스타일) ───────────────
+      if (nearby) {
+        const fcG = frameCountRef.current;
+        const nr = nearby;
+        const grx = nr.x * T - camX, gry = nr.y * T - camY;
+        const grw = nr.w * T, grh = nr.h * T;
+        const glowPulse = 0.55 + Math.sin(fcG * 0.08) * 0.45;
+        // 외곽 글로우 테두리
+        ctx!.strokeStyle = nr.teamColor + Math.round(glowPulse * 0x90 + 0x20).toString(16).padStart(2, '0');
+        ctx!.lineWidth = 2.5;
+        ctx!.shadowColor = nr.teamColor;
+        ctx!.shadowBlur = 12 * glowPulse;
+        ctx!.strokeRect(grx - 1, gry - 1, grw + 2, grh + 2);
+        ctx!.shadowBlur = 0;
+        // 문 쪽 바닥 하이라이트 (문은 아래쪽)
+        const doorTileX = (nr.x + Math.floor(nr.w / 2)) * T - camX;
+        const doorBaseY = (nr.y + nr.h - 1) * T - camY;
+        const doorGrd = ctx!.createRadialGradient(doorTileX + T, doorBaseY + T / 2, 0, doorTileX + T, doorBaseY + T / 2, T * 2.5);
+        doorGrd.addColorStop(0, nr.teamColor + Math.round(glowPulse * 0x28).toString(16).padStart(2, '0'));
+        doorGrd.addColorStop(1, 'transparent');
+        ctx!.fillStyle = doorGrd;
+        ctx!.fillRect(doorTileX - T * 1.5, doorBaseY, T * 5, T * 3);
+        // "E 대화" 아이콘 (문 바로 아래)
+        const eIconY = doorBaseY + T * 1.4;
+        const eAlpha = 0.5 + glowPulse * 0.5;
+        ctx!.save();
+        ctx!.shadowColor = nr.teamColor;
+        ctx!.shadowBlur = 8 * glowPulse;
+        ctx!.fillStyle = `rgba(255,255,255,${eAlpha})`;
+        ctx!.font = 'bold 10px monospace';
+        ctx!.textAlign = 'center';
+        ctx!.fillText('[E]', doorTileX + T, eIconY);
+        ctx!.restore();
+      }
 
       // Door nameplates
       for (const r of ROOMS) drawDoorNameplate(r, camX, camY);
 
-      // NPCs
-      for (const r of ROOMS) drawNPC(r, camX, camY);
-
-      // Player
-      drawPlayer(camX, camY);
+      // ── Y-sorted 렌더링 (앞쪽 엔티티가 뒤쪽을 가림 — 게더타운 깊이감) ──
+      const tw2 = tweenRef.current;
+      const playerWorldY = tw2.active
+        ? (tw2.sy + (tw2.ty - tw2.sy) * tw2.t) * T
+        : playerRef.current.y * T;
+      const renderEntities: Array<{ worldY: number; draw: () => void }> = [];
+      for (const r of ROOMS) {
+        if (r.id === 'cron-center') continue;
+        renderEntities.push({ worldY: r.npcY * T, draw: () => drawNPC(r, camX, camY) });
+      }
+      renderEntities.push({ worldY: playerWorldY, draw: () => drawPlayer(camX, camY) });
+      renderEntities.sort((a, b) => a.worldY - b.worldY);
+      for (const e of renderEntities) e.draw();
 
       // Interact prompt
       if (nearby && !popupOpenRef.current) {
         drawInteractPrompt(nearby, camX, camY);
       }
+
+      // ── HUD 패스: 줌 해제 → 화면 좌표계 (w×h) ──────────────
+      ctx!.setTransform(_dpr, 0, 0, _dpr, 0, 0);
 
       // ── HUD: Top bar ──
       const grad = ctx!.createLinearGradient(0, 0, 0, 40);
@@ -2281,15 +2675,63 @@ export default function VirtualOffice() {
         : '[WASD/Arrows] 이동   [E/Space] 대화   [ESC] 닫기';
       ctx!.fillText(controlText, 16, h - 14);
 
-      // Time (KST)
+      // Time (KST) + 줌 인디케이터
       ctx!.textAlign = 'right';
-      ctx!.fillStyle = '#c9a227';
       ctx!.font = '11px monospace';
       const now = new Date();
+      ctx!.fillStyle = '#c9a227';
       ctx!.fillText(now.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' }) + ' KST', w - 16, h - 14);
+      // 줌 레벨 표시 (1.0x가 아닐 때만 강조)
+      const zoomPct = Math.round(_zoom * 100);
+      ctx!.fillStyle = _zoom !== 1 ? '#58a6ff' : '#484f58';
+      ctx!.fillText(`🔍 ${zoomPct}%`, w - 16, h - 28);
 
       // Minimap
       drawMinimap(w, h);
+
+      // ── 구역 진입 토스트 (게더타운 "You are in [ZONE]" 스타일) ──
+      if (zoneToastRef.current) {
+        const zt = zoneToastRef.current;
+        zt.frame++;
+        const TOAST_IN = 20, TOAST_HOLD = 80, TOAST_OUT = 30;
+        const totalLife = TOAST_IN + TOAST_HOLD + TOAST_OUT;
+        if (zt.frame > totalLife) {
+          zoneToastRef.current = null;
+        } else {
+          let toastAlpha = 1;
+          if (zt.frame < TOAST_IN) toastAlpha = zt.frame / TOAST_IN;
+          else if (zt.frame > TOAST_IN + TOAST_HOLD) toastAlpha = 1 - (zt.frame - TOAST_IN - TOAST_HOLD) / TOAST_OUT;
+          const slideY = zt.frame < TOAST_IN ? (1 - zt.frame / TOAST_IN) * 20 : 0;
+          const toastText = `${zt.emoji} ${zt.text} 구역 진입`;
+          ctx!.font = 'bold 12px monospace';
+          const toastW = ctx!.measureText(toastText).width + 28;
+          const toastH = 32;
+          const toastX = w / 2 - toastW / 2;
+          const toastY = 52 + slideY;
+          // 배경
+          ctx!.save();
+          ctx!.globalAlpha = toastAlpha;
+          ctx!.fillStyle = '#0d1117ee';
+          ctx!.beginPath();
+          ctx!.roundRect(toastX, toastY, toastW, toastH, 8);
+          ctx!.fill();
+          ctx!.strokeStyle = zt.color + '60';
+          ctx!.lineWidth = 1.5;
+          ctx!.beginPath();
+          ctx!.roundRect(toastX, toastY, toastW, toastH, 8);
+          ctx!.stroke();
+          // 왼쪽 컬러 바
+          ctx!.fillStyle = zt.color;
+          ctx!.beginPath();
+          ctx!.roundRect(toastX, toastY, 3, toastH, [8, 0, 0, 8]);
+          ctx!.fill();
+          // 텍스트
+          ctx!.fillStyle = '#e6edf3';
+          ctx!.textAlign = 'center';
+          ctx!.fillText(toastText, w / 2, toastY + toastH / 2 + 4);
+          ctx!.restore();
+        }
+      }
 
       // ── Vignette overlay (subtle gradient at map edges) ──
       const vigSize = 80;
@@ -2330,6 +2772,11 @@ export default function VirtualOffice() {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('touchstart', onTouchStartZoom);
+      canvas.removeEventListener('touchmove', onTouchMoveZoom);
+      canvas.removeEventListener('touchend', onTouchEndZoom);
+      canvas.removeEventListener('dblclick', onDblClick);
     };
   }, [loadStatuses, openBriefing, closePopup]);
 
@@ -2349,8 +2796,10 @@ export default function VirtualOffice() {
     if (briefing) {
       const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
       loadChatHistory(room?.entityId || briefing.id);
+      setChatPanelOpen(false); // 새 팀장 열 때 채팅 패널 닫기
     } else {
       setChatMessages([]);
+      setChatPanelOpen(false);
     }
   }, [briefing, loadChatHistory]);
 
@@ -2385,20 +2834,88 @@ export default function VirtualOffice() {
     setChatLoading(false);
   };
 
-  // ── 상태 색상 ──────────────────────────────────────────────
-  const stColor = (s: string) => {
-    if (s === 'GREEN') return '#3fb950';
-    if (s === 'RED') return '#f85149';
-    return '#d29922';
-  };
-
   // ── 렌더 ─────────────────────────────────────────────────────
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#0d1117' }}>
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', width: '100vw', height: '100vh', touchAction: 'none' }}
+        style={{
+          display: 'block', width: '100vw', height: '100vh', touchAction: 'none',
+          // 인터랙터블 요소 호버 시 포인터 커서
+          cursor: tooltipRoom ? 'pointer' : 'default',
+        }}
       />
+
+      {/* ── 게임 인트로 오버레이 ── */}
+      {showIntro && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          background: 'rgba(0,0,0,0.82)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            background: '#0d1117',
+            border: '1px solid #30363d',
+            borderTop: '3px solid #c9a227',
+            borderRadius: 20,
+            padding: isMobile ? '28px 24px 32px' : '36px 44px 40px',
+            maxWidth: 520,
+            width: isMobile ? '92vw' : '90vw',
+            color: '#e6edf3',
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+          }}>
+            {/* 헤더 */}
+            <div style={{ textAlign: 'center', marginBottom: 28 }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>🏢</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#f0f6fc', marginBottom: 6 }}>JARVIS MAP</div>
+              <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.6 }}>
+                자비스 컴퍼니의 가상 오피스입니다.<br />
+                팀장·크론잡을 클릭해 실시간 현황을 확인하세요.
+              </div>
+            </div>
+
+            {/* 사용 방법 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
+              {[
+                { icon: '🕹️', label: isMobile ? 'D-pad' : 'WASD / 방향키', desc: '캐릭터 이동' },
+                { icon: '⌨️', label: isMobile ? '탭' : '[E] 또는 스페이스', desc: '가까운 팀장에게 말걸기' },
+                { icon: '🖱️', label: isMobile ? '탭' : '클릭', desc: '팀장 NPC · 크론 워크스테이션 클릭 → 상세 팝업' },
+                { icon: '⏰', label: '크론센터 (하단)', desc: '전사 크론잡 실시간 상태 · 클릭 시 역할·이력 확인' },
+              ].map(({ icon, label, desc }) => (
+                <div key={label} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 14px', background: '#161b22',
+                  border: '1px solid #21262d', borderRadius: 10,
+                }}>
+                  <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#c9d1d9' }}>{label}</div>
+                    <div style={{ fontSize: 11, color: '#6e7681', marginTop: 1 }}>{desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                sessionStorage.setItem('jarvis-map-intro-v2', '1');
+                setShowIntro(false);
+              }}
+              style={{
+                width: '100%', padding: '14px 0',
+                background: '#c9a227', border: 'none',
+                borderRadius: 12, color: '#0d1117',
+                fontSize: 15, fontWeight: 800, cursor: 'pointer',
+                letterSpacing: 0.5,
+              }}
+            >
+              🏢 오피스 입장
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Hover tooltip */}
       {tooltipRoom && !popupOpen && (
@@ -2430,422 +2947,75 @@ export default function VirtualOffice() {
       {/* Nearby room indicator */}
       {nearbyRoom && !popupOpen && (
         <div style={{
-          position: 'fixed', bottom: 54, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed',
+          bottom: isMobile ? 220 : 54,
+          left: '50%', transform: 'translateX(-50%)',
           padding: '8px 18px', borderRadius: 10,
           background: 'rgba(0,0,0,0.8)', color: '#e6edf3',
           fontSize: 13, fontFamily: 'monospace', pointerEvents: 'none',
           border: `1px solid ${nearbyRoom.teamColor}50`,
           boxShadow: `0 0 12px ${nearbyRoom.teamColor}20`,
+          whiteSpace: 'nowrap',
         }}>
-          {nearbyRoom.emoji} {nearbyRoom.name} — {isMobile ? 'Tap으로 대화' : '[E]키로 대화'}
+          {nearbyRoom.emoji} {nearbyRoom.name} — {isMobile ? '탭으로 대화' : '[E]키로 대화'}
         </div>
       )}
 
-      {/* ── Briefing Popup Overlay ── */}
-      {popupOpen && (
-        <div
-          onClick={closePopup}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: isMobile ? 'stretch' : 'center',
-            justifyContent: 'center',
-            backdropFilter: 'blur(3px)',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: isMobile ? '100%' : '100%',
-              maxWidth: isMobile ? '100%' : 460,
-              height: isMobile ? '100%' : 'auto',
-              maxHeight: isMobile ? '100%' : '88vh',
-              background: '#161b22',
-              borderRadius: isMobile ? 0 : 14,
-              border: isMobile ? 'none' : '1px solid #30363d',
-              boxShadow: isMobile ? 'none' : '0 20px 60px rgba(0,0,0,0.5)',
-              overflowY: 'auto',
-              padding: isMobile ? '16px 16px 24px' : '22px 26px',
-              color: '#e6edf3',
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-            }}
-          >
-            {popupLoading ? (
-              <div style={{ padding: 40, textAlign: 'center', color: '#8b949e' }}>
-                <div style={{ fontSize: 36, marginBottom: 12, animation: 'spin 1s linear infinite' }}>
-                  <span style={{ display: 'inline-block' }}>&#9696;</span>
-                </div>
-                <div style={{ fontSize: 13 }}>브리핑 로딩 중...</div>
-              </div>
-            ) : briefing ? (() => {
-              const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
-              const teamColorHex = room?.teamColor || '#58a6ff';
-              return (
-                <>
-                  {/* Header with team color accent */}
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                    marginBottom: 16, paddingBottom: 14,
-                    borderBottom: `2px solid ${teamColorHex}30`,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{
-                        fontSize: 40,
-                        background: teamColorHex + '15',
-                        borderRadius: 12,
-                        width: 56, height: 56,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        {briefing.emoji || briefing.avatar || briefing.icon || room?.emoji || '\uD83D\uDC64'}
-                      </span>
-                      <div>
-                        <div style={{ fontSize: 17, fontWeight: 700 }}>{briefing.name}</div>
-                        <div style={{ fontSize: 12, color: '#8b949e', marginTop: 3, lineHeight: 1.4 }}>
-                          {briefing.roomDescription || briefing.description || room?.description || ''}
-                        </div>
-                        {(briefing.schedule || briefing.title) && (
-                          <div style={{ fontSize: 11, color: '#6e7681', marginTop: 3 }}>
-                            {briefing.schedule && <span>&#x1F4C5; {briefing.schedule}</span>}
-                            {briefing.schedule && briefing.title && <span> &middot; </span>}
-                            {briefing.title && <span>{briefing.title}</span>}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={closePopup}
-                      style={{
-                        background: '#21262d', border: '1px solid #30363d', color: '#8b949e',
-                        cursor: 'pointer', fontSize: 16, padding: '4px 8px', lineHeight: 1,
-                        borderRadius: 6, minWidth: 32, minHeight: 32,
-                      }}
-                      aria-label="닫기"
-                    >&#x2715;</button>
-                  </div>
 
-                  {/* Status badge with explanation */}
-                  <div style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
-                    padding: '8px 14px', borderRadius: 10, marginBottom: 14,
-                    background: stColor(briefing.status) + '10',
-                    border: `1px solid ${stColor(briefing.status)}30`,
-                  }}>
-                    <span style={{
-                      width: 10, height: 10, borderRadius: '50%',
-                      background: stColor(briefing.status),
-                      boxShadow: `0 0 8px ${stColor(briefing.status)}60`,
-                      flexShrink: 0,
-                      marginTop: 3,
-                    }} />
-                    <div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: stColor(briefing.status) }}>
-                        {briefing.status === 'GREEN' ? '정상' : briefing.status === 'RED' ? '이상' : '주의'}
-                      </span>
-                      <div style={{ fontSize: 12, color: '#8b949e', marginTop: 2, lineHeight: 1.4 }}>
-                        {statusExplanation(briefing)}
-                      </div>
-                    </div>
-                  </div>
+      {/* ── Team Briefing Popup ── */}
+      <TeamBriefingPopup
+        popupOpen={popupOpen}
+        popupLoading={popupLoading}
+        briefing={briefing}
+        isMobile={isMobile}
+        cronData={cronData}
+        closePopup={closePopup}
+        chatPanelOpen={chatPanelOpen}
+        setChatPanelOpen={setChatPanelOpen}
+        chatMessages={chatMessages}
+        chatLoading={chatLoading}
+        chatInput={chatInput}
+        setChatInput={setChatInput}
+        chatResp={chatResp}
+        sendMessage={sendMessage}
+        chatEndRef={chatEndRef}
+      />
 
-                  {/* Summary */}
-                  <div style={{ marginBottom: 14 }}>
-                    <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      &#x1F4CC; 현재 상태
-                    </h4>
-                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: '#c9d1d9' }}>{briefing.summary}</p>
-                  </div>
-
-                  {/* Alerts */}
-                  {briefing.alerts && briefing.alerts.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      {briefing.alerts.map((a, i) => (
-                        <div key={i} style={{
-                          padding: '8px 12px', borderRadius: 8, marginBottom: 4,
-                          background: '#f8514915', border: '1px solid #f8514925',
-                          fontSize: 12, color: '#fca5a5', lineHeight: 1.4,
-                        }}>
-                          &#x26A0;&#xFE0F; {a}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 24h KPI cards */}
-                  {briefing.stats && (
-                    <div style={{ marginBottom: 14 }}>
-                      <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        &#x1F4CA; 24시간 지표
-                      </h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        {([
-                          ['성공률', `${briefing.stats.rate}%`, briefing.stats.rate >= 90 ? '#3fb950' : briefing.stats.rate >= 70 ? '#d29922' : '#f85149'],
-                          ['성공', String(briefing.stats.success), '#3fb950'],
-                          ['실패', String(briefing.stats.failed), briefing.stats.failed > 0 ? '#f85149' : '#6e7681'],
-                        ] as [string, string, string][]).map(([label, value, color], i) => (
-                          <div key={i} style={{
-                            background: '#0d1117', border: '1px solid #21262d',
-                            borderRadius: 10, padding: '10px 8px', textAlign: 'center',
-                          }}>
-                            <div style={{ fontSize: 10, color: '#6e7681', marginBottom: 4, fontWeight: 500 }}>{label}</div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent activity timeline */}
-                  {(briefing.recentActivity?.length || briefing.recentEvents?.length) ? (
-                    <div style={{ marginBottom: 14 }}>
-                      <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        &#x1F4CB; 최근 활동
-                      </h4>
-                      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                        {(briefing.recentActivity || briefing.recentEvents || []).slice(0, 10).map((a, i) => (
-                          <div key={i} style={{
-                            display: 'flex', gap: 8, padding: '6px 0',
-                            fontSize: 12, borderBottom: '1px solid #21262d',
-                            alignItems: 'center',
-                          }}>
-                            <span style={{ fontSize: 14, minWidth: 20, textAlign: 'center' }}>
-                              {activityIcon(a.result)}
-                            </span>
-                            <span style={{ color: '#6e7681', minWidth: 44, fontFamily: 'monospace', fontSize: 11 }}>
-                              {(a.time || '').slice(11, 16)}
-                            </span>
-                            <span style={{
-                              overflow: 'hidden', textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap', color: '#c9d1d9', flex: 1,
-                            }}>
-                              {a.task || (a as { event?: string }).event || ''}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {/* Board minutes */}
-                  {(briefing.lastBoardMinutes || briefing.boardMinutes) && (
-                    <div style={{ marginBottom: 14 }}>
-                      <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        &#x1F4DD; 최근 보고
-                      </h4>
-                      <pre style={{
-                        background: '#0d1117', border: '1px solid #21262d',
-                        borderRadius: 10, padding: 14, fontSize: 11,
-                        color: '#8b949e', whiteSpace: 'pre-wrap',
-                        maxHeight: 130, overflowY: 'auto',
-                        lineHeight: 1.6, margin: 0,
-                      }}>
-                        {briefing.lastBoardMinutes || briefing.boardMinutes?.content || ''}
-                      </pre>
-                    </div>
-                  )}
-
-                  {/* Chat section */}
-                  <div style={{ marginTop: 6 }}>
-                    <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      &#x1F4AC; 대화하기
-                    </h4>
-                    {/* Chat history — messenger-style bubbles */}
-                    <div style={{
-                      background: '#0d1117', border: '1px solid #21262d', borderRadius: 10,
-                      padding: 12, maxHeight: 220, overflowY: 'auto', marginBottom: 8,
-                      minHeight: chatMessages.length > 0 ? 80 : 48,
-                    }}>
-                      {chatMessages.length === 0 && (
-                        <div style={{ fontSize: 12, color: '#484f58', textAlign: 'center', padding: 10 }}>
-                          {briefing.name}에게 질문해보세요
-                        </div>
-                      )}
-                      {chatMessages.map((m, i) => (
-                        <div key={i} style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
-                          marginBottom: 8,
-                        }}>
-                          {m.role !== 'user' && (
-                            <span style={{ fontSize: 10, color: '#6e7681', marginBottom: 2, marginLeft: 4 }}>
-                              {briefing.emoji} {briefing.name}
-                            </span>
-                          )}
-                          <div style={{
-                            maxWidth: '85%', padding: '8px 12px',
-                            borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                            fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                            background: m.role === 'user' ? '#238636' : '#21262d',
-                            color: '#e6edf3',
-                          }}>
-                            {m.content}
-                          </div>
-                          <span style={{ fontSize: 9, color: '#484f58', marginTop: 2, marginLeft: 4, marginRight: 4 }}>
-                            {new Date(m.created_at * 1000).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      ))}
-                      {chatLoading && (
-                        <div style={{ fontSize: 12, color: '#8b949e', padding: 6 }}>
-                          <span style={{ display: 'inline-block', animation: 'pulse 1.5s infinite' }}>
-                            {briefing.emoji} 응답 작성 중...
-                          </span>
-                        </div>
-                      )}
-                      <div ref={chatEndRef} />
-                    </div>
-                    {/* Input */}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        value={chatInput}
-                        onChange={e => setChatInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) sendMessage(); }}
-                        placeholder={`${briefing.name}에게 질문...`}
-                        style={{
-                          flex: 1, background: '#0d1117',
-                          border: '1px solid #21262d', borderRadius: 10,
-                          padding: '10px 14px', color: '#e6edf3',
-                          fontSize: 13, outline: 'none',
-                          fontFamily: '-apple-system, sans-serif',
-                          minHeight: 40,
-                        }}
-                      />
-                      <button
-                        onClick={sendMessage}
-                        disabled={chatLoading}
-                        style={{
-                          background: teamColorHex, border: 'none',
-                          borderRadius: 10, padding: '10px 18px',
-                          color: '#fff', fontSize: 13, cursor: 'pointer',
-                          fontWeight: 600, opacity: chatLoading ? 0.5 : 1,
-                          minHeight: 40, minWidth: 56,
-                        }}
-                      >전송</button>
-                    </div>
-                    {chatResp && (
-                      <div style={{ marginTop: 6, fontSize: 12, color: '#f85149' }}>{chatResp}</div>
-                    )}
-                  </div>
-                </>
-              );
-            })() : (
-              <div style={{ padding: 40, textAlign: 'center', color: '#8b949e' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>&#x1F3E2;</div>
-                <div style={{ fontSize: 13 }}>현재 데이터를 수집하고 있어요</div>
-              </div>
-            )}
-
-            {/* Cron tiles grid (only for cron-center) */}
-            {briefing && briefing.id === 'cron-center' && cronData.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <h4 style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  크론잡 현황
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
-                  {cronData.map((c, i) => (
-                    <div
-                      key={i}
-                      onClick={() => setCronPopup(c)}
-                      style={{
-                        background: '#0d1117', border: '1px solid #21262d',
-                        borderRadius: 8, padding: '8px 10px', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        transition: 'border-color 0.2s',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = '#6366f180')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = '#21262d')}
-                    >
-                      <span style={{
-                        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                        background: c.status === 'green' ? '#3fb950' : c.status === 'red' ? '#f85149' : '#d29922',
-                      }} />
-                      <span style={{ fontSize: 12, color: '#c9d1d9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.korName}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* ── Cron Center Grid Popup ── */}
+      {cronGridOpen && (
+        <CronGridPopup
+          cronData={cronData}
+          cronFilter={cronFilter}
+          setCronFilter={setCronFilter}
+          cronSearch={cronSearch}
+          setCronSearch={setCronSearch}
+          isMobile={isMobile}
+          closePopup={closePopup}
+          setCronPopup={setCronPopup}
+          setCronGridOpen={setCronGridOpen}
+          setPopupOpen={setPopupOpen}
+        />
       )}
 
-      {/* Cron Tile Popup */}
+      {/* ── Cron Tile Detail Popup ── */}
       {cronPopup && (
-        <div
-          onClick={() => setCronPopup(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1100,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#161b22', border: '1px solid #6366f140',
-              borderRadius: 14, padding: '20px 24px', minWidth: 280, maxWidth: 360,
-              color: '#e6edf3', fontFamily: '-apple-system, sans-serif',
-              boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <span style={{
-                width: 12, height: 12, borderRadius: '50%',
-                background: cronPopup.status === 'green' ? '#3fb950' : cronPopup.status === 'red' ? '#f85149' : '#d29922',
-                boxShadow: `0 0 8px ${cronPopup.status === 'green' ? '#3fb95060' : cronPopup.status === 'red' ? '#f8514960' : '#d2992260'}`,
-              }} />
-              <span style={{ fontSize: 15, fontWeight: 700 }}>{cronPopup.korName}</span>
-            </div>
-            <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.8 }}>
-              <div>마지막 실행: {cronPopup.lastRun ? new Date(cronPopup.lastRun).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음'}</div>
-              <div>결과: <span style={{ color: cronPopup.result === 'success' ? '#3fb950' : '#f85149', fontWeight: 600 }}>{cronPopup.result === 'success' ? '성공' : cronPopup.result === 'failed' ? '실패' : cronPopup.result || '대기'}</span></div>
-              <div>스케줄: {cronPopup.nextSchedule || '정보 없음'}</div>
-            </div>
-            <button
-              onClick={() => setCronPopup(null)}
-              style={{
-                marginTop: 14, width: '100%', padding: '8px 0',
-                background: '#21262d', border: '1px solid #30363d',
-                borderRadius: 8, color: '#8b949e', cursor: 'pointer', fontSize: 13,
-              }}
-            >닫기</button>
-          </div>
-        </div>
+        <CronDetailPopup
+          cronPopup={cronPopup}
+          isMobile={isMobile}
+          setCronPopup={setCronPopup}
+          setPopupOpen={setPopupOpen}
+        />
       )}
 
-      {/* Mobile floating help button */}
-      {isMobile && !popupOpen && (
-        <>
-          <button
-            onClick={() => setShowMobileHelp(prev => !prev)}
-            style={{
-              position: 'fixed', bottom: 60, right: 16, zIndex: 600,
-              width: 44, height: 44, borderRadius: '50%',
-              background: '#21262d', border: '1px solid #30363d',
-              color: '#8b949e', fontSize: 20, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-            }}
-          >?</button>
-          {showMobileHelp && (
-            <div style={{
-              position: 'fixed', bottom: 112, right: 16, zIndex: 600,
-              background: 'rgba(22,27,34,0.95)', border: '1px solid #30363d',
-              borderRadius: 12, padding: '14px 18px', maxWidth: 220,
-              color: '#c9d1d9', fontSize: 12, fontFamily: 'monospace',
-              lineHeight: 1.8, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-            }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>조작 방법</div>
-              <div>- 방을 탭하면 대화 시작</div>
-              <div>- NPC를 탭해도 대화 가능</div>
-              <div>- 팝업 바깥 탭으로 닫기</div>
-            </div>
-          )}
-        </>
-      )}
+      {/* ── Mobile Controls ── */}
+      <MobileControls
+        isMobile={isMobile}
+        popupOpen={popupOpen}
+        cronGridOpen={cronGridOpen}
+        keysRef={keysRef}
+        showMobileHelp={showMobileHelp}
+        setShowMobileHelp={setShowMobileHelp}
+      />
 
       {/* CSS animations */}
       <style>{`
