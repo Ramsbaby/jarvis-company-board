@@ -22,12 +22,15 @@ const RATES: Record<string, { input: number; output: number }> = {
   'claude-sonnet-4-5': { input: 3, output: 15 },
   'claude-haiku-4-5': { input: 0.8, output: 4 },
   'claude-opus-4-5': { input: 15, output: 75 },
+  // Groq llama-3.3-70b-versatile (Groq 공식 요율)
+  'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
 };
 
 function resolveRate(model: string): { input: number; output: number } {
   if (RATES[model]) return RATES[model];
-  // Loose match — sonnet / haiku / opus family
+  // Loose match — llama / sonnet / haiku / opus family
   const lower = model.toLowerCase();
+  if (lower.includes('llama')) return RATES['llama-3.3-70b-versatile'];
   if (lower.includes('haiku')) return RATES['claude-haiku-4-5'];
   if (lower.includes('sonnet')) return RATES['claude-sonnet-4-5'];
   return RATES['claude-opus-4-5'];
