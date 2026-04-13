@@ -31,6 +31,7 @@ export default function MobileBottomNav({ isOwner }: { isOwner: boolean }) {
 
   const moreItems = [
     ...(isOwner ? [
+      { href: '/company', label: '자비스맵', icon: '🗺️' },
       { href: '/dashboard', label: '대시보드', icon: '📊' },
       { href: '/observability', label: '옵저버빌리티', icon: '🔍' },
       { href: '/interview', label: '면접', icon: '🎤' },

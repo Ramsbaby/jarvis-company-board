@@ -73,9 +73,9 @@ export default function RightInfoPanels({ isMobile }: { isMobile: boolean }) {
       style={{
         position: 'fixed',
         top: 82,
-        right: 12,
+        right: 4,
         zIndex: 450,
-        width: 220,
+        width: 180,
         maxHeight: '40vh',
         overflowY: 'auto',
         opacity: 0.9,

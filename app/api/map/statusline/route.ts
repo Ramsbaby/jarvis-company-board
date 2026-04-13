@@ -169,7 +169,7 @@ export async function GET() {
         value: `${fiveHPct}%`,
         raw: fiveHPct,
         status: statusByPercent(fiveHPct, 70, 90),
-        tooltip: `5시간 창 — ${fiveHPct}% 사용중 (${fiveHRemain}% 남음) · ${fiveHResetIn} 후 리셋 (${fiveHReset})`,
+        tooltip: `5h: 최근 5시간 Claude 사용량 — ${fiveHPct}% 사용 (${fiveHRemain}% 남음) · ${fiveHResetIn} 후 리셋 (${fiveHReset})`,
       },
       {
         label: '7d',
@@ -177,7 +177,7 @@ export async function GET() {
         value: `${sevenDPct}%`,
         raw: sevenDPct,
         status: statusByPercent(sevenDPct, 70, 90),
-        tooltip: `주간 할당량 — ${sevenDPct}% 사용중 (${sevenDRemain}% 남음) · ${sevenDResetIn} 후 리셋 (${sevenDReset})`,
+        tooltip: `7d: 최근 7일 Claude 사용량 — ${sevenDPct}% 사용 (${sevenDRemain}% 남음) · ${sevenDResetIn} 후 리셋 (${sevenDReset})`,
       },
       {
         label: 'Sonnet',
@@ -185,7 +185,7 @@ export async function GET() {
         value: `${sonnetPct}%`,
         raw: sonnetPct,
         status: statusByPercent(sonnetPct, 70, 90),
-        tooltip: `Sonnet 할당량 — ${sonnetPct}% 사용중 (${sonnetRemain}% 남음)`,
+        tooltip: `Sonnet: Sonnet 모델 할당량 — ${sonnetPct}% 사용 (${sonnetRemain}% 남음)`,
       },
       {
         label: 'CPU',
@@ -193,7 +193,7 @@ export async function GET() {
         value: `${cpu.usage}%`,
         raw: cpu.usage,
         status: statusByPercent(cpu.usage, 70, 90),
-        tooltip: `Mac Mini CPU ${cpu.usage}% · Load Avg ${cpu.loadAvg.toFixed(2)}`,
+        tooltip: `CPU: Mac Mini CPU 사용률 ${cpu.usage}% · 부하 평균 ${cpu.loadAvg.toFixed(2)} (높을수록 바쁨)`,
       },
       {
         label: 'RAM',
@@ -201,7 +201,7 @@ export async function GET() {
         value: `${mem.percent}%`,
         raw: mem.percent,
         status: statusByPercent(mem.percent, 85, 95),
-        tooltip: `${mem.usedGb.toFixed(1)}G / ${mem.totalGb.toFixed(1)}G 사용`,
+        tooltip: `RAM: Mac Mini 메모리 — ${mem.usedGb.toFixed(1)}GB / ${mem.totalGb.toFixed(1)}GB 사용 중`,
       },
       {
         label: 'Disk',
@@ -209,7 +209,7 @@ export async function GET() {
         value: `${disk.percent}%`,
         raw: disk.percent,
         status: statusByPercent(disk.percent, 80, 90),
-        tooltip: `${disk.used} / ${disk.total}`,
+        tooltip: `Disk: Mac Mini 디스크 — ${disk.used} / ${disk.total} 사용 중`,
       },
       {
         label: 'Cron 24h',
@@ -217,7 +217,7 @@ export async function GET() {
         value: `${cron.rate}%`,
         raw: cron.rate,
         status: statusByRate(cron.rate),
-        tooltip: `24h 성공 ${cron.success} / 실패 ${cron.failed}`,
+        tooltip: `Cron 24h: 최근 24시간 크론잡 성공률 — 성공 ${cron.success}건 / 실패 ${cron.failed}건`,
       },
     ];
 

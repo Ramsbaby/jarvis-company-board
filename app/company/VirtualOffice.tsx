@@ -5,7 +5,6 @@ import {
   ROOMS, AGENT_TEAM_TO_ROOM,
   CRON_COLS, CRON_ROWS,
   CRON_COL_START, CRON_ROW_START, CRON_COL_SPACING, CRON_ROW_SPACING,
-  CORRIDOR_BRIDGE,
   buildCollisionMap, aStarPath,
 } from '@/lib/map/rooms';
 import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
@@ -61,7 +60,7 @@ export default function VirtualOffice() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // 게임 상태 refs
-  const playerRef = useRef({ x: 25, y: 8 });
+  const playerRef = useRef({ x: 25, y: 10 });
   const movingRef = useRef(false);
   const animRef = useRef({ frame: 0, dir: 0, walking: false });
   const tweenRef = useRef({ sx: 0, sy: 0, tx: 0, ty: 0, t: 0, active: false });
@@ -82,7 +81,7 @@ export default function VirtualOffice() {
   const cameraRef = useRef({ x: 0, y: 0 });
   const frameCountRef = useRef(0);
   const historyPushedRef = useRef(false);
-  const zoomRef = useRef(0.75); // 줌 레벨 (0.6 ~ 2.5) — 넓은 맵 대응
+  const zoomRef = useRef(0.7); // 줌 레벨 (0.6 ~ 2.5) — 55×32 맵 대응
   const cronDataRef = useRef<CronItem[]>([]);
 
   useEffect(() => { popupOpenRef.current = popupOpen || cronGridOpen; }, [popupOpen, cronGridOpen]);
@@ -580,11 +579,24 @@ export default function VirtualOffice() {
         ctx!.fillRect(rx, ry, rw, rh);
         ctx!.restore();
 
-        // 2. 팀 컬러 러그 (방 내부 60%, 중앙 배치)
+        // 2. 팀 컬러 러그 (방 내부 60%, 중앙 배치) + 미세 스트라이프 패턴
         const rugMarginX = rw * 0.2;
         const rugMarginY = rh * 0.2;
+        const rugX = rx + rugMarginX;
+        const rugY = ry + rugMarginY;
+        const rugW = rw - rugMarginX * 2;
+        const rugH = rh - rugMarginY * 2;
         ctx!.fillStyle = r.teamColor + '20';
-        ctx!.fillRect(rx + rugMarginX, ry + rugMarginY, rw - rugMarginX * 2, rh - rugMarginY * 2);
+        ctx!.fillRect(rugX, rugY, rugW, rugH);
+        // 러그 스트라이프 패턴 (가로줄, 미세)
+        ctx!.fillStyle = r.teamColor + '0c';
+        for (let sy = 0; sy < rugH; sy += 6) {
+          ctx!.fillRect(rugX, rugY + sy, rugW, 2);
+        }
+        // 러그 테두리
+        ctx!.strokeStyle = r.teamColor + '30';
+        ctx!.lineWidth = 1;
+        ctx!.strokeRect(rugX + 1, rugY + 1, rugW - 2, rugH - 2);
 
         // 3. 상태 indicator (LED 점) — 우상단 구석
         if (state) {
@@ -762,6 +774,9 @@ export default function VirtualOffice() {
         // 상단 하이라이트
         ctx!.fillStyle = '#d8dce4';
         ctx!.fillRect(rx + 1, ry + 1, rw - 2, 2);
+        // 팀 컬러 스트라이프 (상단 벽, 게더타운 방 이름 띠 느낌)
+        ctx!.fillStyle = r.teamColor + 'cc';
+        ctx!.fillRect(rx + 5, ry + 1, rw - 10, 3);
         // 내부 테두리
         ctx!.strokeStyle = '#d0d4dc';
         ctx!.lineWidth = 1;
@@ -1153,11 +1168,17 @@ export default function VirtualOffice() {
       ctx!.textAlign = 'center';
       ctx!.fillText(nameText, nx, ny + 29);
 
-      // Status text (current task) — 하단 라벨 (항상)
+      // Status text (current task) — 하단 라벨 (항상, 반투명 배경)
       if (state?.task) {
         const taskLabel = state.task.length > 14 ? state.task.slice(0, 13) + '\u2026' : state.task;
-        ctx!.fillStyle = '#8b949e';
         ctx!.font = '7px monospace';
+        const taskW = ctx!.measureText(taskLabel).width + 6;
+        ctx!.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx!.beginPath();
+        ctx!.roundRect(nx - taskW / 2, ny + 32, taskW, 10, 2);
+        ctx!.fill();
+        ctx!.fillStyle = '#8b949e';
+        ctx!.textAlign = 'center';
         ctx!.fillText(taskLabel, nx, ny + 39);
       }
 
@@ -1328,7 +1349,7 @@ export default function VirtualOffice() {
     }
 
     function drawMinimap(canvasW: number, canvasH: number) {
-      const mmW = 240, mmH = 100;
+      const mmW = 180, mmH = 140;
       // 우하단으로 이동 (구 우상단 → 우하단. 정보 패널이 우상단 차지)
       const mx = canvasW - mmW - 16;
       const my = canvasH - mmH - 16;
@@ -1454,15 +1475,6 @@ export default function VirtualOffice() {
           }
         }
       }
-
-      // 연결 통로 영역 (유리색)
-      ctx!.fillStyle = '#58a6ff30';
-      ctx!.fillRect(
-        mx + CORRIDOR_BRIDGE.x * T * scale,
-        my + CORRIDOR_BRIDGE.y * T * scale,
-        CORRIDOR_BRIDGE.w * T * scale,
-        CORRIDOR_BRIDGE.h * T * scale
-      );
 
       // Player dot with pulse
       const pulseSize = 3 + Math.sin(frameCountRef.current * 0.08) * 1;
@@ -1643,33 +1655,12 @@ export default function VirtualOffice() {
           }
           if (inRoom) continue; // Room floors are drawn by drawRoom
 
-          // Corridor tiles — 밝은 오피스 바닥재 스타일 (82×26 레이아웃)
-          const isOfficeHCorridor = x < 50 && ((y >= 8 && y <= 9) || (y >= 16 && y <= 17));
-          const isBridge = x >= CORRIDOR_BRIDGE.x && x < CORRIDOR_BRIDGE.x + CORRIDOR_BRIDGE.w
-            && y >= CORRIDOR_BRIDGE.y && y < CORRIDOR_BRIDGE.y + CORRIDOR_BRIDGE.h;
-          const isServerExterior = x >= 55 && x < 80 && !isBridge;
+          // Corridor tiles — 밝은 오피스 바닥재 스타일 (55×32 상하 레이아웃)
+          const isOfficeHCorridor = y >= 10 && y <= 11; // Row1-Row2 사이 복도
+          const isLobby = y >= 18 && y <= 19; // 오피스-크론 사이 로비
 
-          if (isBridge) {
-            // 연결 통로 — 메탈 그라데이션 (오피스→서버실 전환)
-            const bridgeProgress = (x - CORRIDOR_BRIDGE.x) / (CORRIDOR_BRIDGE.w - 1);
-            const r1 = 0xe0, g1 = 0xe2, b1 = 0xe8; // 밝은 오피스 톤
-            const r2 = 0x30, g2 = 0x38, b2 = 0x48; // 어두운 서버실 톤
-            const rr = Math.round(r1 + (r2 - r1) * bridgeProgress);
-            const gg = Math.round(g1 + (g2 - g1) * bridgeProgress);
-            const bb = Math.round(b1 + (b2 - b1) * bridgeProgress);
-            ctx!.fillStyle = `rgb(${rr},${gg},${bb})`;
-            ctx!.fillRect(sx, sy, T, T);
-            // 좌우 유리벽 패널
-            if (y === CORRIDOR_BRIDGE.y || y === CORRIDOR_BRIDGE.y + CORRIDOR_BRIDGE.h - 1) {
-              ctx!.fillStyle = '#58a6ff18';
-              ctx!.fillRect(sx, sy, T, T);
-            }
-            // 메탈 그리드 선
-            ctx!.strokeStyle = 'rgba(88,166,255,0.08)';
-            ctx!.lineWidth = 0.5;
-            ctx!.strokeRect(sx, sy, T, T);
-          } else if (isOfficeHCorridor) {
-            // 오피스 복도 — 약간 어둡게 (방과 확실히 구분)
+          if (isOfficeHCorridor || isLobby) {
+            // 오피스 복도/로비 — 약간 어둡게 (방과 확실히 구분)
             const tileCol = Math.floor(x / 2);
             const baseColor = (tileCol + y) % 2 === 0 ? '#d8dae0' : '#d4d6dc';
             ctx!.fillStyle = baseColor;
@@ -1683,13 +1674,13 @@ export default function VirtualOffice() {
               ctx!.lineTo(sx + T - 5, sy + 5);
               ctx!.stroke();
             }
-            // 타일 그라우트 (경계선)
-            ctx!.strokeStyle = '#c0c4cc';
-            ctx!.lineWidth = 0.8;
+            // 타일 그라우트 (경계선, 뚜렷하게)
+            ctx!.strokeStyle = '#b8bcc6';
+            ctx!.lineWidth = 1;
             if (x % 2 === 0) { ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx, sy + T); ctx!.stroke(); }
             ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx + T, sy); ctx!.stroke();
-            // 복도 중앙 동선 라인 (파란 악센트 — y=8~9 메인 복도)
-            if (y === 8 || y === 9 || y === 16) {
+            // 복도 중앙 동선 라인 (파란 악센트)
+            if (y === 10 || y === 11 || y === 18) {
               const refGrd = ctx!.createLinearGradient(sx, sy, sx, sy + T);
               refGrd.addColorStop(0, 'rgba(88,166,255,0.06)');
               refGrd.addColorStop(0.5, 'rgba(88,166,255,0.03)');
@@ -1697,14 +1688,6 @@ export default function VirtualOffice() {
               ctx!.fillStyle = refGrd;
               ctx!.fillRect(sx, sy, T, T);
             }
-          } else if (isServerExterior) {
-            // 서버실 외부 복도 — 약간 어둡고 메탈릭
-            const seBase = (x + y) % 2 === 0 ? '#c0c4cc' : '#b8bcc6';
-            ctx!.fillStyle = seBase;
-            ctx!.fillRect(sx, sy, T, T);
-            ctx!.strokeStyle = '#a8acb4';
-            ctx!.lineWidth = 0.3;
-            ctx!.strokeRect(sx, sy, T, T);
           } else {
             // 일반 오픈 영역 — 밝은 헤링본 패턴
             const hbBase = (x + y) % 2 === 0 ? '#e4e6ec' : '#e0e2e8';

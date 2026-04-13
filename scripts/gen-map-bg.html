@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 2560px; height: 1792px;
+  background: #f3f4f6;
+  font-family: -apple-system, 'SF Pro Display', sans-serif;
+  overflow: hidden;
+}
+
+.map {
+  width: 2560px; height: 1792px;
+  position: relative;
+  background:
+    linear-gradient(rgba(0,0,0,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.015) 1px, transparent 1px),
+    linear-gradient(135deg, #f5f6f8 0%, #eef0f2 100%);
+  background-size: 64px 64px, 64px 64px, 100% 100%;
+}
+
+/* ── 외벽 ── */
+.wall { position: absolute; }
+.wall-t { top:0; left:0; width:100%; height:128px;
+  background: linear-gradient(180deg, #b8bbc4 0%, #c5c8d0 80%, #d0d3da 100%);
+  border-bottom: 3px solid #a0a4ae;
+}
+.wall-b { bottom:0; left:0; width:100%; height:128px;
+  background: linear-gradient(0deg, #b8bbc4 0%, #c5c8d0 80%, #d0d3da 100%);
+  border-top: 3px solid #a0a4ae;
+}
+.wall-l { top:0; left:0; width:64px; height:100%;
+  background: linear-gradient(90deg, #b8bbc4, #c8cbd4);
+  border-right: 3px solid #a0a4ae;
+}
+.wall-r { top:0; right:0; width:64px; height:100%;
+  background: linear-gradient(270deg, #b8bbc4, #c8cbd4);
+  border-left: 3px solid #a0a4ae;
+}
+
+/* ── 방 ── */
+.room {
+  position: absolute;
+  border-radius: 10px;
+  overflow: visible;
+}
+.room.pod {
+  border: 2px solid rgba(0,0,0,0.07);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+.room.closed {
+  border: 4px solid #bfc2cc;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
+}
+.room.closed .wall-accent {
+  position: absolute; top: -4px; left: -4px; right: -4px; height: 6px;
+  background: linear-gradient(90deg, #cccfd8, #dcdfe6, #cccfd8);
+  border-radius: 10px 10px 0 0;
+}
+.room.glass {
+  border: 4px solid rgba(130,170,210,0.55);
+  box-shadow: 0 6px 24px rgba(100,150,200,0.14), 0 2px 4px rgba(0,0,0,0.04);
+}
+.room.glass .wall-accent {
+  background: linear-gradient(90deg, rgba(150,190,230,0.3), rgba(190,220,250,0.5), rgba(150,190,230,0.3));
+}
+.room.glass .glass-shine {
+  position: absolute; top: 6px; left: 8px;
+  width: 35%; height: 3px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 2px;
+}
+
+/* 문 */
+.door {
+  position: absolute; bottom: -5px;
+  left: 50%; transform: translateX(-50%);
+  width: 80px; height: 8px;
+  background: #f3f4f6;
+  border-radius: 0 0 5px 5px;
+  border: 2px solid rgba(0,0,0,0.06);
+  border-top: none;
+}
+
+/* ── 가구 공통 ── */
+.furn { position: absolute; }
+
+/* 데스크 */
+.desk {
+  background: linear-gradient(145deg, #4a4844 0%, #565450 100%);
+  border-radius: 5px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.16);
+}
+.desk::after {
+  content:''; position:absolute; top:2px; left:6px; right:6px; height:2px;
+  background: rgba(255,255,255,0.08); border-radius:1px;
+}
+
+/* 모니터 */
+.mon {
+  background: #3a3d48;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  position: relative;
+}
+.mon .screen {
+  position: absolute; top: 4px; left: 4px; right: 4px; bottom: 8px;
+  background: #1a1d26;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mon .screen .line {
+  height: 3px; margin: 3px 4px; border-radius: 2px; opacity: 0.7;
+}
+.mon .stand {
+  position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+  width: 8px; height: 8px; background: #3a3d48; border-radius: 0 0 2px 2px;
+}
+.mon .base {
+  position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
+  width: 18px; height: 4px; background: #3a3d48; border-radius: 2px;
+}
+
+/* 의자 */
+.chr {
+  width: 22px; height: 22px;
+  background: radial-gradient(circle at 45% 45%, #555860 0%, #42454e 100%);
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  position: relative;
+}
+.chr::before {
+  content:''; position:absolute;
+  top:-3px; left:-2px; right:-2px; height:60%;
+  border: 4px solid #3a3d46; border-bottom:none;
+  border-radius: 12px 12px 0 0;
+}
+
+/* 테이블 (회의실) */
+.mtbl {
+  background: linear-gradient(145deg, #4e4c46 0%, #585650 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.16);
+}
+.mtbl::after {
+  content:''; position:absolute; top:4px; left:14px; right:14px; height:3px;
+  background: rgba(255,255,255,0.06); border-radius:2px;
+}
+
+/* 랙 */
+.rack {
+  background: linear-gradient(180deg, #2c3140 0%, #343a4c 100%);
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+  padding: 6px 4px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ru { height: 8px; background: #262c38; border-radius: 2px; position:relative; }
+.led { position:absolute; right:4px; top:2px; width:6px; height:5px; border-radius:50%; }
+.led.g { background:#22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+.led.b { background:#3b82f6; box-shadow: 0 0 8px rgba(59,130,246,0.5); }
+
+/* 책장 */
+.bshelf {
+  background: linear-gradient(180deg, #8a7050 0%, #7a6040 100%);
+  border-radius: 5px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  display: flex; flex-direction: column; padding: 3px; gap: 2px;
+}
+.srow {
+  flex:1; display:flex; gap:2px; padding:2px;
+  border-bottom: 2px solid #6a5030; align-items:flex-end;
+}
+.bk { border-radius:1px; }
+
+/* 화이트보드 */
+.wb {
+  background: #fbfbfc; border: 3px solid #d0d3da; border-radius: 5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 8px;
+}
+.wbl { height: 3px; margin: 5px 0; border-radius: 2px; }
+
+/* 화분 */
+.plant { position: relative; }
+.plant .lv {
+  width: 38px; height: 32px;
+  background: radial-gradient(ellipse at 50% 60%, #4cb860 0%, #38a048 50%, #2a8838 100%);
+  border-radius: 50%;
+  box-shadow: inset 0 -4px 8px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.1);
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+}
+.plant .pt {
+  width: 24px; height: 18px;
+  background: linear-gradient(180deg, #c88050 0%, #a86840 100%);
+  border-radius: 0 0 5px 5px;
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.plant .rim {
+  width: 28px; height: 5px;
+  background: #d0905c;
+  border-radius: 3px;
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+}
+
+/* 소파 */
+.sofa {
+  background: linear-gradient(145deg, #5888b0 0%, #4878a0 100%);
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+  display: flex; gap: 5px; padding: 4px 6px;
+}
+.cush { flex:1; background: rgba(255,255,255,0.12); border-radius: 6px; }
+
+/* 정수기 */
+.wclr {
+  position: relative;
+}
+.wclr .bdy {
+  width: 22px; height: 26px;
+  background: linear-gradient(180deg, #d8dae2 0%, #c8cad2 100%);
+  border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+}
+.wclr .tnk {
+  width: 16px; height: 22px;
+  background: linear-gradient(180deg, rgba(150,210,240,0.65), rgba(130,190,225,0.45));
+  border-radius: 8px;
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.3);
+}
+
+/* 자판기 */
+.vend {
+  background: linear-gradient(180deg, #cc4444 0%, #b83838 100%);
+  border-radius: 6px; box-shadow: 0 3px 10px rgba(0,0,0,0.16);
+  padding: 5px;
+}
+.vend .disp {
+  background: #f0f2f5; border-radius: 3px;
+  padding: 4px; display: grid;
+  grid-template-columns: repeat(3,1fr); gap: 4px;
+}
+.vend .itm { width:8px; height:8px; border-radius:2px; }
+.vend .slt {
+  width:20px; height:10px; background:#2a2d36;
+  border-radius:3px; margin:6px auto 2px;
+}
+
+/* 크론 워크스테이션 */
+.cws {
+  position: relative;
+  width: 26px; height: 22px;
+}
+.cws .cd { /* desk */
+  position: absolute; bottom: 0;
+  width: 26px; height: 9px;
+  background: #3c4050;
+  border-radius: 2px;
+}
+.cws .cm { /* monitor */
+  position: absolute; top: 0; left: 3px;
+  width: 20px; height: 13px;
+  background: #3c4050;
+  border: 2px solid #484c5c;
+  border-radius: 3px;
+}
+.cws .cs { /* screen */
+  position: absolute; top: 3px; left: 6px;
+  width: 14px; height: 7px;
+  background: #1a1d26;
+  border-radius: 1px;
+}
+.cws .cl { /* line */
+  position: absolute; top: 5px; left: 8px;
+  width: 8px; height: 2px;
+  border-radius: 1px;
+  opacity: 0.7;
+}
+.cws .cl2 {
+  position: absolute; top: 8px; left: 8px;
+  width: 5px; height: 2px;
+  border-radius: 1px;
+  opacity: 0.5;
+}
+
+/* 조명 */
+.glow {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,252,240,0.12) 0%, transparent 70%);
+}
+</style>
+</head>
+<body>
+<div class="map" id="map">
+  <div class="wall wall-t"></div>
+  <div class="wall wall-b"></div>
+  <div class="wall wall-l"></div>
+  <div class="wall wall-r"></div>
+</div>
+<script>
+const T = 64; // 2x tile
+const map = document.getElementById('map');
+
+function mk(cls, css, par) {
+  const d = document.createElement('div');
+  d.className = cls || '';
+  Object.assign(d.style, css || {});
+  (par || map).appendChild(d);
+  return d;
+}
+
+const ROOMS = [
+  {id:'president',  x:2,y:3,w:7,h:5,  closed:1, floor:'wood',   bg:'linear-gradient(135deg,#d8c4a0,#c8b490,#d0bc98)'},
+  {id:'infra-lead', x:9,y:3,w:5,h:4,  pod:1,    bg:'#dcf0e1',   ac:'#22c55e'},
+  {id:'trend-lead', x:14,y:3,w:5,h:4, pod:1,    bg:'#dce6f8',   ac:'#3b82f6'},
+  {id:'record-lead',x:19,y:3,w:5,h:4, pod:1,    bg:'#eee5d8',   ac:'#92702a'},
+  {id:'audit-lead', x:24,y:3,w:5,h:4, pod:1,    bg:'#f8dede',   ac:'#dc2626'},
+  {id:'finance',    x:29,y:3,w:7,h:5, closed:1, floor:'wood',   bg:'linear-gradient(135deg,#c8dcd2,#bed4ca,#c4d8ce)'},
+  {id:'library',    x:2,y:10,w:5,h:4, pod:1,    bg:'#deeafa',   ac:'#0ea5e9'},
+  {id:'brand-lead', x:7,y:10,w:5,h:4, pod:1,    bg:'#f8e8d8',   ac:'#ea580c'},
+  {id:'standup',    x:12,y:10,w:7,h:5,glass:1,  bg:'#f8f4de',   ac:'#eab308'},
+  {id:'growth-lead',x:19,y:10,w:5,h:4,pod:1,    bg:'#def2ee',   ac:'#14b8a6'},
+  {id:'secretary',  x:24,y:10,w:5,h:4,pod:1,    bg:'#e8e0f8',   ac:'#8b5cf6'},
+  {id:'server-room',x:29,y:10,w:7,h:5,closed:1, bg:'linear-gradient(135deg,#d8dae2,#d0d2da)'},
+  {id:'cron-center',x:1,y:17,w:36,h:8,cron:1,   bg:'linear-gradient(145deg,#2e3344 0%,#363b50 50%,#2e3344 100%)'},
+];
+
+ROOMS.forEach(r => {
+  const rx = r.x*T, ry = r.y*T, rw = r.w*T, rh = r.h*T;
+  const cls = r.glass ? 'room glass' : r.closed ? 'room closed' : r.cron ? 'room' : 'room pod';
+
+  const rm = mk(cls, {
+    left:rx+'px', top:ry+'px', width:rw+'px', height:rh+'px', background:r.bg,
+    ...(r.cron ? {borderRadius:'8px', border:'3px solid #444860',
+      boxShadow:'0 6px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05)'} : {}),
+  });
+
+  // 벽 악센트 (닫힌 방)
+  if (r.closed || r.glass) {
+    mk('wall-accent', {}, rm);
+    mk('door', {}, rm);
+    if (r.glass) mk('glass-shine', {}, rm);
+  }
+
+  // 나무 바닥 줄무늬
+  if (r.floor === 'wood') {
+    for (let i = 0; i < rh; i += 14) {
+      mk('', {position:'absolute', top:i+'px', left:'4px', right:'4px', height:'1px',
+        background:'rgba(160,140,100,0.12)'}, rm);
+    }
+  }
+
+  // 크론센터 그리드
+  if (r.cron) {
+    for (let i = 0; i < rh; i += 16)
+      mk('',{position:'absolute',top:i+'px',left:0,width:'100%',height:'1px',background:'rgba(255,255,255,0.025)'},rm);
+    for (let i = 0; i < rw; i += 16)
+      mk('',{position:'absolute',top:0,left:i+'px',width:'1px',height:'100%',background:'rgba(255,255,255,0.025)'},rm);
+  }
+
+  // 조명
+  mk('glow', {left:(rw/2-80)+'px', top:(rh/2-80)+'px', width:'160px', height:'160px'}, rm);
+
+  const cx = rw/2, cy = rh/2;
+  const ac = r.ac || '#6a7080';
+
+  // ── 가구 ──
+  if (r.id === 'president' || r.id === 'finance') {
+    // L자 데스크
+    mk('desk furn', {left:(cx-40)+'px', top:(cy-18)+'px', width:'70px', height:'28px'}, rm);
+    mk('desk furn', {left:(cx-40)+'px', top:(cy-18)+'px', width:'20px', height:'50px'}, rm);
+    // 모니터
+    const m = mk('mon furn', {left:(cx-18)+'px', top:(cy-50)+'px', width:'32px', height:'24px'}, rm);
+    const sc = mk('screen',{},m);
+    mk('line',{background:ac,width:'70%'},sc);
+    mk('line',{background:ac,width:'50%',opacity:'0.5'},sc);
+    mk('stand',{},m); mk('base',{},m);
+    // 의자
+    mk('chr furn', {left:(cx+30)+'px', top:(cy+14)+'px'}, rm);
+    // 책장
+    const bs = mk('bshelf furn', {right:'16px', top:'18px', width:'26px', height:'80px'}, rm);
+    const bcolors = ['#b84545','#4580b8','#45a058','#c0a838','#9850a0'];
+    for (let s=0; s<4; s++) {
+      const row = mk('srow',{},bs);
+      for (let b=0; b<4; b++) mk('bk',{width:(3+Math.random()*3)+'px',height:(10+Math.random()*6)+'px',background:bcolors[(s*4+b)%5]},row);
+    }
+  }
+  else if (r.id === 'standup') {
+    mk('mtbl furn', {left:(cx-60)+'px', top:(cy-16)+'px', width:'120px', height:'32px'}, rm);
+    for (let i=0; i<4; i++) {
+      mk('chr furn', {left:(cx-48+i*28)+'px', top:(cy-38)+'px'}, rm);
+      mk('chr furn', {left:(cx-48+i*28)+'px', top:(cy+24)+'px'}, rm);
+    }
+    const wb = mk('wb furn', {right:'14px', top:'18px', width:'50px', height:'44px'}, rm);
+    mk('wbl',{background:'rgba(60,60,70,0.35)',width:'80%'},wb);
+    mk('wbl',{background:'rgba(200,70,70,0.35)',width:'55%'},wb);
+    mk('wbl',{background:'rgba(70,70,200,0.35)',width:'90%'},wb);
+    // 프로젝터 스크린(모니터)
+    const m = mk('mon furn', {left:'20px', top:'14px', width:'40px', height:'28px'}, rm);
+    const sc = mk('screen',{},m);
+    mk('line',{background:ac,width:'70%'},sc);
+    mk('line',{background:ac,width:'50%',opacity:'0.5'},sc);
+    mk('line',{background:ac,width:'80%',opacity:'0.3'},sc);
+    mk('stand',{},m); mk('base',{},m);
+  }
+  else if (r.id === 'server-room') {
+    for (let ri=0; ri<3; ri++) {
+      const rk = mk('rack furn', {right:(16+ri*40)+'px', top:'18px', width:'32px', height:'70px'}, rm);
+      for (let u=0; u<7; u++) {
+        const unit = mk('ru',{},rk);
+        mk('led '+(u%2===0?'g':'b'),{},unit);
+      }
+    }
+    mk('desk furn', {left:'20px', top:(cy+4)+'px', width:'50px', height:'22px'}, rm);
+    const m = mk('mon furn', {left:'28px', top:(cy-24)+'px', width:'32px', height:'24px'}, rm);
+    const sc = mk('screen',{},m);
+    mk('line',{background:ac,width:'70%'},sc);
+    mk('line',{background:ac,width:'50%',opacity:'0.5'},sc);
+    mk('stand',{},m); mk('base',{},m);
+    mk('chr furn', {left:'36px', top:(cy+32)+'px'}, rm);
+  }
+  else if (r.cron) {
+    for (let i=0; i<72; i++) {
+      const col=i%16, row=Math.floor(i/16);
+      const ws = mk('cws furn', {left:(40+col*132)+'px', top:(24+row*92)+'px'}, rm);
+      mk('cd',{},ws);
+      mk('cm',{},ws);
+      mk('cs',{},ws);
+      const lc = ['#22c55e','#3b82f6','#eab308'][i%3];
+      mk('cl',{background:lc},ws);
+      mk('cl2',{background:lc},ws);
+    }
+    // 서버랙 양쪽
+    [[10,18],[10,180],[rw-44,18],[rw-44,180]].forEach(([lx,ly]) => {
+      const rk = mk('rack furn', {left:lx+'px', top:ly+'px', width:'32px', height:'70px'}, rm);
+      for (let u=0; u<7; u++) {
+        const unit = mk('ru',{},rk);
+        mk('led '+(u%2===0?'g':'b'),{},unit);
+      }
+    });
+  }
+  else if (r.pod) {
+    mk('desk furn', {left:(cx-26)+'px', top:(cy-14)+'px', width:'52px', height:'22px'}, rm);
+    const m = mk('mon furn', {left:(cx-16)+'px', top:(cy-42)+'px', width:'32px', height:'24px'}, rm);
+    const sc = mk('screen',{},m);
+    mk('line',{background:ac,width:'70%'},sc);
+    mk('line',{background:ac,width:'50%',opacity:'0.5'},sc);
+    mk('stand',{},m); mk('base',{},m);
+    mk('chr furn', {left:(cx-11)+'px', top:(cy+16)+'px'}, rm);
+  }
+});
+
+// ── 복도 오브젝트 ──
+function addPlant(x,y,s) {
+  const p = mk('plant',{left:x+'px',top:y+'px',width:'38px',height:'48px',transform:`scale(${s||1})`});
+  mk('lv',{},p); mk('rim',{},p); mk('pt',{},p);
+}
+addPlant(76,540); addPlant(2440,540);
+addPlant(76,990); addPlant(2440,990);
+addPlant(600,960,0.85); addPlant(1860,960,0.85);
+
+function addSofa(x,y) {
+  const s = mk('sofa',{left:x+'px',top:y+'px',width:'70px',height:'26px'});
+  mk('cush',{},s); mk('cush',{},s);
+}
+addSofa(320,968); addSofa(1660,968);
+
+// 정수기
+const wc = mk('wclr',{left:'1000px',top:'956px',width:'22px',height:'52px'});
+mk('tnk',{},wc); mk('bdy',{},wc);
+
+// 자판기
+const v = mk('vend',{left:'1360px',top:'950px',width:'38px',height:'58px'});
+const disp = mk('disp',{},v);
+['#45a058','#4580b8','#c0a838','#b84545','#4580b8','#45a058','#c0a838','#b84545','#45a058'].forEach(c => mk('itm',{background:c},disp));
+mk('slt',{},v);
+
+// 복도 조명
+for (let lx = 256; lx < 2400; lx += 320) {
+  mk('glow',{left:(lx-60)+'px',top:'940px',width:'120px',height:'60px'});
+}
+</script>
+</body>
+</html>

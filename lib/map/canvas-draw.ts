@@ -12,7 +12,7 @@
  * judged higher risk than reward for a pure visual-refactor.
  */
 import type { RoomDef, CronItem } from '@/lib/map/rooms';
-import { T, getCronTilePos, CORRIDOR_BRIDGE } from '@/lib/map/rooms';
+import { T, getCronTilePos } from '@/lib/map/rooms';
 
 // ── Helper: draw a small pixel-art chair ──
 export function drawChair(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string) {
@@ -187,15 +187,15 @@ function drawStandardFurniture(
     // 화이트보드 (직사각형 1개)
     ctx.fillStyle = '#f5f5f4';
     ctx.globalAlpha = 0.9;
-    ctx.fillRect(rx + T * 5, ry + T * 0.5, T * 1.3, T * 1.5);
+    ctx.fillRect(rx + _rw - T * 2, ry + T * 0.5, T * 1.3, T * 1.5);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = '#a0a4b0';
     ctx.lineWidth = 1;
-    ctx.strokeRect(rx + T * 5, ry + T * 0.5, T * 1.3, T * 1.5);
+    ctx.strokeRect(rx + _rw - T * 2, ry + T * 0.5, T * 1.3, T * 1.5);
   } else {
-    // 서버 랙 2개 (세로 박스 + LED 점)
+    // 서버 랙 2개 (세로 박스 + LED 점) — 방 내부에 맞게 배치
     for (let i = 0; i < 2; i++) {
-      const sx = rx + T * 5 + i * T * 0.8;
+      const sx = rx + _rw - T * 1.8 + i * T * 0.8;
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(sx, ry + T * 0.5, T * 0.6, T * 2.5);
       ctx.strokeStyle = '#334155';
@@ -345,24 +345,24 @@ export function drawRoomFurniture(
         ctx.fillStyle = stColor + Math.round(pulse * 18).toString(16).padStart(2, '0');
         ctx.fill();
 
-        // ── 이름 라벨 (데스크 아래) ──
-        const displayName = cron.name.length > 20 ? cron.name.slice(0, 19) + '…' : cron.name;
-        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+        // ── 이름 라벨 (데스크 아래, 작고 반투명) ──
+        const displayName = cron.name.length > 14 ? cron.name.slice(0, 13) + '…' : cron.name;
+        ctx.font = 'bold 7px -apple-system, BlinkMacSystemFont, sans-serif';
         const nw = ctx.measureText(displayName).width + 8;
-        // 라벨 배경
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        // 라벨 배경 (반투명)
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
         ctx.beginPath();
-        ctx.roundRect(snx - nw / 2, sny + 20, nw, 16, 2);
+        ctx.roundRect(snx - nw / 2, sny + 20, nw, 13, 2);
         ctx.fill();
         ctx.fillStyle = '#c9d1d9';
         ctx.textAlign = 'center';
-        ctx.fillText(displayName, snx, sny + 32);
+        ctx.fillText(displayName, snx, sny + 30);
 
-        // 팀 이모지 (이름 오른쪽, 11px)
+        // 팀 이모지 (이름 오른쪽, 8px)
         if (cron.teamEmoji) {
-          ctx.font = '11px sans-serif';
+          ctx.font = '8px sans-serif';
           ctx.textAlign = 'left';
-          ctx.fillText(cron.teamEmoji, snx + nw / 2 + 1, sny + 32);
+          ctx.fillText(cron.teamEmoji, snx + nw / 2 + 1, sny + 30);
         }
       });
 
@@ -382,19 +382,19 @@ export function drawRoomFurniture(
 
 export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, camY: number, fc: number) {
 
-  // Potted plants (6개 — 오피스 코너 + 통로 입구)
+  // Potted plants (6개 — 오피스 코너 + 로비)
   const plantPositions = [
-    { x: 1.5, y: 1 }, { x: 48, y: 1 },       // 상단 좌우
-    { x: 1.5, y: 16 }, { x: 48, y: 16 },      // 하단 좌우
-    { x: 49, y: 11 }, { x: 55, y: 11 },        // 통로 입구 양쪽
+    { x: 1.5, y: 4 }, { x: 53, y: 4 },       // Row1 좌우
+    { x: 1.5, y: 12 }, { x: 53, y: 12 },     // Row2 좌우
+    { x: 1.5, y: 18 }, { x: 53, y: 18 },     // 로비 좌우
   ];
   for (const pl of plantPositions) {
     drawPlantSmall(ctx, pl.x * T - camX, pl.y * T - camY);
   }
 
-  // Water cooler #1 (오피스 좌측 복도)
+  // Water cooler #1 (Row1-Row2 복도 좌측)
   const wcx = 1 * T - camX + T / 2;
-  const wcy = 8 * T - camY;
+  const wcy = 10 * T - camY;
   ctx.fillStyle = '#64748b';
   ctx.fillRect(wcx - 5, wcy - 2, 10, 12);
   ctx.fillStyle = '#bae6fd50';
@@ -405,9 +405,9 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   ctx.fillStyle = '#f5f5f430';
   ctx.fillRect(wcx + 6, wcy + 2, 5, 6);
 
-  // Water cooler #2 (오피스 우측 복도)
-  const wcx2 = 48 * T - camX + T / 2;
-  const wcy2 = 8 * T - camY;
+  // Water cooler #2 (Row1-Row2 복도 우측)
+  const wcx2 = 53 * T - camX + T / 2;
+  const wcy2 = 10 * T - camY;
   ctx.fillStyle = '#64748b';
   ctx.fillRect(wcx2 - 5, wcy2 - 2, 10, 12);
   ctx.fillStyle = '#bae6fd50';
@@ -415,8 +415,8 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   ctx.fillStyle = '#7dd3fc60';
   ctx.fillRect(wcx2 - 4, wcy2 - 10, 8, 4);
 
-  // Vending machine (오피스 우측 하단)
-  const vmx = 48 * T - camX;
+  // Vending machine (로비 우측)
+  const vmx = 53 * T - camX;
   const vmy = 18 * T - camY;
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(vmx, vmy, T * 1, T * 1.5);
@@ -438,9 +438,9 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   ctx.fillStyle = '#c9a227';
   ctx.fillRect(vmx + T * 0.7, vmy + T * 0.8, 4, 6);
 
-  // Notice board on corridor wall (top corridor)
+  // Notice board on corridor wall (Row1 위)
   const nbx = 15 * T - camX;
-  const nby = 0.3 * T - camY;
+  const nby = 3.3 * T - camY;
   ctx.fillStyle = '#5a3e1b80';
   ctx.fillRect(nbx, nby, T * 2.5, T * 0.8);
   ctx.strokeStyle = '#8b6914';
@@ -458,39 +458,99 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
     ctx.fillRect(nbx + 3 + i * 14, nby + 8, 10, 12);
   }
 
-  // Welcome sign at top with decorative border
-  const signX = 25 * T - camX;
-  const signY = 0.15 * T - camY;
-  ctx.fillStyle = '#c9a22720';
+  // ── 복도 카펫 러너 (메인 복도 중앙, 짙은 베이지) ──
+  const carpetColor = '#d4c8b0';
+  const carpetDark = '#c8b898';
+  for (const corridorY of [10, 18]) {
+    for (let cx = 2; cx < 54; cx++) {
+      const csx = cx * T - camX;
+      const csy = corridorY * T - camY;
+      // 러너 바탕 (2타일 높이 × 1타일 폭)
+      ctx.fillStyle = carpetColor + '50';
+      ctx.fillRect(csx, csy + T * 0.3, T, T * 1.4);
+      // 러너 테두리 (좌우 스트라이프)
+      ctx.fillStyle = carpetDark + '40';
+      ctx.fillRect(csx, csy + T * 0.3, T, 2);
+      ctx.fillRect(csx, csy + T * 1.68, T, 2);
+      // 미세 다이아몬드 패턴 (4타일마다)
+      if (cx % 4 === 0) {
+        ctx.fillStyle = carpetDark + '25';
+        ctx.beginPath();
+        ctx.moveTo(csx + T / 2, csy + T * 0.5);
+        ctx.lineTo(csx + T * 0.8, csy + T);
+        ctx.lineTo(csx + T / 2, csy + T * 1.5);
+        ctx.lineTo(csx + T * 0.2, csy + T);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+
+  // ── 복도 벤치/소파 (게더타운 스타일) ──
+  const benchPositions = [
+    { x: 8, y: 10.2 }, { x: 20, y: 10.2 }, { x: 32, y: 10.2 }, { x: 44, y: 10.2 },
+    { x: 8, y: 11.3 }, { x: 20, y: 11.3 }, { x: 32, y: 11.3 }, { x: 44, y: 11.3 },
+    { x: 8, y: 18.2 }, { x: 20, y: 18.2 }, { x: 32, y: 18.2 }, { x: 44, y: 18.2 },
+    { x: 8, y: 19.3 }, { x: 20, y: 19.3 }, { x: 32, y: 19.3 }, { x: 44, y: 19.3 },
+  ];
+  for (const bp of benchPositions) {
+    const bpx = bp.x * T - camX;
+    const bpy = bp.y * T - camY;
+    ctx.fillStyle = '#6b7280';
+    ctx.beginPath();
+    ctx.roundRect(bpx, bpy, T * 1.5, T * 0.5, 3);
+    ctx.fill();
+    ctx.fillStyle = '#4b5563';
+    ctx.fillRect(bpx + 2, bpy - 2, T * 1.5 - 4, 4);
+    ctx.fillStyle = '#9ca3af40';
+    ctx.beginPath();
+    ctx.roundRect(bpx + 3, bpy + 2, T * 0.6, T * 0.35, 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(bpx + T * 0.75, bpy + 2, T * 0.6, T * 0.35, 2);
+    ctx.fill();
+  }
+
+  // ── "JARVIS COMPANY" 로고 영역 (외벽 상단, 크고 명확) ──
+  const signX = 27 * T - camX;
+  const signY = 3.1 * T - camY;
+  ctx.fillStyle = '#1e293b';
   ctx.beginPath();
-  ctx.roundRect(signX - 80, signY, 160, 22, 5);
+  ctx.roundRect(signX - 120, signY, 240, 28, 6);
   ctx.fill();
-  ctx.strokeStyle = '#c9a22740';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#c9a22780';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.roundRect(signX - 80, signY, 160, 22, 5);
+  ctx.roundRect(signX - 120, signY, 240, 28, 6);
   ctx.stroke();
-  // Decorative dots
-  ctx.fillStyle = '#c9a22750';
+  ctx.strokeStyle = '#c9a22730';
+  ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.arc(signX - 72, signY + 11, 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(signX + 72, signY + 11, 2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.roundRect(signX - 116, signY + 3, 232, 22, 4);
+  ctx.stroke();
+  ctx.fillStyle = '#c9a22770';
+  for (const ddx of [-108, 104]) {
+    ctx.beginPath();
+    ctx.moveTo(signX + ddx, signY + 14);
+    ctx.lineTo(signX + ddx + 4, signY + 10);
+    ctx.lineTo(signX + ddx + 8, signY + 14);
+    ctx.lineTo(signX + ddx + 4, signY + 18);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.fillStyle = '#c9a227';
-  ctx.font = 'bold 11px monospace';
+  ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('\uD83C\uDFE2 JARVIS MAP', signX, signY + 16);
+  ctx.fillText('\uD83C\uDFE2 JARVIS COMPANY', signX, signY + 20);
 
   // Floor arrows in corridors (directional guides)
   const arrowPositions = [
-    { x: 5, y: 8, dir: 'right' }, { x: 15, y: 8, dir: 'right' },
-    { x: 25, y: 8, dir: 'right' }, { x: 35, y: 8, dir: 'right' },
-    { x: 45, y: 8, dir: 'right' },
-    { x: 5, y: 16, dir: 'right' }, { x: 15, y: 16, dir: 'right' },
-    { x: 25, y: 16, dir: 'right' }, { x: 35, y: 16, dir: 'right' },
-    { x: 45, y: 16, dir: 'right' },
+    { x: 5, y: 10, dir: 'right' }, { x: 15, y: 10, dir: 'right' },
+    { x: 25, y: 10, dir: 'right' }, { x: 35, y: 10, dir: 'right' },
+    { x: 45, y: 10, dir: 'right' },
+    { x: 5, y: 18, dir: 'right' }, { x: 15, y: 18, dir: 'right' },
+    { x: 25, y: 18, dir: 'right' }, { x: 35, y: 18, dir: 'right' },
+    { x: 45, y: 18, dir: 'right' },
   ];
   for (const arr of arrowPositions) {
     const ax = arr.x * T - camX + T / 2;
@@ -512,8 +572,8 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
 
   // Emergency exit signs (green rectangles)
   const exitPositions = [
-    { x: 0.3, y: 7.5 }, { x: 0.3, y: 16 },
-    { x: 49, y: 7.5 }, { x: 49, y: 16 },
+    { x: 0.3, y: 10 }, { x: 0.3, y: 18 },
+    { x: 54, y: 10 }, { x: 54, y: 18 },
   ];
   for (const ep of exitPositions) {
     const ex = ep.x * T - camX;
@@ -528,7 +588,7 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
 
   // Wall clock showing real KST time
   const clockX = 40 * T - camX;
-  const clockY = 0.3 * T - camY;
+  const clockY = 3.3 * T - camY;
   // Clock body
   ctx.fillStyle = '#21262d';
   ctx.beginPath();
@@ -570,12 +630,12 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
 
   // Ceiling lights in corridors (subtle glow circles on floor, x간격 5타일)
   const lightPositions = [
-    { x: 5, y: 8 }, { x: 10, y: 8 }, { x: 15, y: 8 }, { x: 20, y: 8 },
-    { x: 25, y: 8 }, { x: 30, y: 8 }, { x: 35, y: 8 }, { x: 40, y: 8 },
-    { x: 45, y: 8 },
-    { x: 5, y: 16 }, { x: 10, y: 16 }, { x: 15, y: 16 }, { x: 20, y: 16 },
-    { x: 25, y: 16 }, { x: 30, y: 16 }, { x: 35, y: 16 }, { x: 40, y: 16 },
-    { x: 45, y: 16 },
+    { x: 5, y: 10 }, { x: 10, y: 10 }, { x: 15, y: 10 }, { x: 20, y: 10 },
+    { x: 25, y: 10 }, { x: 30, y: 10 }, { x: 35, y: 10 }, { x: 40, y: 10 },
+    { x: 45, y: 10 },
+    { x: 5, y: 18 }, { x: 10, y: 18 }, { x: 15, y: 18 }, { x: 20, y: 18 },
+    { x: 25, y: 18 }, { x: 30, y: 18 }, { x: 35, y: 18 }, { x: 40, y: 18 },
+    { x: 45, y: 18 },
   ];
   for (const lp of lightPositions) {
     const lx = lp.x * T - camX + T / 2;
@@ -594,9 +654,9 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
     ctx.fillRect(lx - 4, ly - T * 0.4 + 1, 8, 1);
   }
 
-  // Lobby welcome mat near entrance (오피스 입구)
+  // Lobby welcome mat near entrance (Row1 위쪽)
   const matX = 22 * T - camX;
-  const matY = 0.8 * T - camY;
+  const matY = 3.5 * T - camY;
   ctx.fillStyle = '#5a3e1b15';
   ctx.beginPath();
   ctx.roundRect(matX, matY, T * 4, T * 0.6, 3);
@@ -607,46 +667,4 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
   ctx.roundRect(matX + 2, matY + 2, T * 4 - 4, T * 0.6 - 4, 2);
   ctx.stroke();
 
-  // ── 연결 통로 장식 (x=50~54, y=6~17) ──
-  const bx = CORRIDOR_BRIDGE.x;
-  const by = CORRIDOR_BRIDGE.y;
-  const bw = CORRIDOR_BRIDGE.w;
-  const bh = CORRIDOR_BRIDGE.h;
-
-  // "→ SERVER ROOM" 방향 표지판 (통로 중앙 상단)
-  const signCx = (bx + bw / 2) * T - camX;
-  const signCy = (by + 0.5) * T - camY;
-  ctx.fillStyle = '#1e293b';
-  ctx.beginPath();
-  ctx.roundRect(signCx - 50, signCy, 100, 16, 3);
-  ctx.fill();
-  ctx.strokeStyle = '#3b82f640';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(signCx - 50, signCy, 100, 16, 3);
-  ctx.stroke();
-  ctx.fillStyle = '#58a6ff';
-  ctx.font = 'bold 9px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('\u2192 SERVER ROOM', signCx, signCy + 12);
-
-  // 양쪽 유리벽 LED 스트립 (파랑 글로우 점)
-  const ledCount = Math.floor(bh / 1.5);
-  for (let li = 0; li < ledCount; li++) {
-    const ledY = (by + 1 + li * 1.5) * T - camY;
-    const ledPulseVal = 0.3 + Math.sin(fc * 0.08 + li * 0.6) * 0.3;
-    const ledAlpha = Math.round(ledPulseVal * 255).toString(16).padStart(2, '0');
-    // 좌측 벽
-    const ledLx = bx * T - camX + 3;
-    ctx.fillStyle = '#3b82f6' + ledAlpha;
-    ctx.beginPath();
-    ctx.arc(ledLx, ledY, 2, 0, Math.PI * 2);
-    ctx.fill();
-    // 우측 벽
-    const ledRx = (bx + bw) * T - camX - 3;
-    ctx.fillStyle = '#3b82f6' + ledAlpha;
-    ctx.beginPath();
-    ctx.arc(ledRx, ledY, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
 }

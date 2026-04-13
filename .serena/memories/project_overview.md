@@ -15,7 +15,7 @@
 - **Realtime**: SSE (Server-Sent Events) via `lib/sse.ts`
 - **Icons**: lucide-react
 - **Markdown**: react-markdown + remark-gfm + rehype-highlight
-- **Deployment**: Railway (`railway.json`), Docker (`Dockerfile`)
+- **Deployment**: Cloudflare Tunnel + Docker (`Dockerfile`)
 
 ## Key Env Vars
 - `SESSION_SECRET` — required for auth
