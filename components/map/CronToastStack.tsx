@@ -36,6 +36,10 @@ const STYLE: Record<CronEvent['type'], { bg: string; border: string; icon: strin
   },
 };
 
+interface CronToastStackProps {
+  isMobile?: boolean;
+}
+
 /**
  * CSS 트랜지션 기반 토스트 — React가 매 프레임 렌더하지 않음.
  * 각 토스트는 3단계 phase 전이:
@@ -43,7 +47,7 @@ const STYLE: Record<CronEvent['type'], { bg: string; border: string; icon: strin
  *  2. stay → STAY_MS 후 leave 전이
  *  3. leave → FADE_MS 후 unmount
  */
-export default function CronToastStack() {
+export default function CronToastStack({ isMobile = false }: CronToastStackProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Map<number, number[]>>(new Map());
   const nextId = useRef(1);
@@ -60,7 +64,6 @@ export default function CronToastStack() {
         const toast: Toast = { ...ev, id, phase: 'enter' };
 
         setToasts(prev => {
-          // 새 토스트 앞에 추가, 최대 N개 유지 (초과분은 leave로 보내지 않고 즉시 제거)
           const next = [toast, ...prev].slice(0, MAX_TOASTS);
           return next;
         });
@@ -93,7 +96,6 @@ export default function CronToastStack() {
     return () => {
       es.removeEventListener('message', onMessage);
       es.close();
-      // 모든 타이머 취소
       timers.current.forEach(ids => ids.forEach(i => window.clearTimeout(i)));
       timers.current.clear();
     };
@@ -101,26 +103,43 @@ export default function CronToastStack() {
 
   if (toasts.length === 0) return null;
 
+  // 모바일: 상단 중앙, 데스크톱: 좌하단
+  const containerStyle: React.CSSProperties = isMobile
+    ? {
+        position: 'fixed',
+        top: 48,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 1300,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        pointerEvents: 'none',
+        width: 'calc(100vw - 32px)',
+        maxWidth: 360,
+      }
+    : {
+        position: 'fixed',
+        left: 16,
+        bottom: 16,
+        zIndex: 1300,
+        display: 'flex',
+        flexDirection: 'column-reverse',
+        gap: 8,
+        pointerEvents: 'none',
+      };
+
   return (
-    <div style={{
-      position: 'fixed',
-      left: 16,
-      bottom: 16,
-      zIndex: 1300,
-      display: 'flex',
-      flexDirection: 'column-reverse',
-      gap: 8,
-      pointerEvents: 'none',
-    }}>
+    <div style={containerStyle}>
       {toasts.map(t => {
         const s = STYLE[t.type];
         const visible = t.phase === 'stay';
+        const slideDir = isMobile ? 'translateY(-12px)' : 'translateX(-12px)';
+        const slideReset = isMobile ? 'translateY(0)' : 'translateX(0)';
         return (
           <div
             key={t.id}
             style={{
-              minWidth: 220,
-              maxWidth: 360,
               padding: '10px 14px',
               background: s.bg,
               border: `1px solid ${s.border}`,
@@ -133,7 +152,7 @@ export default function CronToastStack() {
               backdropFilter: 'blur(8px)',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
               opacity: visible ? 1 : 0,
-              transform: visible ? 'translateX(0)' : 'translateX(-12px)',
+              transform: visible ? slideReset : slideDir,
               transition: `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease`,
               willChange: 'opacity, transform',
             }}
