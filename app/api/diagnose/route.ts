@@ -3,12 +3,13 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import Anthropic from '@anthropic-ai/sdk';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap, computeCostUsd } from '@/lib/chat-cost';
 
-const MODEL = 'claude-haiku-4-5';
+// Groq llama-3.3-70b-versatile (OpenAI 호환, JSON 모드 지원)
+const MODEL = 'llama-3.3-70b-versatile';
 const MAX_TOKENS = 800;
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const RATE_LIMIT = { perMin: 10, perDay: 100 };
 const JARVIS_HOME = path.join(process.env.HOME || '', '.jarvis');
 
@@ -133,9 +134,9 @@ export async function POST(req: NextRequest) {
     console.error('[diagnose] cost check failed:', err);
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
+    return NextResponse.json({ error: 'GROQ_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
   }
 
   // Gather data
@@ -165,22 +166,38 @@ ${logBlock}
 이 크론의 최근 실패를 분석해줘. 반드시 위 JSON 형식만 출력하라.`;
 
   try {
-    const anthropic = new Anthropic({ apiKey });
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+    const groqRes = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
     });
 
-    const fullText = response.content
-      .filter((b) => b.type === 'text')
-      .map((b) => (b.type === 'text' ? b.text : ''))
-      .join('');
+    if (!groqRes.ok) {
+      const errBody = await groqRes.text().catch(() => '');
+      throw new Error(`Groq HTTP ${groqRes.status}: ${errBody.slice(0, 300)}`);
+    }
 
+    const groqData = (await groqRes.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+
+    const fullText = groqData.choices?.[0]?.message?.content ?? '';
     const parsed = parseDiagnoseJson(fullText);
-    const inputTokens = response.usage?.input_tokens ?? 0;
-    const outputTokens = response.usage?.output_tokens ?? 0;
+    const inputTokens = groqData.usage?.prompt_tokens ?? 0;
+    const outputTokens = groqData.usage?.completion_tokens ?? 0;
     const costUsd = computeCostUsd(MODEL, inputTokens, outputTokens);
 
     // Record cost (best-effort)
