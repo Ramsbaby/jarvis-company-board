@@ -319,6 +319,24 @@ function getUpcomingTasks(keywords: string[]): Array<{ time: string; task: strin
   return upcoming.slice(0, 5);
 }
 
+// 정규식 특수문자 이스케이프
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 키워드 → word-boundary 매칭 정규식.
+// 한글은 \b가 먹지 않으므로 (영문/숫자 경계 + 한글 앞뒤에 구두점/공백/줄 경계) 2원 전략.
+function buildKeywordRegex(kw: string): RegExp {
+  const escaped = escapeRegExp(kw.toLowerCase());
+  const isHangul = /[가-힣]/.test(kw);
+  if (isHangul) {
+    // 한글 키워드는 앞뒤가 영숫자/한글이 아닌 경계(또는 문자열 끝/구두점)여야 매칭
+    return new RegExp(`(?:^|[^가-힣A-Za-z0-9])${escaped}(?=$|[^가-힣A-Za-z0-9])`, 'i');
+  }
+  // 영문 키워드는 표준 \b
+  return new RegExp(`\\b${escaped}\\b`, 'i');
+}
+
 function getLatestBoardMinutes(teamKeywords: string[]): string | null {
   try {
     if (!existsSync(BOARD_MINUTES_DIR)) return null;
@@ -326,9 +344,11 @@ function getLatestBoardMinutes(teamKeywords: string[]): string | null {
     if (files.length === 0) return null;
     const content = readFileSync(path.join(BOARD_MINUTES_DIR, files[0]), 'utf8');
     const lines = content.split('\n');
+    const regexes = teamKeywords.map(buildKeywordRegex);
     const excerpts: string[] = [];
     for (let i = 0; i < lines.length && excerpts.length < 5; i++) {
-      if (teamKeywords.some(kw => lines[i].toLowerCase().includes(kw))) {
+      const lower = lines[i].toLowerCase();
+      if (regexes.some(re => re.test(lower))) {
         const start = Math.max(0, i - 1);
         const end = Math.min(lines.length, i + 3);
         excerpts.push(lines.slice(start, end).join('\n'));
