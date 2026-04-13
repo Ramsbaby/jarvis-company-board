@@ -268,101 +268,63 @@ export function drawRoomFurniture(
       // 바닥 반사광 — 각 워크스테이션 개별 glow (전체 폭 밴드 제거)
       // 개별 그림자는 워크스테이션 렌더링 시 처리
 
-      // ── 워크스테이션 NPC 렌더링 (Gather Town 스타일) ─────────
+      // ── 크론 워크스테이션 — 카드 그리드 스타일 ─────────────────
 
       cronItems.forEach((cron, i) => {
         const { tx, ty } = getCronTilePos(r, i);
-        // 월드 → 스크린 (매 프레임 신선하게 계산)
-        const snx = tx * T - (r.x * T - rx) + T / 2;   // rx = r.x*T-camX already
+        const snx = tx * T - (r.x * T - rx) + T / 2;
         const sny = ty * T - (r.y * T - ry) + T / 2;
 
         // 화면 밖이면 skip
-        const cw = _rw + rx;
-        const ch = _rh + ry;
-        if (snx < rx - 40 || snx > cw + 40 || sny < ry - 40 || sny > ch + 40) return;
+        if (snx < rx - 80 || snx > _rw + rx + 80 || sny < ry - 40 || sny > _rh + ry + 40) return;
 
-        const stColor =
-          cron.status === 'success' ? '#22c55e' :
-          cron.status === 'failed'  ? '#f85149' :
-          cron.status === 'running' ? '#58a6ff' :
-          cron.status === 'skipped' ? '#d29922' :
-          '#374151';
+        // 상태별 색상
+        const statusConfig = {
+          success: { bg: '#1a2e1e', border: '#22c55e', text: '#4ade80', label: '성공' },
+          failed:  { bg: '#2e1a1a', border: '#f85149', text: '#f87171', label: '실패' },
+          running: { bg: '#1a2238', border: '#58a6ff', text: '#93c5fd', label: '실행중' },
+          skipped: { bg: '#2e2a1a', border: '#d29922', text: '#fbbf24', label: '스킵' },
+          unknown: { bg: '#1e2028', border: '#374151', text: '#6b7280', label: '-' },
+        };
+        const st = statusConfig[cron.status] || statusConfig.unknown;
 
-        const pulse = 0.6 + Math.sin(fc * 0.06 + i * 0.8) * 0.4;
+        // 카드 크기
+        const cardW = T * 4.2;
+        const cardH = T * 1.0;
+        const cx = snx - cardW / 2;
+        const cy = sny - cardH / 2;
 
-        // ── 워크스테이션 본체 (1.5x 확대) ──
-        // 바닥 그림자
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        // 카드 배경 (상태색 배경)
+        ctx.fillStyle = st.bg;
         ctx.beginPath();
-        ctx.ellipse(snx, sny + 20, 26, 7, 0, 0, Math.PI * 2);
+        ctx.roundRect(cx, cy, cardW, cardH, 4);
         ctx.fill();
 
-        // 데스크 표면
-        ctx.fillStyle = '#1a2035';
-        ctx.fillRect(snx - 27, sny + 3, 54, 14);
-        ctx.fillStyle = '#242b42';
-        ctx.fillRect(snx - 27, sny + 3, 54, 2); // 데스크 하이라이트
-
-        // 모니터 스탠드
-        ctx.fillStyle = '#1e2842';
-        ctx.fillRect(snx - 3, sny - 20, 6, 22);
-
-        // 모니터 케이싱
-        ctx.fillStyle = '#1a2035';
+        // 카드 테두리 (상태색)
+        ctx.strokeStyle = st.border + '80';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.roundRect(snx - 24, sny - 44, 48, 28, 2);
+        ctx.roundRect(cx, cy, cardW, cardH, 4);
+        ctx.stroke();
+
+        // 상태 점 (좌측)
+        ctx.fillStyle = st.border;
+        ctx.beginPath();
+        ctx.arc(cx + 8, cy + cardH / 2, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // 모니터 스크린 (상태색 글로우)
-        const glowA = Math.round(pulse * 40).toString(16).padStart(2, '0');
-        ctx.fillStyle = stColor + glowA;
-        ctx.beginPath();
-        ctx.roundRect(snx - 22, sny - 42, 44, 24, 1);
-        ctx.fill();
-        // 스크린 베이스 (어두운 배경)
-        ctx.fillStyle = '#080e1a';
-        ctx.fillRect(snx - 21, sny - 41, 42, 22);
-        // 스크린 내용 (가로 선 효과)
-        ctx.fillStyle = stColor + '30';
-        for (let sl = 0; sl < 3; sl++) {
-          ctx.fillRect(snx - 18, sny - 38 + sl * 6, 14 + (i % 3) * 6, 2);
-        }
-        // 상태 LED (스크린 우측 상단)
-        const ledPulse = Math.round(pulse * 70).toString(16).padStart(2, '0');
-        ctx.beginPath();
-        ctx.arc(snx + 16, sny - 38, 4, 0, Math.PI * 2);
-        ctx.fillStyle = stColor + ledPulse;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(snx + 16, sny - 38, 3, 0, Math.PI * 2);
-        ctx.fillStyle = stColor;
-        ctx.fill();
+        // 이름 (점 오른쪽)
+        const displayName = cron.name.length > 16 ? cron.name.slice(0, 15) + '…' : cron.name;
+        ctx.font = 'bold 8px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#e0e4ea';
+        ctx.textAlign = 'left';
+        ctx.fillText(displayName, cx + 15, cy + cardH / 2 + 3);
 
-        // 모니터 위 글로우 (상태 halo)
-        const haloR = 20 + Math.sin(fc * 0.04 + i * 0.5) * 2;
-        ctx.beginPath();
-        ctx.arc(snx, sny - 30, haloR, 0, Math.PI * 2);
-        ctx.fillStyle = stColor + Math.round(pulse * 18).toString(16).padStart(2, '0');
-        ctx.fill();
-
-        // ── 이름 라벨 (데스크 아래, 작고 반투명) ──
-        const displayName = cron.name.length > 14 ? cron.name.slice(0, 13) + '…' : cron.name;
-        ctx.font = 'bold 7px -apple-system, BlinkMacSystemFont, sans-serif';
-        const nw = ctx.measureText(displayName).width + 8;
-        // 라벨 배경 (반투명)
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        ctx.beginPath();
-        ctx.roundRect(snx - nw / 2, sny + 20, nw, 13, 2);
-        ctx.fill();
-        ctx.fillStyle = '#c9d1d9';
-        ctx.textAlign = 'center';
-        ctx.fillText(displayName, snx, sny + 30);
-
-        // 팀 이모지 (이름 오른쪽, 8px)
+        // 팀 이모지 (우측)
         if (cron.teamEmoji) {
-          ctx.font = '8px sans-serif';
-          ctx.textAlign = 'left';
-          ctx.fillText(cron.teamEmoji, snx + nw / 2 + 1, sny + 30);
+          ctx.font = '7px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText(cron.teamEmoji, cx + cardW - 4, cy + cardH / 2 + 3);
         }
       });
 
