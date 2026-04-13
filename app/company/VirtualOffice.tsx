@@ -911,12 +911,55 @@ export default function VirtualOffice() {
       ctx!.textAlign = 'center';
       ctx!.fillText(nameText, nx, ny + 29);
 
-      // Status text (current task)
+      // Status text (current task) — 하단 라벨 (항상)
       if (state?.task) {
         const taskLabel = state.task.length > 14 ? state.task.slice(0, 13) + '\u2026' : state.task;
         ctx!.fillStyle = '#8b949e';
         ctx!.font = '7px monospace';
         ctx!.fillText(taskLabel, nx, ny + 39);
+      }
+
+      // ── NPC 머리 위 현재작업 배지 (플레이어 거리 기반 선명도) ──
+      if (state?.task && state.task !== 'idle') {
+        const p = playerRef.current;
+        const dx = p.x - r.npcX;
+        const dy = p.y - r.npcY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        // 5타일 이내 선명(1.0), 12타일 밖은 0, 사이는 linear
+        const clarity = dist <= 5 ? 1 : dist >= 12 ? 0 : 1 - (dist - 5) / 7;
+        if (clarity > 0.05) {
+          const badgeText = state.task.length > 18 ? state.task.slice(0, 17) + '\u2026' : state.task;
+          ctx!.save();
+          ctx!.font = 'bold 9px monospace';
+          const badgeW = ctx!.measureText(badgeText).width + 10;
+          const badgeH = 14;
+          const bubbleY = ny - 32;
+          const alpha = Math.round(clarity * 220).toString(16).padStart(2, '0');
+          const textAlpha = Math.round(clarity * 255).toString(16).padStart(2, '0');
+          // 배경 말풍선
+          ctx!.fillStyle = `#161b22${alpha}`;
+          ctx!.strokeStyle = `#c9a227${alpha}`;
+          ctx!.lineWidth = 1;
+          ctx!.beginPath();
+          ctx!.roundRect(nx - badgeW / 2, bubbleY - badgeH + 2, badgeW, badgeH, 4);
+          ctx!.fill();
+          ctx!.stroke();
+          // 꼬리
+          ctx!.beginPath();
+          ctx!.moveTo(nx - 3, bubbleY + 2);
+          ctx!.lineTo(nx, bubbleY + 6);
+          ctx!.lineTo(nx + 3, bubbleY + 2);
+          ctx!.closePath();
+          ctx!.fillStyle = `#161b22${alpha}`;
+          ctx!.fill();
+          ctx!.strokeStyle = `#c9a227${alpha}`;
+          ctx!.stroke();
+          // 텍스트
+          ctx!.fillStyle = `#e6edf3${textAlpha}`;
+          ctx!.textAlign = 'center';
+          ctx!.fillText(badgeText, nx, bubbleY - 2);
+          ctx!.restore();
+        }
       }
     }
 
@@ -1433,6 +1476,25 @@ export default function VirtualOffice() {
 
       // Decorations
       drawDecorations(ctx!, camX, camY, frameCountRef.current);
+
+      // ── 시간대별 mood overlay (KST) ──
+      // 캔버스 전체에 얇은 컬러 레이어로 시간감 부여 (드로잉 완료 후 맨 위)
+      {
+        const nowKst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const h = nowKst.getUTCHours();
+        let moodFill: string | null = null;
+        if (h >= 23 || h < 6) moodFill = 'rgba(20, 30, 60, 0.35)';       // 심야
+        else if (h < 9) moodFill = 'rgba(255, 180, 100, 0.10)';           // 새벽
+        else if (h >= 18 && h < 23) moodFill = 'rgba(160, 80, 140, 0.12)'; // 황혼
+        if (moodFill) {
+          const { w: cw, h: ch } = logicalSizeRef.current;
+          ctx!.save();
+          ctx!.globalCompositeOperation = 'source-over';
+          ctx!.fillStyle = moodFill;
+          ctx!.fillRect(0, 0, cw, ch);
+          ctx!.restore();
+        }
+      }
 
       // ── 클릭-투-무브 목표 타일 표시 (게더타운 스타일) ──────────
       const pt = pathTargetRef.current;
