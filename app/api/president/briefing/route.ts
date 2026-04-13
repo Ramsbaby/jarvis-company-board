@@ -92,6 +92,7 @@ interface PresidentBriefing {
   name: string;
   title: string;
   avatar: string;
+  status: 'GREEN' | 'YELLOW' | 'RED';
   summary: string;
   recentActivity: CronEntry[];
   lastBoardMinutes: { filename: string; excerpt: string } | null;
@@ -124,12 +125,18 @@ export async function GET() {
     summary = `최근 ${recent.length}건이 진행중이거나 확인 대기 상태예요.`;
   }
 
+  const status: 'GREEN' | 'YELLOW' | 'RED' =
+    failedCount > 0 ? 'RED'
+    : recent.length === 0 || (successCount === 0 && skippedCount > 0) ? 'YELLOW'
+    : 'GREEN';
+
   const data: PresidentBriefing = {
     type: 'president',
     id: 'president',
     name: '사장실',
     title: '대표님(이정우) 전용 집무실',
     avatar: '🏛️',
+    status,
     summary,
     recentActivity: recent,
     lastBoardMinutes: boardMinutes,

@@ -5,6 +5,8 @@ import { execSync } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
+import { GET as presidentBriefingGET } from '@/app/api/president/briefing/route';
+import { GET as standupBriefingGET } from '@/app/api/standup/briefing/route';
 
 const HOME = homedir();
 const JARVIS = path.join(HOME, '.jarvis');
@@ -772,6 +774,13 @@ const briefingCache: Record<string, { data: unknown; ts: number }> = {};
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // president/standup 방은 전용 엔드포인트로 위임
+  // — 전사 보고/모닝 브리핑은 cron 통계가 아니라 board-minutes·tasks.json 기반이라
+  //   ENTITIES 레지스트리 대신 dedicated route 가 SSoT.
+  if (id === 'president') return presidentBriefingGET();
+  if (id === 'standup') return standupBriefingGET();
+
   const entity = ENTITIES[id];
   if (!entity) {
     return NextResponse.json({ error: `Unknown entity: ${id}` }, { status: 404 });

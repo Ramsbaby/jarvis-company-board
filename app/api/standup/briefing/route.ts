@@ -113,6 +113,7 @@ interface StandupBriefing {
   name: string;
   title: string;
   avatar: string;
+  status: 'GREEN' | 'YELLOW' | 'RED';
   summary: string;
   recentActivity: CronEntry[];
   latestStandup: { filename: string; excerpt: string } | null;
@@ -153,12 +154,18 @@ export async function GET() {
     : next.schedule
       ? `스케줄: ${next.schedule}`
       : '매일 모닝 브리핑';
+  const status: 'GREEN' | 'YELLOW' | 'RED' =
+    failedCount > 0 ? 'RED'
+    : recent.length === 0 || (successCount === 0 && skippedCount > 0) ? 'YELLOW'
+    : 'GREEN';
+
   const data: StandupBriefing = {
     type: 'standup',
     id: 'standup',
     name: '스탠드업홀',
     title: `전사 모닝 브리핑 — ${titleTime}`,
     avatar: '🎤',
+    status,
     summary,
     recentActivity: recent,
     latestStandup: latest,
