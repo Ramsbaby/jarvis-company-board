@@ -1708,14 +1708,38 @@ export default function VirtualOffice() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, chatLoading]);
 
-  // ── 메시지 전송 (인앱 대화) ──────────────────────────────────
+  // ── 메시지 전송 (인앱 대화, Groq SSE 스트리밍) ─────────────
+  const chatAbortRef = useRef<AbortController | null>(null);
+
   const sendMessage = async () => {
     if (!chatInput.trim() || !briefing) return;
+    // 이전 스트림이 있으면 abort
+    chatAbortRef.current?.abort();
+    const ac = new AbortController();
+    chatAbortRef.current = ac;
+
     setChatLoading(true);
     setChatResp('');
     const msg = chatInput;
     setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', content: msg, created_at: Math.floor(Date.now() / 1000) }]);
+    const nowSec = Math.floor(Date.now() / 1000);
+    setChatMessages(prev => [
+      ...prev,
+      { role: 'user', content: msg, created_at: nowSec },
+      { role: 'assistant', content: '', created_at: nowSec }, // placeholder for streaming
+    ]);
+
+    const appendToken = (token: string) => {
+      setChatMessages(prev => {
+        if (prev.length === 0) return prev;
+        const next = prev.slice();
+        const last = next[next.length - 1];
+        if (last.role === 'assistant') {
+          next[next.length - 1] = { ...last, content: last.content + token };
+        }
+        return next;
+      });
+    };
 
     try {
       const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
@@ -1724,15 +1748,89 @@ export default function VirtualOffice() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamId, message: msg }),
+        signal: ac.signal,
       });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setChatMessages(prev => [...prev, { role: 'assistant', content: data.content, created_at: data.created_at }]);
-    } catch {
-      setChatResp('응답 실패 — 잠시 후 다시 시도해주세요');
+
+      // 429/4xx/5xx는 JSON 에러
+      if (!res.ok) {
+        let errMsg = '응답 실패';
+        try {
+          const j = await res.json();
+          if (j?.error) errMsg = j.error;
+        } catch { /* ignore */ }
+        // placeholder 제거
+        setChatMessages(prev => prev.filter((_, i) => !(i === prev.length - 1 && _.role === 'assistant' && _.content === '')));
+        setChatResp(errMsg);
+        setChatLoading(false);
+        return;
+      }
+
+      if (!res.body) {
+        setChatResp('응답 본문이 비어 있습니다');
+        setChatLoading(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamError: string | null = null;
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sepIdx;
+        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+          for (const line of rawEvent.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            const payload = trimmed.slice(5).trim();
+            if (!payload) continue;
+            try {
+              const parsed = JSON.parse(payload) as {
+                token?: string;
+                done?: boolean;
+                id?: number;
+                error?: string;
+              };
+              if (parsed.error) {
+                streamError = parsed.error;
+                break outer;
+              }
+              if (parsed.token) {
+                appendToken(parsed.token);
+              }
+              if (parsed.done) {
+                break outer;
+              }
+            } catch { /* non-json ignore */ }
+          }
+        }
+      }
+
+      if (streamError) {
+        setChatResp(streamError);
+      }
+    } catch (err) {
+      if ((err as { name?: string })?.name !== 'AbortError') {
+        setChatResp('응답 실패 — 잠시 후 다시 시도해주세요');
+      }
+    } finally {
+      setChatLoading(false);
+      if (chatAbortRef.current === ac) chatAbortRef.current = null;
     }
-    setChatLoading(false);
   };
+
+  // 팝업 닫힐 때 진행 중 스트림 중단
+  useEffect(() => {
+    if (!briefing) {
+      chatAbortRef.current?.abort();
+      chatAbortRef.current = null;
+    }
+  }, [briefing]);
 
   // ── 렌더 ─────────────────────────────────────────────────────
   return (
