@@ -294,11 +294,15 @@ function buildRichBase(teamId: string, keywords: string[], cronLog: string): str
     sections.push(`## 책임 태스크 (${owned.length}개)\n${taskLines.join('\n')}${owned.length > 20 ? `\n... 외 ${owned.length - 20}개` : ''}`);
   }
 
-  // 2. 24h 통계
+  // 2. 통계 — 24h 를 primary 로, 7d 는 참고용으로만. LLM 이 24h 질문에
+  //    7d 숫자로 답변하는 혼동을 막기 위해 label 을 강화한다. (briefing
+  //    팝업과 동일한 수치가 나와야 UI 와 chat 이 일치한다.)
   const s24 = cronStats24h(keywords, cronLog);
   const s7d = cronStats7d(keywords, cronLog);
   if (s24.total > 0 || s7d.success + s7d.failed > 0) {
-    sections.push(`## 실행 통계\n- 최근 24h: 전체 ${s24.total}건 / 성공 ${s24.success}건 / 실패 ${s24.failed}건 / 스킵 ${s24.skipped}건 / 성공률 ${s24.rate}%\n- 최근 7d: 성공 ${s7d.success}건 / 실패 ${s7d.failed}건 / 성공률 ${s7d.rate}% / 일평균 ${s7d.dailyAvg}건`);
+    const primary = `**[권장 숫자 — CEO 질문 답변 시 이 줄 사용]** 오늘 (최근 24시간): 전체 ${s24.total}건 / 성공 ${s24.success}건 / 실패 ${s24.failed}건 / 스킵 ${s24.skipped}건 / 성공률 ${s24.rate}%`;
+    const supplementary = `(참고용 · 7일 누적) 성공 ${s7d.success}건 / 실패 ${s7d.failed}건 / 성공률 ${s7d.rate}% / 일평균 ${s7d.dailyAvg}건 — **"오늘" 또는 "24시간" 질문에는 절대 이 줄을 사용하지 말 것**`;
+    sections.push(`## 실행 통계\n${primary}\n${supplementary}`);
   }
 
   // 3. 최근 24h cron.log 스니펫 (팀 관련 라인만)
@@ -631,7 +635,7 @@ ${teamContext || '(수집된 데이터 없음)'}
 1. 위 실제 데이터를 근거로 ${persona}의 입장에서 한국어로 답변한다.
 2. "사용자가 현재 보고 있는 브리핑 화면 요약"에 나온 내용은 사실로 간주한다. 사용자가 화면에서 실패를 봤다면 인정하고 분석한다.
 3. 실패 원인을 물으면 "현재 실패 중인 작업" 섹션의 stderr/로그를 인용해서 원인 분석. 로그가 없더라도 브리핑 화면에 실패가 표시됐다면 "브리핑에서 감지된 실패"로 인정하고 가능한 원인을 추론한다.
-4. 상태 질문에는 숫자(실행 건수, 실패 건수, 디스크%, 시간)를 구체적으로 포함한다.
+4. 상태 질문에는 숫자(실행 건수, 실패 건수, 디스크%, 시간)를 구체적으로 포함한다. 시간 창이 모호하면 **항상 "오늘 (최근 24h)" 통계만 인용**한다. 7일 누적 숫자는 "최근 7일" 이라고 명시적으로 물었을 때만 사용한다 — "오늘", "지금", "현재", "상태" 같은 질문에는 절대 7d 숫자를 쓰지 않는다.
 5. 답변은 짧고 구조화해서: 핵심 결론 → 근거 데이터 → 다음 액션 제안.`;
 
   const userContent = `${conversationContext ? `=== 이전 대화 ===\n${conversationContext}\n\n` : ''}${message}`;

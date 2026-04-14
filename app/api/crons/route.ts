@@ -340,33 +340,61 @@ function buildFallbackFromIndividualLogs(taskId: string): LastRun | null {
   const outStat = safeStat(outPath);
   const errStat = safeStat(errPath);
 
-  // 둘 다 없거나 zero-byte → 실행된 적 없음 (legitimate unknown)
   const outUsable = outStat && outStat.size > 0;
   const errUsable = errStat && errStat.size > 0;
-  if (!outUsable && !errUsable) return null;
+  // 3차: LLM 전용 태스크는 `claude-stderr-{id}-YYYY-MM-DD.log` 를 쓴다.
+  const claudeStderr = readStderrExcerpt(taskId);
+
+  // 아무 로그도 없고 claude-stderr 도 없음 → 실행된 적 없음
+  if (!outUsable && !errUsable && !claudeStderr) return null;
 
   const now = Date.now();
   const DAY_MS = 24 * 3600 * 1000;
-  const errRecent = errUsable && now - errStat!.mtime.getTime() < DAY_MS;
 
-  // 최근 24h 내 err 로그 non-empty → failed
-  if (errRecent) {
-    const tail = safeReadTail(errPath, 500);
-    const excerpt = tail.trim().slice(-400);
+  // 분기 1: err 로그가 "최근" 이거나 "out 로그보다 새로움" → failed
+  //   - err-log 가 24h 이내면 명확히 현재 실패 상태
+  //   - err-log 가 24h 이상이더라도 out-log 가 0-byte 이거나 err-log 보다
+  //     오래되었다면 "여태 한 번도 성공 못 한 실패" 로 봐야 한다
+  //     (예: rag-bench — out=0B/Mar29, err=2KB/Apr12 → 계속 실패 중)
+  const errMs = errStat ? errStat.mtime.getTime() : 0;
+  const outMs = outStat ? outStat.mtime.getTime() : 0;
+  const errIsRecent = errUsable && now - errMs < DAY_MS;
+  const errDominates = errUsable && (!outUsable || errMs >= outMs);
+
+  if (errIsRecent || errDominates || claudeStderr) {
+    const tail = errUsable ? safeReadTail(errPath, 500).trim().slice(-400) : '';
+    const stderr = tail || claudeStderr;
+    const refMs = errUsable ? errMs : (claudeStderr ? now : outMs);
+    const ageH = Math.round((now - refMs) / 3600_000);
+    const staleSuffix = ageH > 24 ? ` · ${ageH}h 이전 (stale)` : '';
     return {
       status: 'failed',
-      timestamp: formatKstTimestamp(errStat!.mtime),
-      message: `stderr: ${excerpt}`.slice(0, 500),
+      timestamp: formatKstTimestamp(new Date(refMs)),
+      message: (stderr ? `stderr: ${stderr}` : '실패 감지 (개별 로그)') + staleSuffix,
       duration: '',
     };
   }
 
-  // .log만 non-empty → success 추정
+  // 분기 2: out 로그 존재 → success 추정
+  //   age 가 상당한 경우에도 lastRun 은 그대로 노출해서 CEO 가 "이거 10일째
+  //   안 돌았네" 를 바로 알아챌 수 있게 한다. 단 age 가 극단적이면 status 는
+  //   unknown 으로 낮춰서 grid 정렬상 상단 경고로 뜨도록.
   if (outUsable) {
+    const ageH = Math.round((now - outMs) / 3600_000);
+    // 극단적 stale (7일 초과) → 계속 unknown 유지. 하지만 timestamp 는 보여줌.
+    if (ageH > 24 * 7) {
+      return {
+        status: 'unknown',
+        timestamp: formatKstTimestamp(new Date(outMs)),
+        message: `마지막 실행: ${ageH}h 이전 — 장기 미실행 (확인 필요)`,
+        duration: '',
+      };
+    }
+    const staleSuffix = ageH > 24 ? ` · ${ageH}h 이전` : '';
     return {
       status: 'success',
-      timestamp: formatKstTimestamp(outStat!.mtime),
-      message: '최근 실행 감지 (개별 로그)',
+      timestamp: formatKstTimestamp(new Date(outMs)),
+      message: '최근 실행 감지 (개별 로그)' + staleSuffix,
       duration: '',
     };
   }
