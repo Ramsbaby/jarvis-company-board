@@ -168,24 +168,21 @@ function drawStandardFurniture(
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 2;
 
-  // 일자 데스크 (방 너비에 맞게 동적 — T*1.5 시작, 오른쪽 T*0.8 여백)
-  const deskW = _rw - T * 2.3; // 어떤 방 크기든 벽 안에 수납
-  ctx.fillStyle = '#4a5060';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, T * 0.5);
-  ctx.fillStyle = '#3a4050';
-  ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, 2); // 상단 엣지
-
-  // 모니터
-  drawMonitor(ctx, rx + T * 2.5, ry + T * 1, T * 1, T * 0.6, teamColor + '28', '#4a5060');
-
-  // 의자
-  ctx.fillStyle = '#4a5060';
-  ctx.beginPath();
-  ctx.arc(rx + T * 3.5, ry + T * 2.8, 7, 0, Math.PI * 2);
-  ctx.fill();
-
   if (variant === 'meeting') {
-    // 화이트보드 (actual white)
+    // 일자 데스크
+    const deskW = _rw - T * 2.3;
+    ctx.fillStyle = '#4a5060';
+    ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, T * 0.5);
+    ctx.fillStyle = '#3a4050';
+    ctx.fillRect(rx + T * 1.5, ry + T * 1.8, deskW, 2);
+    // 모니터
+    drawMonitor(ctx, rx + T * 2.5, ry + T * 1, T * 1, T * 0.6, teamColor + '28', '#4a5060');
+    // 의자
+    ctx.fillStyle = '#4a5060';
+    ctx.beginPath();
+    ctx.arc(rx + T * 3.5, ry + T * 2.8, 7, 0, Math.PI * 2);
+    ctx.fill();
+    // 화이트보드
     ctx.fillStyle = '#f5f5f4';
     ctx.globalAlpha = 0.9;
     ctx.fillRect(rx + _rw - T * 2, ry + T * 0.5, T * 1.3, T * 1.5);
@@ -194,31 +191,35 @@ function drawStandardFurniture(
     ctx.lineWidth = 1;
     ctx.strokeRect(rx + _rw - T * 2, ry + T * 0.5, T * 1.3, T * 1.5);
   } else {
-    // 서버 랙 2개 (세로 박스 + LED 점) — 방 내부에 맞게 배치
-    for (let i = 0; i < 2; i++) {
-      const sx = rx + _rw - T * 1.8 + i * T * 0.8;
+    // 서버 랙 3개 — 왼쪽 배치 (모니터/의자 제거)
+    for (let i = 0; i < 3; i++) {
+      const sx = rx + T * 0.7 + i * (T * 0.7);
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(sx, ry + T * 0.5, T * 0.6, T * 2.5);
+      ctx.fillRect(sx, ry + T * 0.5, T * 0.55, T * 2.5);
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1;
-      ctx.strokeRect(sx, ry + T * 0.5, T * 0.6, T * 2.5);
+      ctx.strokeRect(sx, ry + T * 0.55, T * 0.55, T * 2.5);
       // LED 점 + 글로우
       for (let j = 0; j < 6; j++) {
         const ledColor = j % 2 === 0 ? '#22c55e' : '#3b82f6';
         const ledCx = sx + T * 0.15;
         const ledCy = ry + T * 0.8 + j * 12;
-        // 글로우 (외곽)
         ctx.fillStyle = (j % 2 === 0 ? 'rgba(34,197,94,0.3)' : 'rgba(59,130,246,0.3)');
         ctx.beginPath();
         ctx.arc(ledCx, ledCy, 5, 0, Math.PI * 2);
         ctx.fill();
-        // LED 코어
         ctx.fillStyle = ledColor;
         ctx.beginPath();
         ctx.arc(ledCx, ledCy, 3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    // 관리 데스크 — 오른쪽
+    const deskX = rx + _rw - T * 2.2;
+    ctx.fillStyle = '#4a5060';
+    ctx.fillRect(deskX, ry + T * 1.8, T * 1.5, T * 0.5);
+    ctx.fillStyle = '#3a4050';
+    ctx.fillRect(deskX, ry + T * 1.8, T * 1.5, 2);
   }
 
   ctx.restore();

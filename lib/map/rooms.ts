@@ -96,8 +96,8 @@ export const ROOM_TO_CRON_TEAM: Record<string, string> = {
 export const CRON_COLS = 10;
 export const CRON_ROWS = 8;
 export const CRON_COL_SPACING = 4.8;  // tiles (51칸 너비에서 이름 겹침 방지)
-export const CRON_ROW_SPACING = 1.2;  // tiles
-export const CRON_COL_START = 1.5;    // room-relative start x
+export const CRON_ROW_SPACING = 1.15; // tiles
+export const CRON_COL_START = 2.5;    // room-relative start x
 export const CRON_ROW_START = 1.0;    // room-relative start y
 
 export function getCronTilePos(cronRoom: RoomDef, i: number): { tx: number; ty: number } {
