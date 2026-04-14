@@ -198,15 +198,12 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 minHeight: 0,
                 display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
               }}>
-              {/* 내부 패딩 래퍼 — hero banner negative margin이 clipping 없이 풀 블리드 가능 */}
-              <div style={{ padding: isMobile ? '20px 16px 24px' : '28px 32px' }}>
-              {/* Header — hero banner with team color */}
+              {/* Header — hero banner (풀 블리드, 패딩 자체 관리) */}
               <div style={{
-                margin: isMobile ? '-16px -16px 20px' : '-28px -32px 20px',
                 padding: isMobile ? '20px 16px 20px' : '28px 32px 22px',
                 background: `linear-gradient(135deg, ${teamColorHex}1e 0%, ${teamColorHex}08 50%, transparent 85%)`,
                 borderBottom: `1px solid ${teamColorHex}1a`,
-                borderRadius: isMobile ? 0 : '22px 22px 0 0',
+                borderRadius: isMobile ? 0 : (showTwoCol ? '22px 0 0 0' : '22px 22px 0 0'),
                 position: 'relative',
               }}>
                 {/* Top row: emoji + title + close */}
@@ -271,6 +268,9 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   >✕</button>
                 </div>
               </div>
+
+              {/* 콘텐츠 패딩 래퍼 — hero banner 아래 콘텐츠에 좌우 균일 패딩 */}
+              <div style={{ padding: isMobile ? '20px 16px 24px' : '20px 32px 28px' }}>
 
               {/* ── ⚡ 팀 역할 — GREEN이면 헤더에 이미 표시됨 → 숨김. RED/YELLOW만 표시 ── */}
               {(() => {
@@ -989,7 +989,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   <span>{chatPanelOpen ? '질문 닫기' : `${briefing.name}에게 질문`}</span>
                 </button>
               </div>
-              </div>{/* 패딩 래퍼 끝 */}
+              </div>{/* 콘텐츠 패딩 래퍼 끝 */}
               </div>{/* 좌측 브리핑 컬럼 끝 */}
 
               {/* ── 우측: 채팅 컬럼 (데스크톱 2컬럼 / 모바일 탭) ── */}
