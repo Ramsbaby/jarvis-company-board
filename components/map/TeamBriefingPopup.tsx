@@ -59,11 +59,10 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
       onClick={closePopup}
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(4,6,16,0.92)',
+        background: 'rgba(4,6,16,0.95)',
         display: 'flex',
         alignItems: isMobile ? 'flex-end' : 'center',
         justifyContent: 'center',
-        backdropFilter: 'blur(12px)',
       }}
     >
       <div

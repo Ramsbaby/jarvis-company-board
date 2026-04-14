@@ -536,6 +536,7 @@ export default function VirtualOffice() {
     // ── 줌: 마우스 휠 (커서 위치 기준 중심점 보정) ──────────────
     const ZOOM_MIN = 0.55, ZOOM_MAX = 2.4;
     const onWheel = (e: WheelEvent) => {
+      if (popupOpenRef.current) return; // 팝업 열린 동안 캔버스 줌 차단
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.08 : 0.93;
       const prevZoom = zoomRef.current;
@@ -555,6 +556,7 @@ export default function VirtualOffice() {
     let _pinchMidX = 0;  // 핀치 중심 CSS 픽셀 X
     let _pinchMidY = 0;  // 핀치 중심 CSS 픽셀 Y
     const onTouchStartZoom = (e: TouchEvent) => {
+      if (popupOpenRef.current) return;
       if (e.touches.length === 2) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -564,7 +566,7 @@ export default function VirtualOffice() {
       }
     };
     const onTouchMoveZoom = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
+      if (popupOpenRef.current || e.touches.length !== 2) return;
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1812,6 +1814,12 @@ export default function VirtualOffice() {
 
     // ── 게임 루프 ──────────────────────────────────────────────
     function gameLoop(time: number) {
+      // 팝업 열린 동안 5fps로 절전 — backdrop 깜빡임 방지 + CPU 절약
+      if (popupOpenRef.current && frameCountRef.current % 12 !== 0) {
+        frameCountRef.current++;
+        animId = requestAnimationFrame(gameLoop);
+        return;
+      }
       frameCountRef.current++;
       // DPR + Zoom 보정: 월드 렌더링 패스
       const _dpr = window.devicePixelRatio || 1;
