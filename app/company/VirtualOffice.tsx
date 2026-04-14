@@ -116,10 +116,10 @@ export default function VirtualOffice() {
   // ── 팝업 닫기 ──────────────────────────────────────────────
   const closePopup = useCallback(() => {
     setPopupOpen(false);
-    setBriefing(null);
+    // briefing은 유지 — 팝업 재오픈 시 기존 대화 + 정보 복원
+    // 다른 NPC 클릭 시 briefing이 교체되면서 자연스럽게 초기화됨
     setPopupLoading(false);
     setChatResp('');
-    setChatInput('');
     setCronGridOpen(false);
     setCronPopup(null);
   }, []);

@@ -17,19 +17,19 @@ const FADE_MS = 450;        // CSS 트랜지션 시간
 
 const STYLE: Record<CronEvent['type'], { bg: string; border: string; icon: string; label: string }> = {
   cron_start: {
-    bg: 'rgba(56, 139, 253, 0.16)',
+    bg: 'rgba(13, 17, 23, 0.92)',
     border: '#388bfd',
     icon: '▶️',
     label: '시작',
   },
   cron_success: {
-    bg: 'rgba(63, 185, 80, 0.16)',
+    bg: 'rgba(13, 17, 23, 0.92)',
     border: '#3fb950',
     icon: '✅',
     label: '성공',
   },
   cron_failed: {
-    bg: 'rgba(248, 81, 73, 0.18)',
+    bg: 'rgba(30, 10, 10, 0.95)',
     border: '#f85149',
     icon: '❌',
     label: '실패',

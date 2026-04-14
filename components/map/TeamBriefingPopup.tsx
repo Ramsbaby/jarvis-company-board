@@ -196,6 +196,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 overflowY: 'auto',
                 minHeight: 0,
                 display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
+                scrollbarGutter: 'stable',
               }}>
               {/* Header — hero banner (풀 블리드, 패딩 자체 관리) */}
               <div style={{
