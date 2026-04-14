@@ -51,7 +51,7 @@ export default function VirtualOffice() {
     if (typeof window === 'undefined') return true;
     return sessionStorage.getItem('jarvis-map-intro-v2') !== '1';
   });
-  const [chatPanelOpen, setChatPanelOpen] = useState(false); // 팀장 채팅 패널 (기본 닫힘)
+  const [chatPanelOpen, setChatPanelOpen] = useState(true); // TODO: 테스트 후 false로 복원
   // 뷰 모드 (맵 / 표) — localStorage 영속화
   const [viewMode, setViewMode] = useState<'map' | 'table'>(() => {
     if (typeof window === 'undefined') return 'map';
@@ -1287,21 +1287,27 @@ export default function VirtualOffice() {
         ctx!.lineTo(nx, ny - 10);
         ctx!.stroke();
       } else if (r.id === 'infra-lead') {
-        // 헤드셋
+        // 방패 — 신임 팀장 이준혁 (예방 우선)
         ctx!.strokeStyle = '#22c55e';
+        ctx!.fillStyle = '#22c55e22';
         ctx!.lineWidth = 2;
         ctx!.beginPath();
-        ctx!.arc(nx, ny - 13, 11, Math.PI, 0);
+        ctx!.moveTo(nx, ny - 20);
+        ctx!.lineTo(nx + 8, ny - 16);
+        ctx!.lineTo(nx + 8, ny - 10);
+        ctx!.quadraticCurveTo(nx + 8, ny - 5, nx, ny - 2);
+        ctx!.quadraticCurveTo(nx - 8, ny - 5, nx - 8, ny - 10);
+        ctx!.lineTo(nx - 8, ny - 16);
+        ctx!.closePath();
+        ctx!.fill();
         ctx!.stroke();
-        ctx!.fillStyle = '#22c55e';
-        ctx!.fillRect(nx - 11, ny - 13, 3, 4);
-        ctx!.fillRect(nx + 8,  ny - 13, 3, 4);
-        // 마이크 암
+        // 방패 중앙 체크마크
         ctx!.strokeStyle = '#22c55e';
-        ctx!.lineWidth = 1;
+        ctx!.lineWidth = 1.5;
         ctx!.beginPath();
-        ctx!.moveTo(nx + 10, ny - 10);
-        ctx!.lineTo(nx + 6, ny - 6);
+        ctx!.moveTo(nx - 3, ny - 10);
+        ctx!.lineTo(nx, ny - 7);
+        ctx!.lineTo(nx + 4, ny - 14);
         ctx!.stroke();
       } else if (r.id === 'trend-lead') {
         // 안테나
@@ -1877,7 +1883,13 @@ export default function VirtualOffice() {
       // 구역 진입 토스트 트리거
       const nearbyId = nearby?.id ?? null;
       if (nearbyId !== lastNearbyIdRef.current && nearby) {
-        zoneToastRef.current = { text: nearby.name, color: nearby.teamColor, emoji: nearby.emoji || '🏢', frame: 0 };
+        // 신임 팀장 이준혁 부임 1회성 토스트
+        if (nearby.id === 'infra-lead' && typeof window !== 'undefined' && !localStorage.getItem('jarvis-infra-new-lead-v1')) {
+          zoneToastRef.current = { text: 'SRE실 · 이준혁 신임 팀장 부임', color: '#22c55e', emoji: '🛡️', frame: 0 };
+          localStorage.setItem('jarvis-infra-new-lead-v1', '1');
+        } else {
+          zoneToastRef.current = { text: nearby.name, color: nearby.teamColor, emoji: nearby.emoji || '🏢', frame: 0 };
+        }
         lastNearbyIdRef.current = nearbyId;
       } else if (!nearby) {
         lastNearbyIdRef.current = null;
@@ -2299,23 +2311,49 @@ export default function VirtualOffice() {
 
   // ── 채팅 히스토리 ──────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string; created_at: number }>>([]);
+  const [chatHistoryOffset, setChatHistoryOffset] = useState(0);
+  const [chatHasMore, setChatHasMore] = useState(false);
+  const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
+  const chatTeamIdRef = useRef<string>('');
 
-  const loadChatHistory = useCallback(async (teamId: string) => {
+  const loadChatHistory = useCallback(async (teamId: string, offset = 0, prepend = false) => {
     try {
-      const res = await fetch(`/api/game/chat/${teamId}`);
+      setChatHistoryLoading(true);
+      const res = await fetch(`/api/game/chat/${teamId}?offset=${offset}`);
       if (!res.ok) return;
       const data = await res.json();
-      setChatMessages(data.messages || []);
+      const msgs = data.messages || [];
+      if (prepend) {
+        setChatMessages(prev => [...msgs, ...prev]);
+      } else {
+        setChatMessages(msgs);
+      }
+      setChatHasMore(data.hasMore ?? false);
+      setChatHistoryOffset(offset + msgs.length);
     } catch { /* skip */ }
+    finally { setChatHistoryLoading(false); }
   }, []);
+
+  const loadMoreHistory = useCallback(() => {
+    const teamId = chatTeamIdRef.current;
+    if (!teamId || chatHistoryLoading) return;
+    loadChatHistory(teamId, chatHistoryOffset, true);
+  }, [chatHistoryOffset, chatHistoryLoading, loadChatHistory]);
 
   useEffect(() => {
     if (briefing) {
       const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
-      loadChatHistory(room?.entityId || briefing.id);
+      const teamId = room?.entityId || briefing.id;
+      chatTeamIdRef.current = teamId;
+      setChatHistoryOffset(0);
+      setChatHasMore(false);
+      loadChatHistory(teamId, 0, false);
       setChatPanelOpen(false); // 새 팀장 열 때 채팅 패널 닫기
     } else {
       setChatMessages([]);
+      setChatHasMore(false);
+      setChatHistoryOffset(0);
+      chatTeamIdRef.current = '';
       setChatPanelOpen(false);
     }
   }, [briefing, loadChatHistory]);
@@ -2687,6 +2725,9 @@ export default function VirtualOffice() {
         setChatPanelOpen={setChatPanelOpen}
         chatMessages={chatMessages}
         chatLoading={chatLoading}
+        chatHasMore={chatHasMore}
+        chatHistoryLoading={chatHistoryLoading}
+        loadMoreHistory={loadMoreHistory}
         chatInput={chatInput}
         setChatInput={setChatInput}
         chatResp={chatResp}

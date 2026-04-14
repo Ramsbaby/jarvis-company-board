@@ -1,27 +1,30 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap, GROQ_LLAMA_70B } from '@/lib/chat-cost';
+import Anthropic from '@anthropic-ai/sdk';
+
+const CLAUDE_CLI = '/Users/ramsbaby/.local/bin/claude';
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 
 const TEAM_PROMPTS: Record<string, string> = {
-  president: '나는 자비스 컴퍼니의 대표 이정우입니다. AI 경영 현황(이사회·KPI·경영 점검)과 개인 데이터(약속·Claude 세션·메모리)를 통합 관리하는 이정우 본인의 공간이라 답변합니다.',
-  finance: '나는 재무실장 장원석입니다. 자비스 AI 운영 비용, TQQQ·시장 포지션, 오너 Preply 수입, 손익 추적을 담당합니다. 숫자와 통화는 정확하게 전달합니다.',
-  'infra-lead': '나는 SRE실장 박태성입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 시스템 상태에 대해 쉽게 설명합니다. 단, 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.',
-  'trend-lead': '나는 전략기획실장 강나연입니다. 뉴스, 기술 트렌드, GitHub 동향을 분석합니다. 시장/주식 지표는 재무실 소관이라 다루지 않습니다.',
-  'record-lead': '나는 데이터실장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 **백엔드** 업무를 담당합니다. 사용자가 직접 검색하는 UI는 자료실(문지아) 소관입니다.',
-  library: '나는 자료실 사서 문지아입니다. 데이터실이 쌓은 RAG 인덱스와 오너 메모리 파일을 사용자가 검색·탐색할 수 있도록 돕는 프론트엔드를 담당합니다.',
-  'growth-lead': '나는 인재개발실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다. 학습과 면접은 현실적으로 분리되지 않기 때문입니다.',
-  'brand-lead': '나는 마케팅실장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.',
-  'audit-lead': '나는 QA실장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.',
-  'cron-engine': '나는 크론 엔진 관리자입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.',
-  'discord-bot': '나는 Discord 봇 관리자입니다. 봇 프로세스 상태와 채팅 시스템을 관리합니다.',
-  'disk-storage': '나는 디스크 스토리지 관리자입니다. 로컬 스토리지 사용량과 정리 상태를 관리합니다.',
+  president: '나는 자비스 컴퍼니의 대표 이정우입니다. AI 경영 현황(이사회·KPI·경영 점검)과 개인 데이터(약속·Claude 세션·메모리)를 통합 관리하는 이정우 본인의 공간이라 답변합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 이정우 대표 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  finance: '나는 재무실장 장원석입니다. 자비스 AI 운영 비용, TQQQ·시장 포지션, 오너 Preply 수입, 손익 추적을 담당합니다. 숫자와 통화는 정확하게 전달합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 장원석 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'infra-lead': '나는 SRE실장 이준혁입니다. 서버, 디스크, 크론, Discord 봇 상태를 관리합니다. 예방적 신뢰성 엔지니어링을 추구하며, 장애 발생 전에 선제 조치를 취합니다. 단, 돈 관련(TQQQ/market/cost-monitor)은 재무실 소관입니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 이준혁 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'trend-lead': '나는 전략기획실장 강나연입니다. 뉴스, 기술 트렌드, GitHub 동향을 분석합니다. 시장/주식 지표는 재무실 소관이라 다루지 않습니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 강나연 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'record-lead': '나는 데이터실장 한소희입니다. 일일 대화 기록, RAG 인덱싱, 데이터 아카이빙 등 **백엔드** 업무를 담당합니다. 사용자가 직접 검색하는 UI는 자료실(문지아) 소관입니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 한소희 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  library: '나는 자료실 사서 문지아입니다. 데이터실이 쌓은 RAG 인덱스와 오너 메모리 파일을 사용자가 검색·탐색할 수 있도록 돕는 프론트엔드를 담당합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 문지아 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'growth-lead': '나는 인재개발실장 김서연입니다. 기술 학습(CS/아키텍처/책 요약)과 이직 준비(채용·이력서·면접)를 한 곳에서 관리합니다. 학습과 면접은 현실적으로 분리되지 않기 때문입니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 김서연 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'brand-lead': '나는 마케팅실장 정하은입니다. 오픈소스 전략, 기술 블로그, GitHub 성장을 관리합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 정하은 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'audit-lead': '나는 QA실장 류태환입니다. 크론 실패 추적, E2E 테스트, 시스템 품질을 감시합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 류태환 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'cron-engine': '나는 크론 엔진 관리자입니다. 자동화 태스크 스케줄링과 실행 상태를 관리합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 크론 엔진 관리자 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'discord-bot': '나는 Discord 봇 관리자입니다. 봇 프로세스 상태와 채팅 시스템을 관리합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 Discord 봇 관리자 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
+  'disk-storage': '나는 디스크 스토리지 관리자입니다. 로컬 스토리지 사용량과 정리 상태를 관리합니다.\n\n[절대 규칙] 나는 NPC 역할을 하는 AI다. 반드시 디스크 스토리지 관리자 캐릭터로만 말하고, 도구 실행·파일 읽기·권한 요청·터미널 명령 안내를 절대 하지 않는다. 오직 "=== 오늘 팀의 실제 활동 데이터 ===" 섹션의 데이터만 사용해 답변한다. 데이터에 없으면 "해당 데이터가 오늘 수집본에 없습니다"라고 짧게 답한다. "작업 디렉토리", "allowedDirectories", "터미널", "권한 승인" 같은 말은 절대 하지 않는다.',
 };
 
 // --- Team context gathering ---
@@ -392,7 +395,7 @@ function gatherFailureDetails(keywords: string[], cronLog: string, maxTasks = 3)
 
 // 팀별 cron 키워드 — 브리핑 라우트의 ENTITIES와 동기화
 const TEAM_KEYWORDS: Record<string, string[]> = {
-  'infra-lead': ['infra-daily', 'system-doctor', 'system-health', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics'],
+  'infra-lead': ['infra-daily', 'system-doctor', 'system-health', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics', 'memory-cleanup', 'memory-expire', 'memory-sync', 'rate-limit-check'],
   'trend-lead': ['trend', 'news', 'calendar-alert', 'github-monitor', 'recon'],
   'finance': ['tqqq', 'market-alert', 'stock', 'macro', 'finance-monitor', 'cost-monitor', 'preply', 'personal-schedule'],
   'record-lead': ['record-daily', 'memory', 'session-sum', 'compact', 'rag-index'],
@@ -604,8 +607,11 @@ export async function POST(req: NextRequest) {
     // 비용 파일 읽기 실패 시에는 통과 (hard-block 아님)
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
+  // Groq API 키는 Claude CLI/SDK 경로일 때는 불필요 — Groq 경로에서만 검증
+  const groqApiKey = process.env.GROQ_API_KEY;
+  const isClaudeModelEarly = (process.env.GAME_CHAT_MODEL || '').startsWith('claude-');
+  const claudeCliExists = existsSync(CLAUDE_CLI);
+  if (!isClaudeModelEarly && !groqApiKey) {
     return NextResponse.json({ error: 'GROQ_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
   }
 
@@ -656,83 +662,160 @@ ${message}
       req.signal?.addEventListener('abort', onAbort);
 
       try {
-        const groqRes = await fetch(GROQ_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        const anthropicKey = process.env.ANTHROPIC_API_KEY;
+        const isClaudeModel = MODEL.startsWith('claude-');
+        // CLI 우선 (Max 구독). SDK는 CLI 없을 때만 폴백.
+        const useClaudeCLI = isClaudeModel && claudeCliExists;
+        const useClaudeSDK = isClaudeModel && !claudeCliExists && !!anthropicKey;
+
+        if (useClaudeSDK) {
+          // ── Anthropic SDK (API 키 있을 때) ────────────────────────────────
+          const anthropic = new Anthropic({ apiKey: anthropicKey! });
+
+          const claudeStream = await anthropic.messages.stream({
             model: MODEL,
             max_tokens: MAX_TOKENS,
-            temperature: 0.3,
-            stream: true,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userContent },
-            ],
-          }),
-          signal: req.signal,
-        });
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userContent }],
+          });
 
-        if (!groqRes.ok || !groqRes.body) {
-          const errBody = await groqRes.text().catch(() => '');
-          throw new Error(`Groq HTTP ${groqRes.status}: ${errBody.slice(0, 300)}`);
-        }
-
-        const reader = groqRes.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        // Groq SSE는 OpenAI 호환: `data: {...}\n\n` lines, 마지막은 `data: [DONE]`
-        // 마지막 청크 직전(stream_options 없이도)에 `usage` 필드가 포함된 chunk가 옴
-        outer: while (true) {
-          if (aborted) {
-            try { await reader.cancel(); } catch { /* ignore */ }
-            break;
+          for await (const event of claudeStream) {
+            if (aborted) break;
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+              const token = event.delta.text;
+              fullText += token;
+              controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+            }
           }
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
 
-          // SSE 이벤트 단위 분리: 빈 줄(\n\n)이 구분자
-          let sepIdx;
-          while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
-            const rawEvent = buffer.slice(0, sepIdx);
-            buffer = buffer.slice(sepIdx + 2);
+          const finalMsg = await claudeStream.finalMessage();
+          inputTokens = finalMsg.usage.input_tokens;
+          outputTokens = finalMsg.usage.output_tokens;
 
-            // 각 이벤트는 여러 줄 가능하지만 Groq는 보통 단일 `data: ` 라인
-            for (const line of rawEvent.split('\n')) {
-              const trimmed = line.trim();
-              if (!trimmed.startsWith('data:')) continue;
-              const payload = trimmed.slice(5).trim();
-              if (!payload) continue;
-              if (payload === '[DONE]') {
-                break outer;
+        } else if (useClaudeCLI) {
+          // ── Claude CLI (Max 구독, API 키 불필요) ────────────────────────────
+          const cliPrompt = `${systemPrompt}\n\n---\n\n${userContent}`;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cliEnv = { ...process.env, HOME: process.env.HOME || '/Users/ramsbaby' } as any;
+          delete cliEnv.NODE_OPTIONS;
+          delete cliEnv.ANTHROPIC_API_KEY;
+
+          // Keepalive: 20초마다 SSE ping (Cloudflare 100s 타임아웃 방지)
+          const keepaliveTimer = setInterval(() => {
+            try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* stream closed */ }
+          }, 20000);
+
+          try {
+            const cliText = await new Promise<string>((resolve, reject) => {
+              const proc = spawn(CLAUDE_CLI, [
+                '-p',
+                '--model', 'sonnet',
+                '--output-format', 'text',
+                '--no-session-persistence',
+              ], { stdio: 'pipe', env: cliEnv, cwd: '/tmp' });
+              let out = '';
+              let errOut = '';
+              if (proc.stdin) {
+                proc.stdin.write(cliPrompt, 'utf8');
+                proc.stdin.end();
+              } else {
+                reject(new Error('claude CLI stdin is null'));
+                return;
               }
-              try {
-                const parsed = JSON.parse(payload) as {
-                  choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
-                  usage?: { prompt_tokens?: number; completion_tokens?: number };
-                  x_groq?: { usage?: { prompt_tokens?: number; completion_tokens?: number } };
-                };
-                const token = parsed.choices?.[0]?.delta?.content;
-                if (token) {
-                  fullText += token;
-                  controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+              proc.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+              proc.stderr?.on('data', (chunk: Buffer) => { errOut += chunk.toString(); });
+              proc.on('close', (code) => {
+                if (code !== 0) {
+                  console.error('[claude-cli fail]', errOut.slice(0, 500) || out.slice(0, 500));
+                  reject(new Error(`claude CLI exit ${code}: ${errOut.slice(0, 200)}`));
+                  return;
                 }
-                // usage는 마지막 chunk에 옴 (top-level 또는 x_groq 안)
-                const usage = parsed.usage ?? parsed.x_groq?.usage;
-                if (usage) {
-                  inputTokens = usage.prompt_tokens ?? inputTokens;
-                  outputTokens = usage.completion_tokens ?? outputTokens;
-                }
-              } catch {
-                // 비-JSON 라인은 무시
+                resolve(out.trim());
+              });
+              proc.on('error', reject);
+            });
+            fullText = cliText;
+            if (fullText) {
+              controller.enqueue(enc.encode(`data: ${JSON.stringify({ token: fullText })}\n\n`));
+              inputTokens = Math.ceil(cliPrompt.length / 4);
+              outputTokens = Math.ceil(fullText.length / 4);
+            }
+          } finally {
+            clearInterval(keepaliveTimer);
+          }
+
+        } else {
+          // ── Groq 스트리밍 ──────────────────────────────────────────────────
+          const groqRes = await fetch(GROQ_URL, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${groqApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: MODEL,
+              max_tokens: MAX_TOKENS,
+              temperature: 0.3,
+              stream: true,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userContent },
+              ],
+            }),
+            signal: req.signal,
+          });
+
+          if (!groqRes.ok || !groqRes.body) {
+            const errBody = await groqRes.text().catch(() => '');
+            throw new Error(`Groq HTTP ${groqRes.status}: ${errBody.slice(0, 300)}`);
+          }
+
+          const reader = groqRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          // Groq SSE는 OpenAI 호환: `data: {...}\n\n` lines, 마지막은 `data: [DONE]`
+          outer: while (true) {
+            if (aborted) {
+              try { await reader.cancel(); } catch { /* ignore */ }
+              break;
+            }
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let sepIdx;
+            while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+              const rawEvent = buffer.slice(0, sepIdx);
+              buffer = buffer.slice(sepIdx + 2);
+
+              for (const line of rawEvent.split('\n')) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data:')) continue;
+                const payload = trimmed.slice(5).trim();
+                if (!payload) continue;
+                if (payload === '[DONE]') { break outer; }
+                try {
+                  const parsed = JSON.parse(payload) as {
+                    choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+                    usage?: { prompt_tokens?: number; completion_tokens?: number };
+                    x_groq?: { usage?: { prompt_tokens?: number; completion_tokens?: number } };
+                  };
+                  const token = parsed.choices?.[0]?.delta?.content;
+                  if (token) {
+                    fullText += token;
+                    controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+                  }
+                  const usage = parsed.usage ?? parsed.x_groq?.usage;
+                  if (usage) {
+                    inputTokens = usage.prompt_tokens ?? inputTokens;
+                    outputTokens = usage.completion_tokens ?? outputTokens;
+                  }
+                } catch { /* 비-JSON 라인 무시 */ }
               }
             }
           }
-        }
+        } // end Groq branch
 
         if (aborted) {
           controller.close();

@@ -149,8 +149,8 @@ const ENTITIES: Record<string, EntityDef> = {
   // ── 팀장 엔티티 ──
   // 'ceo' ENTITY 삭제됨 — 대표실(president)이 AI 경영 데이터까지 통합 흡수
   'infra-lead': {
-    type: 'team-lead', name: 'SRE실 · 박태성', title: '서버·봇·크론 안정성 관리',
-    avatar: '⚙️', keywords: ['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics'],
+    type: 'team-lead', name: 'SRE실 · 이준혁', title: '신뢰성 엔지니어링 · 예방적 시스템 운영',
+    avatar: '🛡️', keywords: ['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'aggregate-metrics', 'memory-cleanup', 'memory-expire', 'memory-sync', 'rate-limit-check'],
     discordChannel: 'jarvis-system', schedule: '매일 09:00',
   },
   'trend-lead': {
@@ -522,7 +522,7 @@ function buildTeamSummary(id: string, stats: { total: number; success: number; f
       }
       parts.push(bot.running ? '봇은 정상 실행중' : '봇이 멈춰 있어요, 재시작이 필요해요');
       if (stats.failed > 0) {
-        const failedNames = getFailedTaskNames(['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard']);
+        const failedNames = getFailedTaskNames(['infra-daily', 'system-doctor', 'health', 'disk', 'glances', 'scorecard', 'memory-cleanup', 'memory-expire', 'memory-sync', 'rate-limit-check']);
         parts.push(`${failedNames.map(taskDisplayName).join(', ')}에서 문제가 생겼어요`);
       } else {
         parts.push('자동 점검은 모두 통과했어요');
@@ -840,6 +840,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const data = entity.type === 'team-lead'
     ? buildTeamLeadBriefing(id, entity)
     : buildSystemMetricBriefing(id, entity);
+
+  // 인프라팀 신임 팀장 KPI (이준혁 — 예방적 시스템 운영)
+  if (id === 'infra-lead') {
+    const infraStats = (data as ReturnType<typeof buildTeamLeadBriefing>).stats;
+    const disk = getDiskUsage();
+    const infra_daily_runs = parseCronLog(['infra-daily'], 7);
+    const infraDailyTotal = infra_daily_runs.length;
+    const infraDailySuccess = infra_daily_runs.filter(r => r.result === 'SUCCESS').length;
+    const infraDailyRate = infraDailyTotal > 0 ? Math.round((infraDailySuccess / infraDailyTotal) * 100) : 100;
+    (data as Record<string, unknown>).kpi = [
+      { label: '크론 성공률', value: Math.round(infraStats?.rate ?? 0), target: 99, unit: '%', icon: '✅', direction: 'higher' },
+      { label: '디스크 사용률', value: disk.percent, target: 80, unit: '%', icon: '💾', direction: 'lower' },
+      { label: '자가진단 이행률', value: infraDailyRate, target: 100, unit: '%', icon: '🔍', direction: 'higher' },
+      { label: 'MTTR 목표', value: 5, target: 5, unit: '분', icon: '⚡', direction: 'lower' },
+    ];
+  }
 
   briefingCache[id] = { data, ts: Date.now() };
   return NextResponse.json(data);

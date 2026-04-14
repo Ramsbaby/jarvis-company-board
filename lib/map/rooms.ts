@@ -38,7 +38,7 @@ export const ROOMS: RoomDef[] = [
 
   // ── Row 1 (y=4~9): 임원실 2개 + 팀 Pod 4개 ────────────────────────────
   { id: 'president',   entityId: 'president',   name: '대표실',     emoji: '🏛️', description: '이정우(실 대표)의 공간. 자비스 AI 경영 데이터(이사회·KPI·경영 점검) + 오너 개인 데이터(Discord 약속·Claude 세션·메모리)를 하나로 통합.',   x: 2,  y: 4,  w: 7, h: 5, type: 'meeting', npcX: 5,  npcY: 6,  teamColor: '#c9a227', floorStyle: 'executive', wallStyle: 'closed' },
-  { id: 'infra-lead',  entityId: 'infra-lead',  name: 'SRE실',       emoji: '🖥️', description: '서버·봇·크론·디스크 안정성 관리. 매일 09:00 자동 자가진단.',                                                             x: 11, y: 4,  w: 6, h: 5, type: 'team',    npcX: 14, npcY: 6,  teamColor: '#22c55e', floorStyle: 'open',      wallStyle: 'pod' },
+  { id: 'infra-lead',  entityId: 'infra-lead',  name: 'SRE실',       emoji: '🛡️', description: '신뢰성 엔지니어링 · 예방적 시스템 운영. 크론 성공률·디스크·MTTR·자가진단 4개 KPI 관리.',                                                             x: 11, y: 4,  w: 6, h: 5, type: 'team',    npcX: 14, npcY: 6,  teamColor: '#22c55e', floorStyle: 'open',      wallStyle: 'pod' },
   { id: 'trend-lead',  entityId: 'trend-lead',  name: '전략기획실',  emoji: '📡', description: '뉴스·기술 트렌드 인텔리전스. 평일 07:30 글로벌 동향 분석 리포트.',                                                               x: 19, y: 4,  w: 6, h: 5, type: 'team',    npcX: 22, npcY: 6,  teamColor: '#3b82f6', floorStyle: 'open',      wallStyle: 'pod' },
   { id: 'record-lead', entityId: 'record-lead', name: '데이터실',    emoji: '📁', description: '메모리·기록·RAG 아카이빙 백엔드. 12만 청크 관리.',                                                                               x: 27, y: 4,  w: 6, h: 5, type: 'team',    npcX: 30, npcY: 6,  teamColor: '#92702a', floorStyle: 'open',      wallStyle: 'pod' },
   { id: 'audit-lead',  entityId: 'audit-lead',  name: 'QA실',       emoji: '🔒', description: 'KPI 평가·E2E 테스트·크론 성과 추적. 매일 23:00 집계.',                                                                           x: 35, y: 4,  w: 6, h: 5, type: 'team',    npcX: 38, npcY: 6,  teamColor: '#dc2626', floorStyle: 'open',      wallStyle: 'pod' },
@@ -225,6 +225,7 @@ export interface BriefingData {
   upcoming?: Array<{ task: string; taskKo: string; time: string }>;
   discordChannel?: string;
   roomDescription?: string;
+  kpi?: Array<{ label: string; value: number; target: number; unit: string; icon: string; direction: 'higher' | 'lower' }>;
 }
 
 // ── 크론 아이템 (api/crons) ───────────────────────────────────

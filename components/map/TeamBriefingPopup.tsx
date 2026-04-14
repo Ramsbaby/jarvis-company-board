@@ -27,6 +27,9 @@ interface TeamBriefingPopupProps {
   setChatPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
   chatMessages: ChatMessage[];
   chatLoading: boolean;
+  chatHasMore: boolean;
+  chatHistoryLoading: boolean;
+  loadMoreHistory: () => void;
   chatInput: string;
   setChatInput: React.Dispatch<React.SetStateAction<string>>;
   chatResp: string;
@@ -43,11 +46,14 @@ const stColor = (s: string) => {
 export default function TeamBriefingPopup({
   popupOpen, popupLoading, briefing, activeRoom, isMobile, cronData, closePopup,
   chatPanelOpen, setChatPanelOpen, chatMessages, chatLoading,
+  chatHasMore, chatHistoryLoading, loadMoreHistory,
   chatInput, setChatInput, chatResp, sendMessage, chatEndRef,
 }: TeamBriefingPopupProps) {
   const [metricDetail, setMetricDetail] = useState<MetricItem | null>(null);
   const [activityDetail, setActivityDetail] = useState<{ task: string; result: string; latestTime?: string; description?: string; matchedCron: CronItem | null } | null>(null);
+  const [mobileTab, setMobileTab] = useState<'briefing' | 'chat'>('briefing');
   if (!popupOpen) return null;
+  const showTwoCol = !isMobile && chatPanelOpen;
   return (
     <div
       onClick={closePopup}
@@ -64,8 +70,8 @@ export default function TeamBriefingPopup({
         onClick={e => e.stopPropagation()}
         style={{
           width: isMobile ? '100%' : '92vw',
-          maxWidth: isMobile ? '100%' : 680,
-          height: isMobile ? 'auto' : 'auto',
+          maxWidth: isMobile ? '100%' : (showTwoCol ? 1080 : 680),
+          height: isMobile ? 'auto' : (showTwoCol ? '88vh' : 'auto'),
           maxHeight: isMobile ? '92dvh' : '92vh',
           background: isMobile
             ? 'linear-gradient(180deg, #0e1225 0%, #090c18 100%)'
@@ -75,13 +81,36 @@ export default function TeamBriefingPopup({
           boxShadow: isMobile
             ? '0 -8px 40px rgba(0,0,0,0.8)'
             : '0 0 0 1px rgba(255,255,255,0.02), 0 32px 100px rgba(0,0,0,0.95)',
-          overflowY: 'auto',
-          padding: isMobile ? '20px 16px 40px' : '28px 32px',
+          overflowY: showTwoCol ? 'hidden' : 'auto',
+          overflow: showTwoCol ? 'hidden' : undefined,
+          padding: 0,
+          display: showTwoCol ? 'flex' : 'block',
+          transition: 'max-width 0.3s ease',
           color: '#e6edf3',
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
           WebkitOverflowScrolling: 'touch',
         }}
       >
+        {/* ── 모바일 탭 바 (채팅 열린 상태) ── */}
+        {isMobile && chatPanelOpen && briefing && (
+          <div style={{
+            display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(14,18,37,0.95)', position: 'sticky', top: 0, zIndex: 10,
+          }}>
+            {(['briefing', 'chat'] as const).map(tab => (
+              <button key={tab} onClick={() => setMobileTab(tab)} style={{
+                flex: 1, padding: '14px 0', fontSize: 13, fontWeight: mobileTab === tab ? 800 : 500,
+                color: mobileTab === tab ? '#e6edf3' : '#6e7681',
+                background: mobileTab === tab ? 'rgba(255,255,255,0.04)' : 'transparent',
+                border: 'none', borderBottom: mobileTab === tab ? '2px solid #58a6ff' : '2px solid transparent',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}>
+                {tab === 'briefing' ? `📋 브리핑` : `💬 채팅`}
+              </button>
+            ))}
+          </div>
+        )}
+
         {popupLoading ? (
           <div style={{ padding: 60, textAlign: 'center', color: '#8b949e' }}>
             <style>{`
@@ -162,6 +191,14 @@ export default function TeamBriefingPopup({
           const teamColorHex = room?.teamColor || '#58a6ff';
           return (
             <>
+              {/* ── 좌측: 브리핑 컬럼 ── */}
+              <div style={{
+                flex: showTwoCol ? '0 0 55%' : '1 1 auto',
+                overflowY: 'auto',
+                maxHeight: showTwoCol ? '88vh' : undefined,
+                padding: isMobile ? '20px 16px 24px' : '28px 32px',
+                display: (isMobile && chatPanelOpen && mobileTab === 'chat') ? 'none' : 'block',
+              }}>
               {/* Header — hero banner with team color */}
               <div style={{
                 margin: isMobile ? '-16px -16px 20px' : '-28px -32px 20px',
@@ -487,6 +524,48 @@ export default function TeamBriefingPopup({
                   </div>
                 );
               })()}
+
+              {/* 신임 팀장 KPI (인프라팀 전용 — 이준혁) */}
+              {briefing.kpi && briefing.kpi.length > 0 && (
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 11, color: '#8b949e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+                    🛡️ 신임 팀장 KPI
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {briefing.kpi.map((k, i) => {
+                      const ok = k.direction === 'higher' ? k.value >= k.target : k.value <= k.target;
+                      const pct = k.direction === 'higher'
+                        ? Math.min(100, Math.round((k.value / k.target) * 100))
+                        : Math.min(100, Math.round(((k.target * 2 - k.value) / (k.target * 2)) * 100));
+                      const barColor = ok ? '#3fb950' : k.value >= k.target * 0.8 ? '#d29922' : '#f85149';
+                      return (
+                        <div key={i} style={{
+                          padding: '10px 14px', borderRadius: 10,
+                          background: `linear-gradient(135deg, ${barColor}0d 0%, rgba(255,255,255,0.02) 100%)`,
+                          border: `1px solid ${barColor}25`,
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 12, color: '#b8c2d8', fontWeight: 600 }}>{k.icon} {k.label}</span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: barColor }}>
+                              {k.value}{k.unit} <span style={{ fontSize: 10, color: '#5a6480', fontWeight: 400 }}>/ 목표 {k.target}{k.unit}</span>
+                            </span>
+                          </div>
+                          <div style={{ height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%', width: `${pct}%`, borderRadius: 3,
+                              background: `linear-gradient(90deg, ${barColor}80, ${barColor})`,
+                              transition: 'width 0.8s ease',
+                            }} />
+                          </div>
+                          <div style={{ fontSize: 10, color: '#4a5370', marginTop: 4 }}>
+                            {ok ? '✓ 목표 달성' : `목표까지 ${k.direction === 'higher' ? `+${k.target - k.value}${k.unit}` : `-${k.value - k.target}${k.unit}`}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* 24h KPI + 성공률 바 */}
               {briefing.stats && (
@@ -890,13 +969,13 @@ export default function TeamBriefingPopup({
                 </div>
               )}
 
-              {/* 팀장 AI 질문 버튼 (인라인 채팅 → 접을 수 있는 버튼으로 대체) */}
+              {/* 팀장 AI 질문 버튼 */}
               <div style={{ marginTop: 4, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 11, color: '#484f58' }}>
                   {briefing.schedule ? `다음 실행: ${briefing.schedule}` : ''}
                 </span>
                 <button
-                  onClick={() => { setChatPanelOpen(v => !v); }}
+                  onClick={() => { setChatPanelOpen(v => !v); if (isMobile) setMobileTab('chat'); }}
                   style={{
                     background: teamColorHex + '15', border: `1px solid ${teamColorHex}30`,
                     borderRadius: 8, padding: '7px 14px',
@@ -909,22 +988,64 @@ export default function TeamBriefingPopup({
                   <span>{chatPanelOpen ? '질문 닫기' : `${briefing.name}에게 질문`}</span>
                 </button>
               </div>
+              </div>{/* 좌측 브리핑 컬럼 끝 */}
+
+              {/* ── 우측: 채팅 컬럼 (데스크톱 2컬럼 / 모바일 탭) ── */}
               {chatPanelOpen && (
-                <div style={{ marginTop: 12 }}>
+                <div style={{
+                  flex: showTwoCol ? '0 0 45%' : '1 1 auto',
+                  display: (isMobile && mobileTab === 'briefing') ? 'none' : 'flex',
+                  flexDirection: 'column',
+                  borderLeft: showTwoCol ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                  height: showTwoCol ? '88vh' : undefined,
+                  maxHeight: isMobile ? '75dvh' : undefined,
+                  padding: isMobile ? '16px' : '0',
+                }}>
+                  {/* 채팅 헤더 */}
                   <div style={{
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
-                    padding: 12, maxHeight: 200, overflowY: 'auto', marginBottom: 8,
-                    minHeight: chatMessages.length > 0 ? 80 : 48,
+                    padding: isMobile ? '0 0 12px' : '20px 24px 12px',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    flexShrink: 0,
                   }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3' }}>
+                      {briefing.emoji} {briefing.name}에게 질문
+                    </span>
+                    <button onClick={() => { setChatPanelOpen(false); if (isMobile) setMobileTab('briefing'); }} style={{
+                      background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 6,
+                      padding: '4px 10px', color: '#8b949e', fontSize: 11, cursor: 'pointer',
+                    }}>닫기</button>
+                  </div>
+
+                  {/* 채팅 메시지 영역 — flex:1로 전체 높이 사용 */}
+                  <div style={{
+                    flex: 1, overflowY: 'auto', padding: isMobile ? '12px 0' : '12px 24px',
+                    minHeight: 0,
+                  }}>
+                    {chatHasMore && (
+                      <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                        <button
+                          onClick={loadMoreHistory}
+                          disabled={chatHistoryLoading}
+                          style={{
+                            fontSize: 11, color: '#58a6ff', background: 'none', border: '1px solid rgba(88,166,255,0.3)',
+                            borderRadius: 6, padding: '3px 10px', cursor: chatHistoryLoading ? 'default' : 'pointer',
+                            opacity: chatHistoryLoading ? 0.5 : 1,
+                          }}
+                        >
+                          {chatHistoryLoading ? '불러오는 중...' : '이전 대화 더 보기'}
+                        </button>
+                      </div>
+                    )}
                     {chatMessages.length === 0 && (
-                      <div style={{ fontSize: 12, color: '#484f58', textAlign: 'center', padding: 10 }}>
+                      <div style={{ fontSize: 13, color: '#484f58', textAlign: 'center', padding: '40px 10px' }}>
                         {briefing.name}에게 질문해보세요
                       </div>
                     )}
                     {chatMessages.map((m, i) => (
                       <div key={i} style={{
                         display: 'flex', flexDirection: 'column',
-                        alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 8,
+                        alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10,
                       }}>
                         {m.role !== 'user' && (
                           <span style={{ fontSize: 10, color: '#6e7681', marginBottom: 2, marginLeft: 4 }}>
@@ -954,31 +1075,39 @@ export default function TeamBriefingPopup({
                     )}
                     <div ref={chatEndRef} />
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) sendMessage(); }}
-                      placeholder={`${briefing.name}에게 질문...`}
-                      style={{
-                        flex: 1, background: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
-                        padding: '10px 14px', color: '#e6edf3',
-                        fontSize: 13, outline: 'none',
-                        fontFamily: '-apple-system, sans-serif', minHeight: 40,
-                      }}
-                    />
-                    <button
-                      onClick={sendMessage}
-                      disabled={chatLoading}
-                      style={{
-                        background: teamColorHex, border: 'none', borderRadius: 10,
-                        padding: '10px 18px', color: '#fff', fontSize: 13, cursor: 'pointer',
-                        fontWeight: 700, opacity: chatLoading ? 0.5 : 1, minHeight: 40, minWidth: 56,
-                      }}
-                    >전송</button>
+
+                  {/* 채팅 입력 영역 — 하단 고정 */}
+                  <div style={{
+                    padding: isMobile ? '12px 0 0' : '12px 24px 20px',
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    flexShrink: 0,
+                  }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) sendMessage(); }}
+                        placeholder={`${briefing.name}에게 질문...`}
+                        style={{
+                          flex: 1, background: 'rgba(255,255,255,0.04)',
+                          border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+                          padding: '10px 14px', color: '#e6edf3',
+                          fontSize: 13, outline: 'none',
+                          fontFamily: '-apple-system, sans-serif', minHeight: 40,
+                        }}
+                      />
+                      <button
+                        onClick={sendMessage}
+                        disabled={chatLoading}
+                        style={{
+                          background: teamColorHex, border: 'none', borderRadius: 10,
+                          padding: '10px 18px', color: '#fff', fontSize: 13, cursor: 'pointer',
+                          fontWeight: 700, opacity: chatLoading ? 0.5 : 1, minHeight: 40, minWidth: 56,
+                        }}
+                      >전송</button>
+                    </div>
+                    {chatResp && <div style={{ marginTop: 6, fontSize: 12, color: '#f85149' }}>{chatResp}</div>}
                   </div>
-                  {chatResp && <div style={{ marginTop: 6, fontSize: 12, color: '#f85149' }}>{chatResp}</div>}
                 </div>
               )}
             </>
