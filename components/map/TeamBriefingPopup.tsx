@@ -1022,7 +1022,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                 }}>
                   {/* 채팅 헤더 */}
                   <div style={{
-                    padding: isMobile ? '0 0 12px' : '20px 24px 12px',
+                    padding: isMobile ? '0 0 8px' : '20px 24px 12px',
                     borderBottom: '1px solid rgba(255,255,255,0.06)',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     flexShrink: 0,
@@ -1038,7 +1038,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
 
                   {/* 채팅 메시지 영역 — flex:1로 전체 높이 사용 */}
                   <div style={{
-                    flex: 1, overflowY: 'auto', padding: isMobile ? '12px 0' : '12px 24px',
+                    flex: 1, overflowY: 'auto', padding: isMobile ? '4px 0' : '12px 24px',
                     minHeight: 0,
                   }}>
                     {chatHasMore && (
