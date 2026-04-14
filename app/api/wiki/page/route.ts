@@ -10,8 +10,9 @@ import { readWikiPage } from '@/lib/wiki';
 import { getRequestAuth } from '@/lib/guest-guard';
 
 export async function GET(req: NextRequest) {
-  const { isAnon } = getRequestAuth(req);
-  if (isAnon) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // 위키는 오너 전용 — 게스트 접근 차단
+  const { isOwner } = getRequestAuth(req);
+  if (!isOwner) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const pagePath = req.nextUrl.searchParams.get('path');
 
   if (!pagePath) {

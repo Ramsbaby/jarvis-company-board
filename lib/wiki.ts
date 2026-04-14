@@ -5,11 +5,26 @@
  * Discord봇과 Board가 공유하는 SSoT.
  */
 
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { readFileSync, readdirSync, existsSync, statSync, realpathSync } from 'fs';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 
 const WIKI_DIR = process.env.WIKI_DIR || join(homedir(), '.jarvis', 'wiki');
+
+// Path traversal 방어 — 해결된 경로가 WIKI_DIR 하위인지 검증
+function _safeWikiPath(pagePath: string): string | null {
+  try {
+    const resolved = resolve(WIKI_DIR, pagePath);
+    const wikiReal = existsSync(WIKI_DIR) ? realpathSync(WIKI_DIR) : WIKI_DIR;
+    // 해결된 경로가 WIKI_DIR 하위가 아니면 거부 (symlink 우회 포함)
+    if (!resolved.startsWith(wikiReal + '/') && resolved !== wikiReal) {
+      return null;
+    }
+    return resolved;
+  } catch {
+    return null;
+  }
+}
 
 export interface WikiFrontmatter {
   title?: string;
@@ -72,8 +87,8 @@ function parseFrontmatter(raw: string): { frontmatter: WikiFrontmatter; content:
 // ── 페이지 읽기 ─────────────────────────────────────────────────────────────
 
 export function readWikiPage(pagePath: string): WikiPage | null {
-  const fullPath = join(WIKI_DIR, pagePath);
-  if (!existsSync(fullPath)) return null;
+  const fullPath = _safeWikiPath(pagePath);
+  if (!fullPath || !existsSync(fullPath)) return null;
 
   const raw = readFileSync(fullPath, 'utf-8');
   const stat = statSync(fullPath);
