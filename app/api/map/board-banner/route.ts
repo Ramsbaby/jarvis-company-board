@@ -4,9 +4,9 @@ import { NextResponse } from 'next/server';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
+import { BOARD_MINUTES_DIR as MINUTES_DIR } from '@/lib/jarvis-paths';
 
 const BANNER_TTL_MS = MAP_CACHE_TTL_MS * 4; // 60s
-const MINUTES_DIR = path.join(process.env.HOME || '', '.jarvis', 'state', 'board-minutes');
 
 type Banner = {
   date: string;

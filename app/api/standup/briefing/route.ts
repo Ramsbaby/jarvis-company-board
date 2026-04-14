@@ -1,10 +1,10 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync, readdirSync, existsSync } from 'fs';
-import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
+import { CRON_LOG, RESULTS_DIR, TASKS_JSON as TASKS_FILE } from '@/lib/jarvis-paths';
 
 /**
  * 스탠드업홀(standup) 브리핑 — 전사 모닝 브리핑
@@ -18,11 +18,7 @@ import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
  * 이 엔드포인트로 매핑한다(해당 작업은 Wave 1 마지막에 함께 반영).
  */
 
-const HOME = homedir();
-const JARVIS = path.join(HOME, '.jarvis');
-const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
-const STANDUP_RESULTS_DIR = path.join(JARVIS, 'results', 'morning-standup');
-const TASKS_FILE = path.join(JARVIS, 'config', 'tasks.json');
+const STANDUP_RESULTS_DIR = path.join(RESULTS_DIR, 'morning-standup');
 
 const STANDUP_KEYWORDS = ['morning-standup', 'daily-summary', 'personal-schedule-daily'];
 

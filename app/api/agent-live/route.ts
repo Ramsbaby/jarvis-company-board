@@ -4,10 +4,7 @@ import { readFileSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 const execAsync = promisify(exec);
-import { homedir } from 'os';
-import path from 'path';
-
-const CRON_LOG = path.join(homedir(), '.jarvis', 'logs', 'cron.log');
+import { CRON_LOG } from '@/lib/jarvis-paths';
 
 // ── 캐시 (30초 TTL) ──────────────────────────────────────────────────────────
 let cache: { data: AgentLiveResponse; ts: number } | null = null;

@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { getDiskUsage, getMemoryUsage, getCpuUsage } from '@/lib/map/system-metrics';
+import { CRON_LOG } from '@/lib/jarvis-paths';
 /**
  * 자비스맵 통합 statusline — 좌상단에 붙는 Claude Code statusline 스타일.
  *
@@ -17,7 +18,6 @@ import { getDiskUsage, getMemoryUsage, getCpuUsage } from '@/lib/map/system-metr
  */
 
 const HOME = homedir();
-const CRON_LOG = path.join(HOME, '.jarvis', 'logs', 'cron.log');
 const CLAUDE_USAGE_CACHE = path.join(HOME, '.claude', 'usage-cache.json');
 
 interface StatuslineBlock {

@@ -4,11 +4,9 @@ import { readFileSync, existsSync } from 'fs';
 import { exec, spawn } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
+import { TASKS_JSON as TASKS_FILE, CRON_LOG, JARVIS_HOME as JARVIS } from '@/lib/jarvis-paths';
 
 const HOME = homedir();
-const JARVIS = path.join(HOME, '.jarvis');
-const TASKS_FILE = path.join(JARVIS, 'config', 'tasks.json');
-const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
 
 interface TaskDef {
   id: string;

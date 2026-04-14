@@ -2,7 +2,6 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
-import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { GET as presidentBriefingGET } from '@/app/api/president/briefing/route';
@@ -13,13 +12,11 @@ import { TEAM_REGISTRY, type TeamEntityDef } from '@/lib/map/team-registry';
 import { getBriefingSystemMetrics, getDiskUsage as getDiskUsageShared } from '@/lib/map/system-metrics';
 import { computeCronStats24h } from '@/lib/map/cron-stats';
 import { parseCronLog as parseCronLogShared } from '@/lib/map/cron-log-parser';
-
-const HOME = homedir();
-const JARVIS = path.join(HOME, '.jarvis');
-const CRON_LOG = path.join(JARVIS, 'logs', 'cron.log');
-const TASKS_FILE = path.join(JARVIS, 'config', 'tasks.json');
-const BOARD_MINUTES_DIR = path.join(JARVIS, 'state', 'board-minutes');
-const CB_DIR = path.join(JARVIS, 'state', 'circuit-breaker');
+import {
+  CRON_LOG, TASKS_JSON as TASKS_FILE,
+  BOARD_MINUTES_DIR, CIRCUIT_BREAKER_DIR as CB_DIR,
+  RAG_INDEX_LOG,
+} from '@/lib/jarvis-paths';
 
 // ── 태스크 이름 한국어 매핑 ──────────────────────────────────────────────────
 
@@ -684,7 +681,7 @@ function buildSystemMetricBriefing(id: string, entity: SystemMetricEntity) {
       };
     }
     case 'rag-memory': {
-      const ragLog = readSafe(path.join(JARVIS, 'logs', 'rag-index.log')).split('\n').filter(Boolean).slice(-5);
+      const ragLog = readSafe(RAG_INDEX_LOG).split('\n').filter(Boolean).slice(-5);
       let summary: string;
       if (ragLog.length > 0) {
         summary = `장기기억 시스템이 잘 돌아가고 있어요. 최근 ${ragLog.length}건 기억을 저장했어요.`;

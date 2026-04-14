@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
+import { COMMITMENTS_FILE, CRON_LOG } from '@/lib/jarvis-paths';
 
 /**
  * 대표실(president) 브리핑 — 이정우(실인)의 통합 공간.
@@ -18,10 +19,8 @@ import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
  */
 
 const HOME = homedir();
-const COMMITMENTS_FILE = path.join(HOME, '.jarvis', 'state', 'commitments.jsonl');
 const CLAUDE_SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');
 const CLAUDE_MEMORY_DIR = path.join(HOME, '.claude', 'projects', '-Users-ramsbaby-jarvis', 'memory');
-const CRON_LOG = path.join(HOME, '.jarvis', 'logs', 'cron.log');
 
 const OWNER_USER_ID = '364093757018079234';
 

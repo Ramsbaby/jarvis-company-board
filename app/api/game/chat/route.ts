@@ -8,11 +8,12 @@ import { getDb } from '@/lib/db';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap, GROQ_LLAMA_70B } from '@/lib/chat-cost';
 import Anthropic from '@anthropic-ai/sdk';
-
-const CLAUDE_CLI = '/Users/ramsbaby/.local/bin/claude';
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 import { TEAM_REGISTRY, TEAM_KEYWORDS as REGISTRY_KEYWORDS } from '@/lib/map/team-registry';
 import { computeCronStats24h } from '@/lib/map/cron-stats';
+import { JARVIS_HOME } from '@/lib/jarvis-paths';
+
+const CLAUDE_CLI = '/Users/ramsbaby/.local/bin/claude';
 
 // 공통 NPC 행동 규칙 — 캐릭터 몰입 유지 + 적극적 대응
 const NPC_RULES = `
@@ -36,7 +37,6 @@ const TEAM_PROMPTS: Record<string, string> = Object.fromEntries(
 
 // --- Team context gathering ---
 
-const JARVIS_HOME = path.join(process.env.HOME || '', '.jarvis');
 const contextCache = new Map<string, { value: string; ts: number }>();
 
 function safeRead(file: string, maxBytes = 8192): string {

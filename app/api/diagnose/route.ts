@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap, computeCostUsd, GROQ_LLAMA_70B } from '@/lib/chat-cost';
+import { CRON_LOG, TASKS_JSON } from '@/lib/jarvis-paths';
 
 // Groq llama-3.3-70b-versatile (OpenAI 호환, JSON 모드 지원)
 // MODEL 문자열은 lib/chat-cost.ts SSoT에서 import — typo 시 price table miss → costUsd=0 방지
@@ -12,7 +13,6 @@ const MODEL = GROQ_LLAMA_70B;
 const MAX_TOKENS = 800;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const RATE_LIMIT = { perMin: 10, perDay: 100 };
-const JARVIS_HOME = path.join(process.env.HOME || '', '.jarvis');
 
 interface TaskDef {
   id: string;
@@ -32,7 +32,7 @@ interface DiagnoseResult {
 }
 
 function readCronTail(maxLines = 500): string[] {
-  const file = path.join(JARVIS_HOME, 'logs', 'cron.log');
+  const file = CRON_LOG;
   if (!existsSync(file)) return [];
   try {
     // Read last ~256KB to avoid huge files — then tail maxLines.
@@ -47,7 +47,7 @@ function readCronTail(maxLines = 500): string[] {
 }
 
 function readTaskDef(cronId: string): TaskDef | null {
-  const file = path.join(JARVIS_HOME, 'config', 'tasks.json');
+  const file = TASKS_JSON;
   if (!existsSync(file)) return null;
   try {
     const raw = readFileSync(file, 'utf8');

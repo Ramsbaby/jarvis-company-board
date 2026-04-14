@@ -2,14 +2,9 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync, statSync, readdirSync } from 'fs';
 import { CRON_LOG_LINE_RE, SKIP_TASK_RE } from '@/lib/map/cron-log-parser';
-import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
-
-const HOME = homedir();
-const TASKS_FILE = path.join(HOME, '.jarvis', 'config', 'tasks.json');
-const CRON_LOG = path.join(HOME, '.jarvis', 'logs', 'cron.log');
-const LOG_DIR = path.join(HOME, '.jarvis', 'logs');
+import { TASKS_JSON as TASKS_FILE, CRON_LOG, LOGS_DIR as LOG_DIR } from '@/lib/jarvis-paths';
 const MAX_LOG_READ_BYTES = 8000;
 
 let cache: { data: CronsResponse; ts: number } | null = null;

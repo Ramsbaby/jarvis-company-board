@@ -2,11 +2,11 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
-import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { getTodayCost, getMonthCost, getDailyCap } from '@/lib/chat-cost';
 import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
+import { CRON_LOG, RESULTS_DIR } from '@/lib/jarvis-paths';
 
 /**
  * 재무실(finance) 브리핑 — 돈 관련 데이터 통합 공간.
@@ -18,9 +18,7 @@ import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
  *  4. df/vm_stat — 로컬 cost-monitor 시스템 지표
  */
 
-const HOME = homedir();
-const CRON_LOG = path.join(HOME, '.jarvis', 'logs', 'cron.log');
-const PREPLY_SCHEDULE_DIR = path.join(HOME, '.jarvis', 'results', 'personal-schedule-daily');
+const PREPLY_SCHEDULE_DIR = path.join(RESULTS_DIR, 'personal-schedule-daily');
 
 const MARKET_KEYWORDS = ['tqqq', 'market-alert', 'macro-briefing', 'finance-monitor', 'stock'];
 
