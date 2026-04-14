@@ -1175,10 +1175,16 @@ export default function VirtualOffice() {
       const stColor = state?.status === 'red' ? '#f85149' : state?.status === 'yellow' ? '#d29922' : '#3fb950';
       const isError = state?.status === 'red';
 
-      // Shadow (soft ellipse, bigger for larger sprite)
-      ctx!.fillStyle = 'rgba(0,0,0,0.35)';
+      // Contact shadow 2-layer (Phase 1-C) — 외곽 soft + 내부 hard
+      // 외곽 블러 (얕은 확산)
+      ctx!.fillStyle = 'rgba(0,0,0,0.18)';
       ctx!.beginPath();
-      ctx!.ellipse(nx, ny + 19, 13, 5, 0, 0, Math.PI * 2);
+      ctx!.ellipse(nx, ny + 20, 16, 6.5, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      // 내부 하드 (접지점)
+      ctx!.fillStyle = 'rgba(0,0,0,0.42)';
+      ctx!.beginPath();
+      ctx!.ellipse(nx, ny + 20, 10, 3.5, 0, 0, Math.PI * 2);
       ctx!.fill();
 
       // Arm swing animation (walk cycle)
@@ -1193,16 +1199,19 @@ export default function VirtualOffice() {
       ctx!.fillRect(nx - 6, ny + 18, 5, 3);
       ctx!.fillRect(nx + 1, ny + 18, 5, 3);
 
-      // Body (team color shirt) — larger 18×16
-      const bodyColor = isError ? '#6b2020' : r.teamColor;
-      ctx!.fillStyle = bodyColor + 'd0';
+      // Body (차콜 셔츠) — Phase 1-B: 셔츠 무채화 (teamColor는 타이 액센트에만)
+      // 팀 정체성은 러그/LED/사이니지가 담당. 한 프레임에 풀채도 12색이 동시 켜지는
+      // "초딩 크레용" 인상을 없애기 위한 구조적 수정.
+      const shirtBase = isError ? '#5a1a1a' : '#3a4050';
+      const shirtHi   = isError ? '#7a2a2a' : '#4a5262';
+      ctx!.fillStyle = shirtBase;
       ctx!.fillRect(nx - 9, ny - 3, 18, 16);
-      // Body outline (darker edge for pixel-art pop)
-      ctx!.strokeStyle = bodyColor;
+      // Body outline (어두운 에지 고정)
+      ctx!.strokeStyle = '#1a1d26';
       ctx!.lineWidth = 1;
       ctx!.strokeRect(nx - 9, ny - 3, 18, 16);
-      // Shirt highlight
-      ctx!.fillStyle = '#ffffff12';
+      // Shirt highlight (좌측 면광)
+      ctx!.fillStyle = shirtHi;
       ctx!.fillRect(nx - 9, ny - 3, 6, 16);
       // Collar V
       ctx!.fillStyle = '#0d0d1a';
@@ -1212,8 +1221,8 @@ export default function VirtualOffice() {
       ctx!.lineTo(nx + 3, ny - 3);
       ctx!.closePath();
       ctx!.fill();
-      // Tie (team accent)
-      ctx!.fillStyle = bodyColor;
+      // Tie (team accent) ← 유일한 teamColor 사용처
+      ctx!.fillStyle = isError ? '#8b3a3a' : r.teamColor;
       ctx!.fillRect(nx - 1, ny + 2, 3, 9);
       ctx!.fillStyle = '#fbbf2480';
       ctx!.fillRect(nx - 1, ny + 2, 1, 9); // tie highlight
@@ -1548,11 +1557,17 @@ export default function VirtualOffice() {
       const bounce = isMoving ? Math.abs(Math.sin(fc * 0.3)) * 2 : 0;
       py -= bounce;
 
-      // Shadow (bigger when bouncing)
+      // Contact shadow 2-layer (Phase 1-C) — 외곽 soft + 내부 hard
       const shadowScale = 1 - bounce * 0.03;
-      ctx!.fillStyle = 'rgba(0,0,0,0.4)';
+      // 외곽 블러
+      ctx!.fillStyle = 'rgba(0,0,0,0.2)';
       ctx!.beginPath();
-      ctx!.ellipse(px, py + 15 + bounce, 10 * shadowScale, 4 * shadowScale, 0, 0, Math.PI * 2);
+      ctx!.ellipse(px, py + 16 + bounce, 13 * shadowScale, 5.5 * shadowScale, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      // 내부 하드
+      ctx!.fillStyle = 'rgba(0,0,0,0.48)';
+      ctx!.beginPath();
+      ctx!.ellipse(px, py + 16 + bounce, 8 * shadowScale, 3 * shadowScale, 0, 0, Math.PI * 2);
       ctx!.fill();
 
       // Legs with walking animation
@@ -2192,7 +2207,7 @@ export default function VirtualOffice() {
 
       // ── HUD: Top bar (다크) ──
       const _isMob = w < 768;
-      const topBarH = _isMob ? 28 : 40;
+      const topBarH = _isMob ? 36 : 56;
       const grad = ctx!.createLinearGradient(0, 0, 0, topBarH);
       grad.addColorStop(0, 'rgba(0,0,0,0.5)');
       grad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -2200,35 +2215,36 @@ export default function VirtualOffice() {
       ctx!.fillRect(0, 0, w, topBarH);
 
       ctx!.fillStyle = '#e6edf3';
-      ctx!.font = `bold ${_isMob ? 10 : 12}px monospace`;
+      ctx!.font = `bold ${_isMob ? 16 : 22}px monospace`;
       ctx!.textAlign = 'center';
-      ctx!.letterSpacing = '3px';
-      ctx!.fillText('JARVIS MAP', w / 2, _isMob ? 17 : 22);
+      ctx!.letterSpacing = '4px';
+      ctx!.fillText('JARVIS MAP', w / 2, _isMob ? 24 : 36);
       ctx!.letterSpacing = '0px';
 
       // ── HUD: Bottom bar (다크) ──
-      const gradBot = ctx!.createLinearGradient(0, h - 44, 0, h);
+      const gradBot = ctx!.createLinearGradient(0, h - 56, 0, h);
       gradBot.addColorStop(0, 'rgba(0,0,0,0)');
       gradBot.addColorStop(1, 'rgba(0,0,0,0.5)');
       ctx!.fillStyle = gradBot;
-      ctx!.fillRect(0, h - 44, w, 44);
+      ctx!.fillRect(0, h - 56, w, 56);
 
       ctx!.fillStyle = '#8b949e';
-      ctx!.font = '11px monospace';
+      ctx!.font = '14px monospace';
       ctx!.textAlign = 'left';
       if (!_isMob) {
-        ctx!.fillText('[WASD/Arrows] 이동   [E/Space] 대화   [ESC] 닫기', 16, h - 14);
+        ctx!.fillText('[WASD/Arrows] 이동   [E/Space] 대화   [ESC] 닫기', 20, h - 20);
       }
 
       // Time (KST) + 줌 인디케이터
       ctx!.textAlign = 'right';
-      ctx!.font = `${_isMob ? 10 : 11}px monospace`;
+      ctx!.font = `bold ${_isMob ? 18 : 24}px ui-monospace, "SF Mono", monospace`;
       const now = new Date();
       ctx!.fillStyle = '#e6edf3';
-      ctx!.fillText(now.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' }) + ' KST', w - 16, h - 14);
+      ctx!.fillText(now.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' }) + ' KST', w - 20, h - 22);
       const zoomPct = Math.round(_zoom * 100);
       ctx!.fillStyle = _zoom !== 1 ? '#3b82f6' : '#8b949e';
-      ctx!.fillText(`🔍 ${zoomPct}%`, w - 16, h - 28);
+      ctx!.font = `${_isMob ? 11 : 13}px monospace`;
+      ctx!.fillText(`🔍 ${zoomPct}%`, w - 20, h - 42);
 
       // Minimap
       drawMinimap(w, h);

@@ -827,47 +827,68 @@ export function drawDecorations(ctx: CanvasRenderingContext2D, camX: number, cam
     ctx.fillText('EXIT', ex + T * 0.4, ey + T * 0.28);
   }
 
-  // Wall clock showing real KST time
+  // Wall clock showing real KST time — Phase 1 대수술 (r 10→22, 황동 베젤, 12 tick, 빨간 초침)
   const clockX = 40 * T - camX;
   const clockY = 3.3 * T - camY;
-  // Clock body
-  ctx.fillStyle = '#f0f2f5';
+  const clockR = 22;
+  const clockCY = clockY + 16;
+  // Outer bezel (황동 테두리)
+  ctx.fillStyle = '#c9a227';
   ctx.beginPath();
-  ctx.arc(clockX, clockY + 8, 10, 0, Math.PI * 2);
+  ctx.arc(clockX, clockCY, clockR + 2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#c9a227';
-  ctx.lineWidth = 1;
+  // Clock face
+  ctx.fillStyle = '#f8f4ea';
   ctx.beginPath();
-  ctx.arc(clockX, clockY + 8, 10, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.arc(clockX, clockCY, clockR, 0, Math.PI * 2);
+  ctx.fill();
+  // Hour markers (12개 tick, 3/6/9/12는 더 김)
+  ctx.strokeStyle = '#2a2a2e';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    const r1 = clockR - 3;
+    const r2 = clockR - (i % 3 === 0 ? 7 : 5);
+    ctx.beginPath();
+    ctx.moveTo(clockX + Math.cos(a) * r1, clockCY + Math.sin(a) * r1);
+    ctx.lineTo(clockX + Math.cos(a) * r2, clockCY + Math.sin(a) * r2);
+    ctx.stroke();
+  }
   // Clock hands based on KST time
   const kstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
   const hours = kstNow.getHours() % 12;
   const minutes = kstNow.getMinutes();
   // Hour hand
   const hAngle = ((hours + minutes / 60) / 12) * Math.PI * 2 - Math.PI / 2;
-  ctx.strokeStyle = '#c9a227';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(clockX, clockY + 8);
-  ctx.lineTo(clockX + Math.cos(hAngle) * 5, clockY + 8 + Math.sin(hAngle) * 5);
+  ctx.moveTo(clockX, clockCY);
+  ctx.lineTo(clockX + Math.cos(hAngle) * 11, clockCY + Math.sin(hAngle) * 11);
   ctx.stroke();
   // Minute hand
   const mAngle = (minutes / 60) * Math.PI * 2 - Math.PI / 2;
-  ctx.strokeStyle = '#8b949e';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#2a2a2e';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(clockX, clockY + 8);
-  ctx.lineTo(clockX + Math.cos(mAngle) * 7, clockY + 8 + Math.sin(mAngle) * 7);
+  ctx.moveTo(clockX, clockCY);
+  ctx.lineTo(clockX + Math.cos(mAngle) * 16, clockCY + Math.sin(mAngle) * 16);
   ctx.stroke();
-  // Second hand tick
+  // Second hand (빨간 초침)
   const sAngle = ((fc % 60) / 60) * Math.PI * 2 - Math.PI / 2;
-  ctx.strokeStyle = '#f8514960';
-  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = '#f85149';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(clockX, clockY + 8);
-  ctx.lineTo(clockX + Math.cos(sAngle) * 8, clockY + 8 + Math.sin(sAngle) * 8);
+  ctx.moveTo(clockX, clockCY);
+  ctx.lineTo(clockX + Math.cos(sAngle) * 19, clockCY + Math.sin(sAngle) * 19);
   ctx.stroke();
+  // Center dot
+  ctx.fillStyle = '#c9a227';
+  ctx.beginPath();
+  ctx.arc(clockX, clockCY, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineCap = 'butt';
 
   // Ceiling lights in corridors (subtle glow circles on floor, x간격 5타일)
   const lightPositions = [
