@@ -43,7 +43,7 @@ const stColor = (s: string) => {
   return '#d29922';
 };
 
-export default function TeamBriefingPopup({
+const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
   popupOpen, popupLoading, briefing, activeRoom, isMobile, cronData, closePopup,
   chatPanelOpen, setChatPanelOpen, chatMessages, chatLoading,
   chatHasMore, chatHistoryLoading, loadMoreHistory,
@@ -88,6 +88,7 @@ export default function TeamBriefingPopup({
           color: '#e6edf3',
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
           WebkitOverflowScrolling: 'touch',
+          minHeight: 0, // flex 자식에서 maxHeight가 적용되게 필수
         }}
       >
         {/* ── 모바일 탭 바 (채팅 열린 상태) ── */}
@@ -996,8 +997,8 @@ export default function TeamBriefingPopup({
                   display: (isMobile && mobileTab === 'briefing') ? 'none' : 'flex',
                   flexDirection: 'column',
                   borderLeft: showTwoCol ? '1px solid rgba(255,255,255,0.08)' : 'none',
-                  height: showTwoCol ? '88vh' : undefined,
-                  maxHeight: isMobile ? '75dvh' : undefined,
+                  height: showTwoCol ? '88vh' : (isMobile ? '70dvh' : undefined),
+                  minHeight: 0,
                   padding: isMobile ? '16px' : '0',
                 }}>
                   {/* 채팅 헤더 */}
@@ -1158,7 +1159,9 @@ export default function TeamBriefingPopup({
       </div>
     </div>
   );
-}
+});
+
+export default TeamBriefingPopup;
 
 /* ── 최근 활동 드릴다운 팝오버 ── */
 type ActivityDetail = { task: string; result: string; latestTime?: string; description?: string; matchedCron: CronItem | null };

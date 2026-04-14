@@ -84,6 +84,10 @@ export default function VirtualOffice() {
   const historyPushedRef = useRef(false);
   const zoomRef = useRef(1.0); // 줌 레벨 (0.55 ~ 2.4) — 초기 100%
   const cronDataRef = useRef<CronItem[]>([]);
+  // ── 성능: 바닥 타일 오프스크린 캔버스 캐시 ──
+  const floorCacheRef = useRef<HTMLCanvasElement | null>(null);
+  // ── 성능: 방 드롭 섀도 그라데이션 캐시 ──
+  const shadowCacheRef = useRef<Map<string, { south: CanvasGradient; east: CanvasGradient }>>(new Map());
 
   useEffect(() => { popupOpenRef.current = popupOpen || cronGridOpen; }, [popupOpen, cronGridOpen]);
 
@@ -1936,76 +1940,56 @@ export default function VirtualOffice() {
         ctx!.fillRect(wx * T - camX, ROWS * T - wallThick - camY, T * 2, wallThick);
       }
 
-      // Floor (corridor with directional pattern)
-      for (let y = 0; y < ROWS; y++) {
-        for (let x = 0; x < COLS; x++) {
-          const sx = x * T - camX, sy = y * T - camY;
-          if (sx > wZ || sy > hZ || sx + T < 0 || sy + T < 0) continue;
-
-          // Check if inside a room
-          let inRoom = false;
-          for (const r of ROOMS) {
-            if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
-              inRoom = true;
-              break;
+      // Floor (corridor with directional pattern) — 오프스크린 캐시 사용
+      if (!floorCacheRef.current) {
+        const oc = document.createElement('canvas');
+        oc.width = COLS * T; oc.height = ROWS * T;
+        const fc = oc.getContext('2d')!;
+        for (let y = 0; y < ROWS; y++) {
+          for (let x = 0; x < COLS; x++) {
+            const sx = x * T, sy = y * T;
+            let inRoom = false;
+            for (const r of ROOMS) {
+              if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { inRoom = true; break; }
             }
-          }
-          if (inRoom) continue; // Room floors are drawn by drawRoom
-
-          // Corridor tiles — 밝은 오피스 바닥재
-          const isOfficeHCorridor = y >= 10 && y <= 11;
-          const isLobby = y >= 18 && y <= 19;
-
-          if (isOfficeHCorridor || isLobby) {
-            const tileCol = Math.floor(x / 2);
-            const baseColor = (tileCol + y) % 2 === 0 ? '#ebedf0' : '#e8eaed';
-            ctx!.fillStyle = baseColor;
-            ctx!.fillRect(sx, sy, T, T);
-            if ((x * 5 + y * 7) % 11 === 0) {
-              ctx!.strokeStyle = 'rgba(0,0,0,0.03)';
-              ctx!.lineWidth = 0.5;
-              ctx!.beginPath();
-              ctx!.moveTo(sx + 5, sy + T - 5);
-              ctx!.lineTo(sx + T - 5, sy + 5);
-              ctx!.stroke();
+            if (inRoom) continue;
+            const isOfficeHCorridor = y >= 10 && y <= 11;
+            const isLobby = y >= 18 && y <= 19;
+            if (isOfficeHCorridor || isLobby) {
+              const tileCol = Math.floor(x / 2);
+              fc.fillStyle = (tileCol + y) % 2 === 0 ? '#ebedf0' : '#e8eaed';
+              fc.fillRect(sx, sy, T, T);
+              if ((x * 5 + y * 7) % 11 === 0) {
+                fc.strokeStyle = 'rgba(0,0,0,0.03)'; fc.lineWidth = 0.5;
+                fc.beginPath(); fc.moveTo(sx + 5, sy + T - 5); fc.lineTo(sx + T - 5, sy + 5); fc.stroke();
+              }
+              fc.strokeStyle = '#d0d5dd'; fc.lineWidth = 1;
+              if (x % 2 === 0) { fc.beginPath(); fc.moveTo(sx, sy); fc.lineTo(sx, sy + T); fc.stroke(); }
+              fc.beginPath(); fc.moveTo(sx, sy); fc.lineTo(sx + T, sy); fc.stroke();
+              if (y === 10 || y === 11 || y === 18) {
+                const refGrd = fc.createLinearGradient(sx, sy, sx, sy + T);
+                refGrd.addColorStop(0, 'rgba(100,120,160,0.06)');
+                refGrd.addColorStop(0.5, 'rgba(100,120,160,0.03)');
+                refGrd.addColorStop(1, 'transparent');
+                fc.fillStyle = refGrd; fc.fillRect(sx, sy, T, T);
+              }
+            } else {
+              fc.fillStyle = (x + y) % 2 === 0 ? '#f5f6f8' : '#f0f1f3';
+              fc.fillRect(sx, sy, T, T);
+              if ((x + y) % 4 === 0) {
+                fc.strokeStyle = 'rgba(0,0,0,0.03)'; fc.lineWidth = 0.5;
+                fc.beginPath(); fc.moveTo(sx + T * 0.2, sy + T * 0.8); fc.lineTo(sx + T * 0.8, sy + T * 0.2); fc.stroke();
+              } else if ((x + y) % 4 === 2) {
+                fc.strokeStyle = 'rgba(0,0,0,0.02)'; fc.lineWidth = 0.5;
+                fc.beginPath(); fc.moveTo(sx + T * 0.2, sy + T * 0.2); fc.lineTo(sx + T * 0.8, sy + T * 0.8); fc.stroke();
+              }
+              fc.strokeStyle = '#dde0e630'; fc.lineWidth = 0.3; fc.strokeRect(sx, sy, T, T);
             }
-            ctx!.strokeStyle = '#d0d5dd';
-            ctx!.lineWidth = 1;
-            if (x % 2 === 0) { ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx, sy + T); ctx!.stroke(); }
-            ctx!.beginPath(); ctx!.moveTo(sx, sy); ctx!.lineTo(sx + T, sy); ctx!.stroke();
-            if (y === 10 || y === 11 || y === 18) {
-              const refGrd = ctx!.createLinearGradient(sx, sy, sx, sy + T);
-              refGrd.addColorStop(0, 'rgba(100,120,160,0.06)');
-              refGrd.addColorStop(0.5, 'rgba(100,120,160,0.03)');
-              refGrd.addColorStop(1, 'transparent');
-              ctx!.fillStyle = refGrd;
-              ctx!.fillRect(sx, sy, T, T);
-            }
-          } else {
-            const hbBase = (x + y) % 2 === 0 ? '#f5f6f8' : '#f0f1f3';
-            ctx!.fillStyle = hbBase;
-            ctx!.fillRect(sx, sy, T, T);
-            if ((x + y) % 4 === 0) {
-              ctx!.strokeStyle = 'rgba(0,0,0,0.03)';
-              ctx!.lineWidth = 0.5;
-              ctx!.beginPath();
-              ctx!.moveTo(sx + T * 0.2, sy + T * 0.8);
-              ctx!.lineTo(sx + T * 0.8, sy + T * 0.2);
-              ctx!.stroke();
-            } else if ((x + y) % 4 === 2) {
-              ctx!.strokeStyle = 'rgba(0,0,0,0.02)';
-              ctx!.lineWidth = 0.5;
-              ctx!.beginPath();
-              ctx!.moveTo(sx + T * 0.2, sy + T * 0.2);
-              ctx!.lineTo(sx + T * 0.8, sy + T * 0.8);
-              ctx!.stroke();
-            }
-            ctx!.strokeStyle = '#dde0e630';
-            ctx!.lineWidth = 0.3;
-            ctx!.strokeRect(sx, sy, T, T);
           }
         }
+        floorCacheRef.current = oc;
       }
+      ctx!.drawImage(floorCacheRef.current, -camX, -camY);
 
       // ── 발자국 이펙트 ──────────────────────────────────────────
       footstepsRef.current = footstepsRef.current.filter(f => f.life > 0);
@@ -2099,27 +2083,36 @@ export default function VirtualOffice() {
         });
       }
 
-      // ── 방 남쪽 벽 드롭 섀도우 — 복도 바닥에 투사 (3D 깊이감) ──
+      // ── 방 남쪽 벽 드롭 섀도우 — 캐시된 그라데이션 사용 ──
       for (const r of ROOMS) {
         if (r.type === 'cron') continue;
         const srx = r.x * T - camX;
         const sry = r.y * T - camY;
         const srw = r.w * T;
         const srh = r.h * T;
-        // 남쪽 드롭 섀도 — closed는 진하게, pod는 연하게
-        const isClosed = r.wallStyle === 'closed';
-        const sdGrd = ctx!.createLinearGradient(srx, sry + srh, srx, sry + srh + T * 1.2);
-        sdGrd.addColorStop(0, isClosed ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.05)');
-        sdGrd.addColorStop(0.5, isClosed ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.02)');
-        sdGrd.addColorStop(1, 'transparent');
-        ctx!.fillStyle = sdGrd;
-        ctx!.fillRect(srx + 6, sry + srh, srw - 12, T * 1.2);
-        // 우측 드롭 섀도 (약함)
-        const seGrd = ctx!.createLinearGradient(srx + srw, sry, srx + srw + T * 0.5, sry);
-        seGrd.addColorStop(0, 'rgba(0,0,0,0.04)');
-        seGrd.addColorStop(1, 'transparent');
-        ctx!.fillStyle = seGrd;
-        ctx!.fillRect(srx + srw, sry + 8, T * 0.5, srh - 8);
+        let cached = shadowCacheRef.current.get(r.id);
+        if (!cached) {
+          const isClosed = r.wallStyle === 'closed';
+          const sdGrd = ctx!.createLinearGradient(0, 0, 0, T * 1.2);
+          sdGrd.addColorStop(0, isClosed ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.05)');
+          sdGrd.addColorStop(0.5, isClosed ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.02)');
+          sdGrd.addColorStop(1, 'transparent');
+          const seGrd = ctx!.createLinearGradient(0, 0, T * 0.5, 0);
+          seGrd.addColorStop(0, 'rgba(0,0,0,0.04)');
+          seGrd.addColorStop(1, 'transparent');
+          cached = { south: sdGrd, east: seGrd };
+          shadowCacheRef.current.set(r.id, cached);
+        }
+        ctx!.save();
+        ctx!.translate(srx + 6, sry + srh);
+        ctx!.fillStyle = cached.south;
+        ctx!.fillRect(0, 0, srw - 12, T * 1.2);
+        ctx!.restore();
+        ctx!.save();
+        ctx!.translate(srx + srw, sry + 8);
+        ctx!.fillStyle = cached.east;
+        ctx!.fillRect(0, 0, T * 0.5, srh - 8);
+        ctx!.restore();
       }
 
       // Rooms
@@ -2288,14 +2281,27 @@ export default function VirtualOffice() {
       animId = requestAnimationFrame(gameLoop);
     }
 
-    // Start
+    // Start — 탭 비활성화 시 폴링 중단으로 네트워크/CPU 절약
     loadStatuses();
-    const dataInterval = setInterval(loadStatuses, 15000);
+    let dataInterval = setInterval(loadStatuses, 15000);
     animId = requestAnimationFrame(gameLoop);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(dataInterval);
+        cancelAnimationFrame(animId);
+      } else {
+        loadStatuses();
+        dataInterval = setInterval(loadStatuses, 15000);
+        animId = requestAnimationFrame(gameLoop);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       cancelAnimationFrame(animId);
       clearInterval(dataInterval);
+      document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', resize);
@@ -2348,7 +2354,7 @@ export default function VirtualOffice() {
       setChatHistoryOffset(0);
       setChatHasMore(false);
       loadChatHistory(teamId, 0, false);
-      setChatPanelOpen(false); // 새 팀장 열 때 채팅 패널 닫기
+      setChatPanelOpen(true); // 브리핑 로드 시 채팅 패널 자동 오픈
     } else {
       setChatMessages([]);
       setChatHasMore(false);

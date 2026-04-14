@@ -1,7 +1,9 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { readFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
 import { homedir } from 'os';
 import path from 'path';
 
@@ -235,10 +237,10 @@ function buildResponse(entries: CronEntry[]): AgentLiveResponse {
 }
 
 // ── 라이브 상태 (LaunchAgent PID) ────────────────────────────────────────────
-function getDiscordBotPid(): string | null {
+async function getDiscordBotPid(): Promise<string | null> {
   try {
-    const out = execSync('launchctl list 2>/dev/null | grep ai.jarvis.discord-bot', { timeout: 3000 }).toString();
-    const pid = out.trim().split(/\s+/)[0];
+    const { stdout } = await execAsync('launchctl list 2>/dev/null | grep ai.jarvis.discord-bot', { timeout: 3000 });
+    const pid = stdout.trim().split(/\s+/)[0];
     return /^\d+$/.test(pid) && parseInt(pid) > 0 ? pid : null;
   } catch {
     return null;
@@ -252,8 +254,10 @@ export async function GET() {
   }
 
   const { entries } = parseCronLog();
-  const data = buildResponse(entries);
-  const botPid = getDiscordBotPid();
+  const [data, botPid] = await Promise.all([
+    Promise.resolve(buildResponse(entries)),
+    getDiscordBotPid(),
+  ]);
 
   const response = {
     ...data,
