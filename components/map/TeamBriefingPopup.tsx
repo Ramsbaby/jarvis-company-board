@@ -81,8 +81,7 @@ export default function TeamBriefingPopup({
           boxShadow: isMobile
             ? '0 -8px 40px rgba(0,0,0,0.8)'
             : '0 0 0 1px rgba(255,255,255,0.02), 0 32px 100px rgba(0,0,0,0.95)',
-          overflowY: showTwoCol ? 'hidden' : 'auto',
-          overflow: showTwoCol ? 'hidden' : undefined,
+          overflow: showTwoCol ? 'hidden' : 'hidden auto',
           padding: 0,
           display: showTwoCol ? 'flex' : 'block',
           transition: 'max-width 0.3s ease',
