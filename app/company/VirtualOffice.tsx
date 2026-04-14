@@ -51,7 +51,7 @@ export default function VirtualOffice() {
     if (typeof window === 'undefined') return true;
     return sessionStorage.getItem('jarvis-map-intro-v2') !== '1';
   });
-  const [chatPanelOpen, setChatPanelOpen] = useState(true); // TODO: 테스트 후 false로 복원
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
   // 뷰 모드 (맵 / 표) — localStorage 영속화
   const [viewMode, setViewMode] = useState<'map' | 'table'>(() => {
     if (typeof window === 'undefined') return 'map';
