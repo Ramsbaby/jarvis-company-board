@@ -152,26 +152,57 @@ export function parseConsensusTasks(consensusMarkdown: string): ParsedTask[] {
 
 /**
  * Helper function to finalize current task and add it to the tasks array
+ *
+ * Tier 4 입력 검증 게이트:
+ * - 빈 title / 빈 detail 거부
+ * - placeholder title (할일/작업/개선 등) 거부
+ * - console.warn으로 거부 사유 로깅 (silent drop 금지)
  */
+const INVALID_TITLE_PATTERNS = /^(할일|작업|개선|검토|고려|분석|작업\s*제목|task|todo|item)$/i;
+const MIN_TITLE_LENGTH = 3;
+const MIN_DETAIL_LENGTH = 5;
+
 function finalizeCurrentTask(
   tasks: ParsedTask[],
   currentTask: Partial<ParsedTask>,
   detailLines: string[]
 ): void {
-  if (!currentTask.title || !currentTask.priority) return;
+  // Gate 1: title/priority 필수
+  if (!currentTask.title || !currentTask.priority) {
+    console.warn('[consensus-parser] Skipping task: missing title or priority');
+    return;
+  }
 
   // Clean up and join detail lines
   const detail = detailLines
     .join('\n')
     .trim()
-    // Remove excessive newlines
     .replace(/\n\s*\n\s*\n/g, '\n\n')
     .replace(/^\s+/, '')
     .replace(/\s+$/, '');
 
+  // Gate 2: title 최소 길이
+  const trimmedTitle = currentTask.title.trim();
+  if (trimmedTitle.length < MIN_TITLE_LENGTH) {
+    console.warn(`[consensus-parser] Skipping task: title too short (${trimmedTitle.length} chars) — "${trimmedTitle}"`);
+    return;
+  }
+
+  // Gate 3: placeholder title 거부
+  if (INVALID_TITLE_PATTERNS.test(trimmedTitle)) {
+    console.warn(`[consensus-parser] Skipping task: placeholder title — "${trimmedTitle}"`);
+    return;
+  }
+
+  // Gate 4: detail 최소 길이 (빈 detail은 정보 없이 DB 오염)
+  if (detail.length < MIN_DETAIL_LENGTH) {
+    console.warn(`[consensus-parser] Skipping task: detail too short (${detail.length} chars) — "${trimmedTitle}"`);
+    return;
+  }
+
   tasks.push({
-    title: currentTask.title,
-    detail: detail || '(세부사항 없음)',
-    priority: currentTask.priority
+    title: trimmedTitle,
+    detail,
+    priority: currentTask.priority,
   });
 }
