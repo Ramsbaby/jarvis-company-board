@@ -9,7 +9,7 @@ import {
 } from '@/lib/map/rooms';
 import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
 import { drawRoomFurniture, drawDecorations } from '@/lib/map/canvas-draw';
-import TeamBriefingPopup from '@/components/map/TeamBriefingPopup';
+import TeamBriefingPopup, { type ChatMessage } from '@/components/map/TeamBriefingPopup';
 import CronGridPopup from '@/components/map/CronGridPopup';
 import CronDetailPopup from '@/components/map/CronDetailPopup';
 import MobileControls from '@/components/map/MobileControls';
@@ -17,7 +17,7 @@ import BoardBanner from '@/components/map/BoardBanner';
 import CronToastStack from '@/components/map/CronToastStack';
 import Statusline from '@/components/map/Statusline';
 import RightInfoPanels from '@/components/map/RightInfoPanels';
-import DashboardTable from '@/components/map/DashboardTable';
+// Phase 1: DashboardTable import 제거 — 맵↔표 토글 제거로 사용처 없음 (표는 /dashboard 라우트 분리)
 
 /* ═══════════════════════════════════════════════════════════════════
    Jarvis MAP — Gather Town Style Virtual Office
@@ -36,8 +36,9 @@ export default function VirtualOffice() {
   const [activeRoom, setActiveRoom] = useState<RoomDef | null>(null);
   const [nearbyRoom, setNearbyRoom] = useState<RoomDef | null>(null);
   const [chatInput, setChatInput] = useState('');
-  const [chatResp, setChatResp] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  // Phase 1: 재시도 카운터 — key: user 메시지 content, value: 재시도 횟수 (최대 3)
+  const [retryCount, setRetryCount] = useState<Map<string, number>>(new Map());
   const [isMobile, setIsMobile] = useState(false);
   const [tooltipRoom, setTooltipRoom] = useState<{ room: RoomDef; x: number; y: number } | null>(null);
   // showMobileHelp removed — D-pad 제거로 불필요
@@ -52,12 +53,13 @@ export default function VirtualOffice() {
     return sessionStorage.getItem('jarvis-map-intro-v2') !== '1';
   });
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
-  // 뷰 모드 (맵 / 표) — localStorage 영속화
-  const [viewMode, setViewMode] = useState<'map' | 'table'>(() => {
-    if (typeof window === 'undefined') return 'map';
-    const v = localStorage.getItem('jarvis-map-view-mode');
-    return v === 'table' ? 'table' : 'map';
-  });
+  // Phase 1: viewMode (맵↔표 토글) 제거 — 자비스맵은 "CEO's Bridge" 포지션, 표는 /dashboard 분리
+  // 최초 1회 기존 localStorage 키 정리 (migration)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try { localStorage.removeItem('jarvis-map-view-mode'); } catch { /* ignore */ }
+    }
+  }, []);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // 게임 상태 refs
@@ -99,27 +101,13 @@ export default function VirtualOffice() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // 뷰 모드 변경 시 localStorage 저장
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('jarvis-map-view-mode', viewMode);
-  }, [viewMode]);
-
-  // 표 모드에서 행 클릭 → 기존 팝업 로직 재사용
-  const handleTableRowClick = useCallback((room: RoomDef, rowBriefing: BriefingData) => {
-    setBriefing(rowBriefing);
-    setPopupOpen(true);
-    setPopupLoading(false);
-    setChatResp('');
-  }, []);
-
   // ── 팝업 닫기 ──────────────────────────────────────────────
+  // Phase 1: D1 결정 — 팝업 닫아도 chatAbortRef 호출하지 않음 (서버 스트림은 백그라운드로 계속 달림)
+  // briefing·chatMessages 유지 → 팝업 재오픈 시 DB에서 최신 상태 복원
   const closePopup = useCallback(() => {
     setPopupOpen(false);
     // briefing은 유지 — 팝업 재오픈 시 기존 대화 + 정보 복원
-    // 다른 NPC 클릭 시 briefing이 교체되면서 자연스럽게 초기화됨
     setPopupLoading(false);
-    setChatResp('');
     setCronGridOpen(false);
     setCronPopup(null);
   }, []);
@@ -244,7 +232,7 @@ export default function VirtualOffice() {
     setPopupLoading(true);
     setBriefing(null);
     setActiveRoom(room);
-    setChatResp('');
+    // Phase 1: chatResp 제거 — 에러는 메시지별 status UI로 표시
     setTooltipRoom(null);
 
     const entityId = room.entityId;
@@ -2365,7 +2353,8 @@ export default function VirtualOffice() {
   }, [loadStatuses, openBriefing, closePopup]);
 
   // ── 채팅 히스토리 ──────────────────────────────────────────
-  const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string; created_at: number }>>([]);
+  // Phase 1: 메시지 상태 머신 포함 — streaming/completed/aborted/failed
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatHistoryOffset, setChatHistoryOffset] = useState(0);
   const [chatHasMore, setChatHasMore] = useState(false);
   const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
@@ -2430,59 +2419,57 @@ export default function VirtualOffice() {
     }
   }, [chatMessages, chatLoading]);
 
-  // ── 메시지 전송 (인앱 대화, Groq SSE 스트리밍) ─────────────
+  // ── 메시지 전송 (인앱 대화, SSE 스트리밍) ─────────────
+  // Phase 1: D1 — chatAbortRef는 "사용자 명시 중단 (⏹ 버튼)" 전용.
+  // 팝업 닫기로는 호출되지 않음 (서버 스트림은 백그라운드 지속).
   const chatAbortRef = useRef<AbortController | null>(null);
 
-  const sendMessage = async () => {
-    if (!chatInput.trim() || !briefing) return;
-    // 이전 스트림이 있으면 abort
-    chatAbortRef.current?.abort();
+  // 마지막 assistant 메시지 status/content 패치 — 에러/완료/중단 공통 헬퍼
+  const patchLastAssistant = useCallback((patch: Partial<ChatMessage>) => {
+    setChatMessages(prev => {
+      if (prev.length === 0) return prev;
+      const next = prev.slice();
+      // 역순으로 마지막 assistant 찾기
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].role === 'assistant') {
+          next[i] = { ...next[i], ...patch };
+          break;
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // ── 내부 헬퍼: POST /api/game/chat 호출 + SSE 스트림 처리 ──
+  const runChatStream = useCallback(async (params: {
+    teamId: string;
+    message: string;
+    briefingSummary?: string;
+    isRetry?: boolean;
+  }) => {
     const ac = new AbortController();
     chatAbortRef.current = ac;
-
     setChatLoading(true);
-    setChatResp('');
-    const msg = chatInput;
-    setChatInput('');
-    const nowSec = Math.floor(Date.now() / 1000);
-    setChatMessages(prev => [
-      ...prev,
-      { role: 'user', content: msg, created_at: nowSec },
-      { role: 'assistant', content: '', created_at: nowSec }, // placeholder for streaming
-    ]);
 
     const appendToken = (token: string) => {
       setChatMessages(prev => {
         if (prev.length === 0) return prev;
         const next = prev.slice();
-        const last = next[next.length - 1];
-        if (last.role === 'assistant') {
-          next[next.length - 1] = { ...last, content: last.content + token };
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].role === 'assistant') {
+            next[i] = { ...next[i], content: next[i].content + token, status: 'streaming' };
+            break;
+          }
         }
         return next;
       });
     };
 
     try {
-      const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
-      const teamId = room?.entityId || briefing.id;
       const res = await fetch('/api/game/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teamId,
-          message: msg,
-          // 사용자가 보고 있는 브리핑 요약을 NPC에게 전달 — 좌우 정보 동기화
-          briefingSummary: briefing ? [
-            `상태: ${briefing.status}`,
-            briefing.summary && `요약: ${briefing.summary}`,
-            briefing.stats && `24h 통계: 성공률 ${briefing.stats.rate}% (전체 ${briefing.stats.total}건, 실패 ${briefing.stats.failed}건)`,
-            briefing.alerts?.length && `경보: ${briefing.alerts.join(', ')}`,
-            briefing.recentActivity?.filter(a => a.result === 'failed').length
-              && `최근 실패 활동: ${briefing.recentActivity!.filter(a => a.result === 'failed').map(a => `${a.task}(${a.time})`).join(', ')}`,
-            `화면 표시 현황: ${statusExplanation(briefing)}`,
-          ].filter(Boolean).join('\n') : undefined,
-        }),
+        body: JSON.stringify(params),
         signal: ac.signal,
       });
 
@@ -2493,23 +2480,21 @@ export default function VirtualOffice() {
           const j = await res.json();
           if (j?.error) errMsg = j.error;
         } catch { /* ignore */ }
-        // placeholder 제거
-        setChatMessages(prev => prev.filter((_, i) => !(i === prev.length - 1 && _.role === 'assistant' && _.content === '')));
-        setChatResp(errMsg);
-        setChatLoading(false);
+        patchLastAssistant({ status: 'failed', content: `응답 실패: ${errMsg}` });
         return;
       }
 
       if (!res.body) {
-        setChatResp('응답 본문이 비어 있습니다');
-        setChatLoading(false);
+        patchLastAssistant({ status: 'failed', content: '응답 본문이 비어 있습니다' });
         return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let streamError: string | null = null;
+      let finalId: number | null = null;
+      let finalStatus: 'completed' | 'failed' | 'aborted' = 'completed';
+      let finalErrorMsg: string | null = null;
 
       outer: while (true) {
         const { done, value } = await reader.read();
@@ -2528,17 +2513,27 @@ export default function VirtualOffice() {
               const parsed = JSON.parse(payload) as {
                 token?: string;
                 done?: boolean;
+                aborted?: boolean;
                 id?: number;
                 error?: string;
               };
               if (parsed.error) {
-                streamError = parsed.error;
+                finalStatus = 'failed';
+                finalErrorMsg = parsed.error;
+                finalId = parsed.id ?? null;
                 break outer;
               }
               if (parsed.token) {
                 appendToken(parsed.token);
               }
+              if (parsed.aborted) {
+                finalStatus = 'aborted';
+                finalId = parsed.id ?? null;
+                break outer;
+              }
               if (parsed.done) {
+                finalStatus = 'completed';
+                finalId = parsed.id ?? null;
                 break outer;
               }
             } catch { /* non-json ignore */ }
@@ -2546,23 +2541,112 @@ export default function VirtualOffice() {
         }
       }
 
-      if (streamError) {
-        setChatResp(streamError);
+      // 스트림 종료 후 마지막 assistant status 확정
+      if (finalStatus === 'failed' && finalErrorMsg) {
+        patchLastAssistant({ status: 'failed', id: finalId ?? undefined });
+      } else {
+        patchLastAssistant({ status: finalStatus, id: finalId ?? undefined });
       }
     } catch (err) {
-      if ((err as { name?: string })?.name !== 'AbortError') {
-        setChatResp('응답 실패 — 잠시 후 다시 시도해주세요');
+      // AbortError — 사용자 ⏹ 중단 버튼
+      if ((err as { name?: string })?.name === 'AbortError') {
+        patchLastAssistant({ status: 'aborted' });
+      } else {
+        patchLastAssistant({ status: 'failed', content: '응답 실패 — 네트워크 오류' });
       }
     } finally {
       setChatLoading(false);
       if (chatAbortRef.current === ac) chatAbortRef.current = null;
     }
-  };
+  }, [patchLastAssistant]);
 
-  // 팝업 닫힐 때 진행 중 스트림 중단
+  const buildBriefingSummary = useCallback((b: BriefingData | null) => {
+    if (!b) return undefined;
+    return [
+      `상태: ${b.status}`,
+      b.summary && `요약: ${b.summary}`,
+      b.stats && `24h 통계: 성공률 ${b.stats.rate}% (전체 ${b.stats.total}건, 실패 ${b.stats.failed}건)`,
+      b.alerts?.length && `경보: ${b.alerts.join(', ')}`,
+      b.recentActivity?.filter(a => a.result === 'failed').length
+        && `최근 실패 활동: ${b.recentActivity!.filter(a => a.result === 'failed').map(a => `${a.task}(${a.time})`).join(', ')}`,
+      `화면 표시 현황: ${statusExplanation(b)}`,
+    ].filter(Boolean).join('\n');
+  }, []);
+
+  const sendMessage = useCallback(async () => {
+    if (!chatInput.trim() || !briefing) return;
+    const msg = chatInput;
+    setChatInput('');
+    const nowSec = Math.floor(Date.now() / 1000);
+    // Optimistic UI — user + streaming placeholder
+    setChatMessages(prev => [
+      ...prev,
+      { role: 'user', content: msg, status: 'completed', created_at: nowSec },
+      { role: 'assistant', content: '', status: 'streaming', created_at: nowSec },
+    ]);
+
+    const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
+    const teamId = room?.entityId || briefing.id;
+    await runChatStream({
+      teamId,
+      message: msg,
+      briefingSummary: buildBriefingSummary(briefing),
+    });
+  }, [chatInput, briefing, runChatStream, buildBriefingSummary]);
+
+  // Phase 1: 재시도 — failed/aborted 메시지의 직전 user 메시지를 찾아 재전송
+  const retryMessage = useCallback(async (failedAssistantIdx: number) => {
+    if (!briefing || chatLoading) return;
+    const failedMsg = chatMessages[failedAssistantIdx];
+    if (!failedMsg || failedMsg.role !== 'assistant') return;
+    // 직전 user 메시지 찾기
+    let userMsg: ChatMessage | null = null;
+    for (let i = failedAssistantIdx - 1; i >= 0; i--) {
+      if (chatMessages[i].role === 'user') {
+        userMsg = chatMessages[i];
+        break;
+      }
+    }
+    if (!userMsg) return;
+    const retryKey = userMsg.content;
+    const currentCount = retryCount.get(retryKey) ?? 0;
+    if (currentCount >= 3) return; // 한도 초과
+
+    // 재시도 카운터 증가
+    setRetryCount(prev => {
+      const next = new Map(prev);
+      next.set(retryKey, currentCount + 1);
+      return next;
+    });
+
+    // 실패한 assistant 메시지는 기록으로 유지 (append-only 원장 원칙)
+    // 새 streaming placeholder 추가
+    const nowSec = Math.floor(Date.now() / 1000);
+    setChatMessages(prev => [
+      ...prev,
+      { role: 'assistant', content: '', status: 'streaming', created_at: nowSec },
+    ]);
+
+    const room = ROOMS.find(r => r.entityId === briefing.id || r.id === briefing.id);
+    const teamId = room?.entityId || briefing.id;
+    await runChatStream({
+      teamId,
+      message: userMsg.content,
+      briefingSummary: buildBriefingSummary(briefing),
+      isRetry: true,  // 서버가 user 메시지 중복 INSERT 방지
+    });
+  }, [briefing, chatLoading, chatMessages, retryCount, runChatStream, buildBriefingSummary]);
+
+  // Phase 1: 사용자 명시 중단 — ⏹ 버튼
+  const stopStream = useCallback(() => {
+    chatAbortRef.current?.abort();
+  }, []);
+
+  // Phase 1 (D1): 팝업 닫혀도 chatAbortRef 호출하지 않음 — 서버 스트림 백그라운드 지속
+  // briefing이 null로 바뀔 때 (다른 팀으로 전환 or 완전 언마운트) chatAbortRef 참조만 정리
   useEffect(() => {
     if (!briefing) {
-      chatAbortRef.current?.abort();
+      // abort 호출 안 함 — 서버는 완료까지 달리고 DB에 저장
       chatAbortRef.current = null;
     }
   }, [briefing]);
@@ -2573,19 +2657,15 @@ export default function VirtualOffice() {
       <canvas
         ref={canvasRef}
         style={{
-          display: viewMode === 'map' ? 'block' : 'none',
+          // Phase 1: viewMode 조건 제거 — 항상 맵 렌더 (CEO's Bridge 포지션)
+          display: 'block',
           width: '100vw', height: '100vh', touchAction: 'none',
           // 인터랙터블 요소 호버 시 포인터 커서
           cursor: tooltipRoom ? 'pointer' : 'default',
         }}
       />
 
-      {/* ── 표 모드 ── */}
-      {viewMode === 'table' && (
-        <DashboardTable isMobile={isMobile} onRowClick={handleTableRowClick} />
-      )}
-
-      {/* ── 맵/표 토글 + 도움말 (우상단) ── */}
+      {/* ── 도움말 버튼 (우상단) — Phase 1: 맵/표 토글 제거 ── */}
       <div style={{
         position: 'fixed',
         top: isMobile ? 12 : 20,
@@ -2612,47 +2692,13 @@ export default function VirtualOffice() {
             transition: 'color 0.15s',
           }}
         >?</button>
-        <div style={{
-          display: 'flex',
-          background: 'rgba(0,0,0,0.6)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 10,
-          padding: 3,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-          backdropFilter: 'blur(8px)',
-        }}>
-          {(['map', 'table'] as const).map(mode => {
-            const active = viewMode === mode;
-            const label = mode === 'map' ? '🗺️ 맵' : '📊 표';
-            return (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                aria-pressed={active}
-                style={{
-                  padding: isMobile ? '6px 10px' : '7px 14px',
-                  fontSize: isMobile ? 11 : 12,
-                  fontWeight: 700,
-                  borderRadius: 8,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: active ? '#c9a227' : 'transparent',
-                  color: active ? '#fff' : '#8b949e',
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* 우상단 Board 배너 (오늘 회의록 KPI) — 모바일에서 Statusline과 겹침 방지로 숨김 */}
-      {viewMode === 'map' && !isMobile && <BoardBanner />}
+      {!isMobile && <BoardBanner />}
 
       {/* 우상단 2차 정보 패널 (예정 크론 + 최근 커밋) — 모바일 숨김 */}
-      {viewMode === 'map' && !isMobile && (
+      {!isMobile && (
         <RightInfoPanels
           isMobile={isMobile}
           onCronClick={(id) => {
@@ -2671,7 +2717,7 @@ export default function VirtualOffice() {
       )}
 
       {/* 좌하단 실시간 크론 이벤트 토스트 (SSE) */}
-      {viewMode === 'map' && <CronToastStack isMobile={isMobile} />}
+      <CronToastStack isMobile={isMobile} />
 
       {/* 좌상단 통합 statusline (Claude/CPU/RAM/Disk/Cron 24h) */}
       <Statusline isMobile={isMobile} />
@@ -2814,8 +2860,10 @@ export default function VirtualOffice() {
         loadMoreHistory={loadMoreHistory}
         chatInput={chatInput}
         setChatInput={setChatInput}
-        chatResp={chatResp}
         sendMessage={sendMessage}
+        retryMessage={retryMessage}
+        stopStream={stopStream}
+        retryCount={retryCount}
         chatEndRef={chatEndRef}
       />
 

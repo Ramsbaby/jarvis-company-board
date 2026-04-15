@@ -11,7 +11,16 @@ import { cronToHuman } from '@/lib/map/cron-human';
 import MarkdownContent from '@/components/MarkdownContent';
 import MetricDetailModal from '@/components/map/MetricDetailModal';
 
-interface ChatMessage { role: string; content: string; created_at: number }
+// Phase 1: 메시지 상태 머신 — streaming/completed/aborted/failed
+export type ChatMessageStatus = 'streaming' | 'completed' | 'aborted' | 'failed';
+export interface ChatMessage {
+  id?: number;              // DB id (optimistic UI 에선 undefined)
+  role: string;
+  content: string;
+  status?: ChatMessageStatus;  // undefined 면 completed 로 취급 (백워드 호환)
+  created_at: number;
+  updated_at?: number;
+}
 
 type MetricType = 'disk' | 'memory' | 'cpu';
 type MetricItem = { label: string; value: number; color: string; icon: string; type: MetricType };
@@ -33,8 +42,11 @@ interface TeamBriefingPopupProps {
   loadMoreHistory: () => void;
   chatInput: string;
   setChatInput: React.Dispatch<React.SetStateAction<string>>;
-  chatResp: string;
   sendMessage: () => void;
+  // Phase 1: 채팅 resumable 기능 — 재시도 + 중단
+  retryMessage: (failedAssistantIdx: number) => void;
+  stopStream: () => void;
+  retryCount: Map<string, number>;  // key: "${userContent}" -> count
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -48,7 +60,9 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
   popupOpen, popupLoading, briefing, activeRoom, isMobile, cronData, closePopup,
   chatPanelOpen, setChatPanelOpen, chatMessages, chatLoading,
   chatHasMore, chatHistoryLoading, loadMoreHistory,
-  chatInput, setChatInput, chatResp, sendMessage, chatEndRef,
+  chatInput, setChatInput, sendMessage,
+  retryMessage, stopStream, retryCount,
+  chatEndRef,
 }: TeamBriefingPopupProps) {
   const [metricDetail, setMetricDetail] = useState<MetricItem | null>(null);
   const [activityDetail, setActivityDetail] = useState<{ task: string; result: string; latestTime?: string; description?: string; matchedCron: CronItem | null } | null>(null);
@@ -1247,29 +1261,53 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                       </div>
                     )}
                     {chatMessages.map((m, i) => {
-                      // 스트리밍 중인 빈 assistant placeholder → 타이핑 인디케이터
-                      const isStreamingPlaceholder = m.role === 'assistant' && m.content === '' && chatLoading && i === chatMessages.length - 1;
+                      // Phase 1: 메시지 상태 머신 기반 UI 분기
+                      //   streaming  → 타이핑 인디케이터 (빈 placeholder) 또는 실시간 토큰 append
+                      //   completed  → 일반 표시 (기본값)
+                      //   aborted    → 주황 border + "중단됨" 라벨
+                      //   failed     → 빨강 border + "🔁 다시 시도" 버튼
+                      const status = m.status ?? 'completed';
+                      const isStreamingEmpty = m.role === 'assistant' && m.content === '' && status === 'streaming';
+                      const isFailed = status === 'failed';
+                      const isAborted = status === 'aborted';
+                      const borderColor = isFailed ? '#f85149' : isAborted ? '#d29922' : undefined;
+                      // 이 assistant 메시지의 직전 user 메시지 찾기 (재시도 시 원본 프롬프트)
+                      const prevUserIdx = m.role === 'assistant' ? (() => {
+                        for (let k = i - 1; k >= 0; k--) {
+                          if (chatMessages[k].role === 'user') return k;
+                        }
+                        return -1;
+                      })() : -1;
+                      const prevUserContent = prevUserIdx >= 0 ? chatMessages[prevUserIdx].content : '';
+                      const retryKey = prevUserContent;
+                      const retries = retryCount.get(retryKey) ?? 0;
+                      const retriesLeft = Math.max(0, 3 - retries);
                       return (
-                        <div key={i} style={{
+                        <div key={m.id ?? `tmp-${i}`} style={{
                           display: 'flex', flexDirection: 'column',
                           alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10,
                         }}>
                           {m.role !== 'user' && (
                             <span style={{ fontSize: 10, color: '#6e7681', marginBottom: 2, marginLeft: 4 }}>
                               {briefing.emoji} {briefing.name}
+                              {isAborted && <span style={{ marginLeft: 6, color: '#d29922' }}>· 중단됨</span>}
+                              {isFailed && <span style={{ marginLeft: 6, color: '#f85149' }}>· 실패</span>}
                             </span>
                           )}
                           <div style={{
-                            maxWidth: '85%', padding: isStreamingPlaceholder ? '10px 16px' : '8px 12px',
+                            maxWidth: '85%', padding: isStreamingEmpty ? '10px 16px' : '8px 12px',
                             borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                             fontSize: 13, lineHeight: 1.5,
                             whiteSpace: m.role === 'user' ? 'pre-wrap' : undefined,
                             background: m.role === 'user'
                               ? `linear-gradient(135deg, ${teamColorHex}cc, ${teamColorHex}99)`
+                              : isFailed ? 'rgba(248,81,73,0.06)'
+                              : isAborted ? 'rgba(210,153,34,0.06)'
                               : 'rgba(255,255,255,0.07)',
                             color: '#e6edf3',
+                            border: borderColor ? `1px solid ${borderColor}66` : undefined,
                           }}>
-                            {isStreamingPlaceholder ? (
+                            {isStreamingEmpty ? (
                               <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                 {[0, 1, 2].map(j => (
                                   <span key={j} style={{
@@ -1284,6 +1322,27 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                               ? m.content
                               : <MarkdownContent content={m.content} variant="chat" />}
                           </div>
+                          {/* Phase 1: 재시도 버튼 (failed/aborted 상태의 assistant 메시지에만 노출) */}
+                          {m.role === 'assistant' && (isFailed || isAborted) && prevUserIdx >= 0 && (
+                            <button
+                              onClick={() => retryMessage(i)}
+                              disabled={chatLoading || retriesLeft === 0}
+                              style={{
+                                marginTop: 6, marginLeft: 4,
+                                padding: '6px 12px', fontSize: 11, fontWeight: 600,
+                                background: retriesLeft === 0 ? 'rgba(107,114,128,0.15)' : 'rgba(248,81,73,0.10)',
+                                border: `1px solid ${retriesLeft === 0 ? 'rgba(107,114,128,0.3)' : 'rgba(248,81,73,0.35)'}`,
+                                borderRadius: 8,
+                                color: retriesLeft === 0 ? '#6b7280' : '#fca5a5',
+                                cursor: (chatLoading || retriesLeft === 0) ? 'default' : 'pointer',
+                                transition: 'background 0.15s',
+                              }}
+                              title={retriesLeft === 0 ? '재시도 한도 초과 (최대 3회)' : `재시도 ${retriesLeft}회 남음`}
+                            >
+                              🔁 다시 시도 {retriesLeft < 3 && retriesLeft > 0 && `(${retriesLeft})`}
+                              {retriesLeft === 0 && ' · 한도 초과'}
+                            </button>
+                          )}
                           <span style={{ fontSize: 9, color: '#484f58', marginTop: 2, marginLeft: 4, marginRight: 4 }}>
                             {new Date(m.created_at * 1000).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -1304,7 +1363,8 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                         value={chatInput}
                         onChange={e => setChatInput(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) sendMessage(); }}
-                        placeholder={`${briefing.name}에게 질문...`}
+                        placeholder={chatLoading ? '응답 생성 중…' : `${briefing.name}에게 질문...`}
+                        disabled={chatLoading}
                         className="jm-chat-input"
                         style={{
                           flex: 1, background: 'rgba(255,255,255,0.04)',
@@ -1313,20 +1373,37 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                           fontSize: 13, outline: 'none',
                           fontFamily: '-apple-system, sans-serif', minHeight: 40,
                           transition: 'border-color 0.15s, box-shadow 0.15s',
+                          opacity: chatLoading ? 0.6 : 1,
                         }}
                       />
-                      <button
-                        onClick={sendMessage}
-                        disabled={chatLoading || !chatInput.trim()}
-                        style={{
-                          background: teamColorHex, border: 'none', borderRadius: 10,
-                          padding: '10px 18px', color: '#fff', fontSize: 13, cursor: (chatLoading || !chatInput.trim()) ? 'default' : 'pointer',
-                          fontWeight: 700, opacity: (chatLoading || !chatInput.trim()) ? 0.45 : 1,
-                          minHeight: 40, minWidth: 56, transition: 'opacity 0.15s',
-                        }}
-                      >↑</button>
+                      {/* Phase 1: 스트리밍 중일 때만 중단 버튼, 평시엔 전송 버튼 */}
+                      {chatLoading ? (
+                        <button
+                          onClick={stopStream}
+                          title="응답 중단"
+                          style={{
+                            background: 'rgba(210,153,34,0.15)',
+                            border: '1px solid rgba(210,153,34,0.4)',
+                            borderRadius: 10,
+                            padding: '10px 16px', color: '#fbbf24', fontSize: 13,
+                            cursor: 'pointer', fontWeight: 700,
+                            minHeight: 40, minWidth: 56, transition: 'background 0.15s',
+                          }}
+                        >⏹</button>
+                      ) : (
+                        <button
+                          onClick={sendMessage}
+                          disabled={!chatInput.trim()}
+                          style={{
+                            background: teamColorHex, border: 'none', borderRadius: 10,
+                            padding: '10px 18px', color: '#fff', fontSize: 13, cursor: (!chatInput.trim()) ? 'default' : 'pointer',
+                            fontWeight: 700, opacity: (!chatInput.trim()) ? 0.45 : 1,
+                            minHeight: 40, minWidth: 56, transition: 'opacity 0.15s',
+                          }}
+                        >↑</button>
+                      )}
                     </div>
-                    {chatResp && <div style={{ marginTop: 6, fontSize: 12, color: '#f85149' }}>{chatResp}</div>}
+                    {/* chatResp 인라인 에러 제거 — 메시지별 status UI가 에러를 담당 */}
                   </div>
                 </div>
               )}
