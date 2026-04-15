@@ -2751,24 +2751,27 @@ export default function VirtualOffice() {
       {tooltipRoom && !popupOpen && (
         <div style={{
           position: 'fixed',
-          left: Math.min(tooltipRoom.x + 12, window.innerWidth - 220),
-          top: tooltipRoom.y - 50,
-          padding: '8px 12px',
-          borderRadius: 8,
-          background: 'rgba(255,255,255,0.95)',
-          color: '#2d3340',
+          left: Math.min(tooltipRoom.x + 14, window.innerWidth - 230),
+          top: Math.max(8, tooltipRoom.y - 64),
+          padding: '9px 13px',
+          borderRadius: 10,
+          background: 'rgba(10,13,28,0.95)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          color: '#e6edf3',
           fontSize: 12,
-          fontFamily: 'monospace',
+          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
           pointerEvents: 'none',
           border: `1px solid ${tooltipRoom.room.teamColor}40`,
-          maxWidth: 200,
+          borderLeft: `3px solid ${tooltipRoom.room.teamColor}`,
+          maxWidth: 210,
           zIndex: 500,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
         }}>
-          <div style={{ fontWeight: 700, marginBottom: 2 }}>
+          <div style={{ fontWeight: 700, marginBottom: 3, fontSize: 13 }}>
             {tooltipRoom.room.emoji} {tooltipRoom.room.name}
           </div>
-          <div style={{ color: '#718096', fontSize: 11, lineHeight: 1.4 }}>
+          <div style={{ color: '#8b949e', fontSize: 11, lineHeight: 1.45 }}>
             {tooltipRoom.room.description}
           </div>
         </div>

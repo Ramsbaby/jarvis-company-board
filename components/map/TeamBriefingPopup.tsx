@@ -61,7 +61,9 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
       onClick={closePopup}
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(4,6,16,0.95)',
+        background: 'rgba(4,6,16,0.88)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
         display: 'flex',
         alignItems: isMobile ? 'flex-end' : 'center',
         justifyContent: 'center',
@@ -93,8 +95,55 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
           fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
           WebkitOverflowScrolling: 'touch',
           minHeight: 0, // flex 자식에서 maxHeight가 적용되게 필수
+          animation: isMobile ? 'jmSlideUp 0.32s cubic-bezier(0.16,1,0.3,1)' : 'jmPopIn 0.22s ease-out',
         }}
       >
+        {/* ── 전역 CSS 애니메이션 키프레임 ── */}
+        <style>{`
+          @keyframes jmPopIn {
+            from { opacity: 0; transform: scale(0.97) translateY(6px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
+          }
+          @keyframes jmSlideUp {
+            from { transform: translateY(48px); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
+          }
+          @keyframes jmShimmer {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+          @keyframes jmPulse {
+            0%, 100% { transform: scale(1); opacity: 0.85; }
+            50%      { transform: scale(1.12); opacity: 1; }
+          }
+          @keyframes jmRotate {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+          }
+          @keyframes jmFadeDots {
+            0%, 20%  { opacity: 0.2; }
+            40%      { opacity: 1; }
+            60%, 100% { opacity: 0.2; }
+          }
+          @keyframes jmTypingDot {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30%            { transform: translateY(-5px); opacity: 1; }
+          }
+          .jm-chat-input:focus {
+            outline: none;
+            border-color: rgba(88,166,255,0.45) !important;
+            box-shadow: 0 0 0 3px rgba(88,166,255,0.12) !important;
+          }
+          .jm-close-btn:hover {
+            background: rgba(255,255,255,0.14) !important;
+            color: #c9d1d9 !important;
+          }
+          .jm-suggest-chip:hover {
+            background: rgba(255,255,255,0.1) !important;
+            border-color: rgba(255,255,255,0.2) !important;
+          }
+        `}</style>
+
         {/* ── 모바일 탭 바 (채팅 열린 상태) ── */}
         {isMobile && chatPanelOpen && briefing && (
           <div style={{
@@ -121,25 +170,6 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
 
         {popupLoading ? (
           <div style={{ padding: 60, textAlign: 'center', color: '#8b949e' }}>
-            <style>{`
-              @keyframes jmShimmer {
-                0%   { transform: translateX(-100%); }
-                100% { transform: translateX(200%); }
-              }
-              @keyframes jmPulse {
-                0%, 100% { transform: scale(1); opacity: 0.85; }
-                50%      { transform: scale(1.12); opacity: 1; }
-              }
-              @keyframes jmRotate {
-                from { transform: rotate(0deg); }
-                to   { transform: rotate(360deg); }
-              }
-              @keyframes jmFadeDots {
-                0%, 20%  { opacity: 0.2; }
-                40%      { opacity: 1; }
-                60%, 100% { opacity: 0.2; }
-              }
-            `}</style>
             {/* 회전 링 스피너 */}
             <div style={{
               width: 56, height: 56,
@@ -267,12 +297,13 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   </div>
                   <button
                     onClick={closePopup}
+                    className="jm-close-btn"
                     style={{
                       background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#8094b0',
                       cursor: 'pointer', fontSize: 15, padding: '0',
                       borderRadius: 10, width: 36, height: 36, flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'background 0.15s',
+                      transition: 'background 0.15s, color 0.15s',
                     }}
                     aria-label="닫기"
                   >✕</button>
@@ -1181,41 +1212,80 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                       </div>
                     )}
                     {chatMessages.length === 0 && (
-                      <div style={{ fontSize: 13, color: '#484f58', textAlign: 'center', padding: isMobile ? '16px 10px' : '40px 10px' }}>
-                        {briefing.name}에게 질문해보세요
-                      </div>
-                    )}
-                    {chatMessages.map((m, i) => (
-                      <div key={i} style={{
-                        display: 'flex', flexDirection: 'column',
-                        alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10,
-                      }}>
-                        {m.role !== 'user' && (
-                          <span style={{ fontSize: 10, color: '#6e7681', marginBottom: 2, marginLeft: 4 }}>
-                            {briefing.emoji} {briefing.name}
-                          </span>
-                        )}
-                        <div style={{
-                          maxWidth: '85%', padding: '8px 12px',
-                          borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                          fontSize: 13, lineHeight: 1.5,
-                          whiteSpace: m.role === 'user' ? 'pre-wrap' : undefined,
-                          background: m.role === 'user' ? 'linear-gradient(135deg, #238636, #1a6b2a)' : 'rgba(255,255,255,0.07)', color: '#e6edf3',
-                        }}>
-                          {m.role === 'user'
-                            ? m.content
-                            : <MarkdownContent content={m.content} variant="chat" />}
+                      <div style={{ padding: isMobile ? '16px 0' : '28px 0 16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>{briefing.emoji}</div>
+                        <div style={{ fontSize: 13, color: '#6e7681', marginBottom: 16 }}>
+                          {briefing.name}에게 무엇이든 물어보세요
                         </div>
-                        <span style={{ fontSize: 9, color: '#484f58', marginTop: 2, marginLeft: 4, marginRight: 4 }}>
-                          {new Date(m.created_at * 1000).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    ))}
-                    {chatLoading && (
-                      <div style={{ fontSize: 12, color: '#8b949e', padding: 6 }}>
-                        {briefing.emoji} 응답 작성 중...
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
+                          {[
+                            '지금 어떤 상태야?',
+                            '최근 실패한 작업은?',
+                            '이번 주 성과를 요약해줘',
+                            '다음 예정 작업은?',
+                          ].map(q => (
+                            <button
+                              key={q}
+                              className="jm-suggest-chip"
+                              onClick={() => { setChatInput(q); }}
+                              style={{
+                                background: 'rgba(255,255,255,0.04)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: 8, padding: '8px 14px',
+                                color: '#8b949e', fontSize: 12, cursor: 'pointer',
+                                textAlign: 'left', transition: 'background 0.15s, border-color 0.15s',
+                              }}
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
+                    {chatMessages.map((m, i) => {
+                      // 스트리밍 중인 빈 assistant placeholder → 타이핑 인디케이터
+                      const isStreamingPlaceholder = m.role === 'assistant' && m.content === '' && chatLoading && i === chatMessages.length - 1;
+                      return (
+                        <div key={i} style={{
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10,
+                        }}>
+                          {m.role !== 'user' && (
+                            <span style={{ fontSize: 10, color: '#6e7681', marginBottom: 2, marginLeft: 4 }}>
+                              {briefing.emoji} {briefing.name}
+                            </span>
+                          )}
+                          <div style={{
+                            maxWidth: '85%', padding: isStreamingPlaceholder ? '10px 16px' : '8px 12px',
+                            borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                            fontSize: 13, lineHeight: 1.5,
+                            whiteSpace: m.role === 'user' ? 'pre-wrap' : undefined,
+                            background: m.role === 'user'
+                              ? `linear-gradient(135deg, ${teamColorHex}cc, ${teamColorHex}99)`
+                              : 'rgba(255,255,255,0.07)',
+                            color: '#e6edf3',
+                          }}>
+                            {isStreamingPlaceholder ? (
+                              <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                {[0, 1, 2].map(j => (
+                                  <span key={j} style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: '#8b949e', display: 'inline-block',
+                                    animation: `jmTypingDot 1.2s ease-in-out infinite`,
+                                    animationDelay: `${j * 0.2}s`,
+                                  }} />
+                                ))}
+                              </span>
+                            ) : m.role === 'user'
+                              ? m.content
+                              : <MarkdownContent content={m.content} variant="chat" />}
+                          </div>
+                          <span style={{ fontSize: 9, color: '#484f58', marginTop: 2, marginLeft: 4, marginRight: 4 }}>
+                            {new Date(m.created_at * 1000).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })}
                     <div ref={chatEndRef} />
                   </div>
 
@@ -1231,23 +1301,26 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                         onChange={e => setChatInput(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) sendMessage(); }}
                         placeholder={`${briefing.name}에게 질문...`}
+                        className="jm-chat-input"
                         style={{
                           flex: 1, background: 'rgba(255,255,255,0.04)',
                           border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
                           padding: '10px 14px', color: '#e6edf3',
                           fontSize: 13, outline: 'none',
                           fontFamily: '-apple-system, sans-serif', minHeight: 40,
+                          transition: 'border-color 0.15s, box-shadow 0.15s',
                         }}
                       />
                       <button
                         onClick={sendMessage}
-                        disabled={chatLoading}
+                        disabled={chatLoading || !chatInput.trim()}
                         style={{
                           background: teamColorHex, border: 'none', borderRadius: 10,
-                          padding: '10px 18px', color: '#fff', fontSize: 13, cursor: 'pointer',
-                          fontWeight: 700, opacity: chatLoading ? 0.5 : 1, minHeight: 40, minWidth: 56,
+                          padding: '10px 18px', color: '#fff', fontSize: 13, cursor: (chatLoading || !chatInput.trim()) ? 'default' : 'pointer',
+                          fontWeight: 700, opacity: (chatLoading || !chatInput.trim()) ? 0.45 : 1,
+                          minHeight: 40, minWidth: 56, transition: 'opacity 0.15s',
                         }}
-                      >전송</button>
+                      >↑</button>
                     </div>
                     {chatResp && <div style={{ marginTop: 6, fontSize: 12, color: '#f85149' }}>{chatResp}</div>}
                   </div>
