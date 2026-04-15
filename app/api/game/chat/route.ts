@@ -599,11 +599,13 @@ export async function POST(req: NextRequest) {
   let teamId: string;
   let message: string;
   let briefingSummary: string | undefined;
+  let isRetry = false;
   try {
     const body = await req.json();
     teamId = body.teamId;
     message = body.message;
     briefingSummary = body.briefingSummary;
+    isRetry = body.isRetry === true;
   } catch {
     return NextResponse.json({ error: '잘못된 요청 본문입니다.' }, { status: 400 });
   }
@@ -647,10 +649,22 @@ export async function POST(req: NextRequest) {
   const basePrompt = TEAM_PROMPTS[teamId] || `나는 Jarvis Company의 ${teamId} 담당자입니다. 질문에 답변합니다.`;
   const db = getDb();
 
-  db.prepare('INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)').run(teamId, 'user', message);
+  // ── Phase 1: User 메시지 INSERT + Assistant placeholder INSERT ──
+  // status='completed'가 기본값이므로 user 메시지는 그대로, assistant placeholder는 status='streaming'
+  // isRetry=true 인 경우 user 메시지 중복 INSERT 방지 (재시도 — 원본 user 메시지 재사용)
+  if (!isRetry) {
+    db.prepare(
+      "INSERT INTO game_chat (team_id, role, content, status) VALUES (?, 'user', ?, 'completed')"
+    ).run(teamId, message);
+  }
+
+  const assistantInsert = db.prepare(
+    "INSERT INTO game_chat (team_id, role, content, status) VALUES (?, 'assistant', '', 'streaming')"
+  ).run(teamId);
+  const assistantId = Number(assistantInsert.lastInsertRowid);
 
   const recentMessages = db.prepare(
-    'SELECT role, content FROM game_chat WHERE team_id = ? ORDER BY created_at DESC LIMIT 6'
+    "SELECT role, content FROM game_chat WHERE team_id = ? AND status IN ('completed', 'aborted') ORDER BY created_at DESC LIMIT 6"
   ).all(teamId) as Array<{ role: string; content: string }>;
 
   const conversationContext = recentMessages.reverse()
@@ -680,6 +694,14 @@ ${teamContext || '(수집된 데이터 없음)'}
 
   const userContent = `${conversationContext ? `=== 이전 대화 ===\n${conversationContext}\n\n` : ''}${message}`;
 
+  // ── Phase 1: incremental UPDATE 준비 (throttle 500ms or 40 tokens) ──
+  const updateStmt = db.prepare(
+    'UPDATE game_chat SET content = ?, updated_at = unixepoch() WHERE id = ?'
+  );
+  const finalizeStmt = db.prepare(
+    'UPDATE game_chat SET content = ?, status = ?, updated_at = unixepoch() WHERE id = ?'
+  );
+
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -687,7 +709,38 @@ ${teamContext || '(수집된 데이터 없음)'}
       let inputTokens = 0;
       let outputTokens = 0;
       let aborted = false;
+      let clientDisconnected = false;
+      let lastUpdateAt = Date.now();
+      let lastUpdateLen = 0;
+      const UPDATE_INTERVAL_MS = 500;
+      const UPDATE_TOKEN_LEN = 40;
 
+      // Throttle 된 incremental UPDATE — 500ms 또는 40 토큰 간격
+      const maybeUpdate = () => {
+        const now = Date.now();
+        if (now - lastUpdateAt >= UPDATE_INTERVAL_MS || fullText.length - lastUpdateLen >= UPDATE_TOKEN_LEN) {
+          try {
+            updateStmt.run(fullText, assistantId);
+            lastUpdateAt = now;
+            lastUpdateLen = fullText.length;
+          } catch (updErr) {
+            console.error('[game-chat] incremental UPDATE failed:', updErr);
+          }
+        }
+      };
+
+      // 안전한 enqueue — controller가 닫혔으면 silent drop
+      const safeEnqueue = (payload: string) => {
+        if (clientDisconnected) return;
+        try {
+          controller.enqueue(enc.encode(payload));
+        } catch {
+          clientDisconnected = true;
+        }
+      };
+
+      // req.signal abort: 사용자가 명시적으로 ⏹ 중단 버튼을 눌렀거나 브라우저 탭이 닫힌 경우
+      // D1: 팝업만 닫힌 경우엔 클라이언트가 abort 호출 안 하므로 여기 안 옴 (서버 계속 달림)
       const onAbort = () => {
         aborted = true;
       };
@@ -716,13 +769,16 @@ ${teamContext || '(수집된 데이터 없음)'}
             if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
               const token = event.delta.text;
               fullText += token;
-              controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+              safeEnqueue(`data: ${JSON.stringify({ token })}\n\n`);
+              maybeUpdate();
             }
           }
 
-          const finalMsg = await claudeStream.finalMessage();
-          inputTokens = finalMsg.usage.input_tokens;
-          outputTokens = finalMsg.usage.output_tokens;
+          if (!aborted) {
+            const finalMsg = await claudeStream.finalMessage();
+            inputTokens = finalMsg.usage.input_tokens;
+            outputTokens = finalMsg.usage.output_tokens;
+          }
 
         } else if (useClaudeCLI) {
           // ── Claude CLI (Max 구독, API 키 불필요) ────────────────────────────
@@ -734,7 +790,7 @@ ${teamContext || '(수집된 데이터 없음)'}
 
           // Keepalive: 20초마다 SSE ping (Cloudflare 100s 타임아웃 방지)
           const keepaliveTimer = setInterval(() => {
-            try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* stream closed */ }
+            safeEnqueue(': ping\n\n');
           }, 20000);
 
           try {
@@ -770,7 +826,8 @@ ${teamContext || '(수집된 데이터 없음)'}
             });
             fullText = cliText;
             if (fullText) {
-              controller.enqueue(enc.encode(`data: ${JSON.stringify({ token: fullText })}\n\n`));
+              safeEnqueue(`data: ${JSON.stringify({ token: fullText })}\n\n`);
+              maybeUpdate();
               inputTokens = Math.ceil(cliPrompt.length / 4);
               outputTokens = Math.ceil(fullText.length / 4);
             }
@@ -780,6 +837,8 @@ ${teamContext || '(수집된 데이터 없음)'}
 
         } else {
           // ── Groq 스트리밍 ──────────────────────────────────────────────────
+          // 주의: Groq의 signal에는 req.signal을 전달하지 않음 (D1 — 백그라운드 지속)
+          // 사용자가 ⏹ 버튼 누른 경우에만 aborted=true → 우리가 직접 reader.cancel() 호출
           const groqRes = await fetch(GROQ_URL, {
             method: 'POST',
             headers: {
@@ -796,7 +855,6 @@ ${teamContext || '(수집된 데이터 없음)'}
                 { role: 'user', content: userContent },
               ],
             }),
-            signal: req.signal,
           });
 
           if (!groqRes.ok || !groqRes.body) {
@@ -838,7 +896,8 @@ ${teamContext || '(수집된 데이터 없음)'}
                   const token = parsed.choices?.[0]?.delta?.content;
                   if (token) {
                     fullText += token;
-                    controller.enqueue(enc.encode(`data: ${JSON.stringify({ token })}\n\n`));
+                    safeEnqueue(`data: ${JSON.stringify({ token })}\n\n`);
+                    maybeUpdate();
                   }
                   const usage = parsed.usage ?? parsed.x_groq?.usage;
                   if (usage) {
@@ -851,16 +910,25 @@ ${teamContext || '(수집된 데이터 없음)'}
           }
         } // end Groq branch
 
+        // ── Phase 1: 최종 상태 결정 + DB UPDATE ──
         if (aborted) {
-          controller.close();
+          // 사용자가 ⏹ 중단 버튼 누름 (또는 탭 닫힘)
+          try {
+            finalizeStmt.run(fullText, 'aborted', assistantId);
+          } catch (upErr) {
+            console.error('[game-chat] finalize aborted failed:', upErr);
+          }
+          safeEnqueue(`data: ${JSON.stringify({ aborted: true, id: assistantId })}\n\n`);
+          try { controller.close(); } catch { /* ignore */ }
           return;
         }
 
-        // Persist assistant message
-        const result = db.prepare(
-          'INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)'
-        ).run(teamId, 'assistant', fullText);
-        const savedId = Number(result.lastInsertRowid);
+        // 정상 완료
+        try {
+          finalizeStmt.run(fullText, 'completed', assistantId);
+        } catch (upErr) {
+          console.error('[game-chat] finalize completed failed:', upErr);
+        }
 
         // Record cost (best-effort) — usage가 비어 있으면 skip
         if (inputTokens > 0 || outputTokens > 0) {
@@ -871,32 +939,24 @@ ${teamContext || '(수집된 데이터 없음)'}
           }
         }
 
-        controller.enqueue(
-          enc.encode(`data: ${JSON.stringify({ done: true, id: savedId, usage: { inputTokens, outputTokens } })}\n\n`),
+        safeEnqueue(
+          `data: ${JSON.stringify({ done: true, id: assistantId, usage: { inputTokens, outputTokens } })}\n\n`,
         );
-        controller.close();
+        try { controller.close(); } catch { /* ignore */ }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[game-chat] stream error:', msg);
+        // ── Phase 1: 실패 시 placeholder를 failed로 마킹 + 부분 토큰/에러 메시지 저장 ──
         try {
-          // 실패한 사용자 메시지에 대해 에러 컨텐츠도 assistant로 남겨서 UI 일관성 유지
-          if (fullText.length === 0) {
-            db.prepare('INSERT INTO game_chat (team_id, role, content) VALUES (?, ?, ?)')
-              .run(teamId, 'assistant', `응답 처리 중 오류: ${msg.slice(0, 200)}`);
-          }
-        } catch {
-          /* ignore persistence error */
+          const failContent = fullText.length > 0
+            ? `${fullText}\n\n[오류: ${msg.slice(0, 200)}]`
+            : `응답 처리 중 오류: ${msg.slice(0, 200)}`;
+          finalizeStmt.run(failContent, 'failed', assistantId);
+        } catch (upErr) {
+          console.error('[game-chat] finalize failed failed:', upErr);
         }
-        try {
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ error: msg.slice(0, 500) })}\n\n`));
-        } catch {
-          /* controller may be closed */
-        }
-        try {
-          controller.close();
-        } catch {
-          /* ignore */
-        }
+        safeEnqueue(`data: ${JSON.stringify({ error: msg.slice(0, 500), id: assistantId })}\n\n`);
+        try { controller.close(); } catch { /* ignore */ }
       } finally {
         req.signal?.removeEventListener('abort', onAbort);
       }

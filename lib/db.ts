@@ -258,16 +258,42 @@ export function getDb(): Database.Database {
     `);
 
     // game_chat: 인앱 채팅 (팀 에이전트와 1:1 대화)
+    // Phase 1: status 머신 + updated_at 추가 (채팅 resumable)
+    // status: 'streaming' | 'completed' | 'aborted' | 'failed'
+    //   - streaming: assistant 메시지가 현재 생성 중
+    //   - completed: 정상 종료 (기본값, user 메시지도 포함)
+    //   - aborted: 사용자가 명시적으로 중단 (⏹ 버튼)
+    //   - failed: 네트워크/LLM/DB 에러로 실패 (재시도 버튼 표시)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS game_chat (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         team_id TEXT NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
         content TEXT NOT NULL,
-        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('streaming', 'completed', 'aborted', 'failed')),
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
       );
       CREATE INDEX IF NOT EXISTS idx_game_chat_team ON game_chat(team_id, created_at);
     `);
+
+    // game_chat 마이그레이션: 기존 테이블에 status/updated_at 없으면 ALTER TABLE (idempotent)
+    // 주의: SQLite ALTER TABLE ADD COLUMN 은 non-constant DEFAULT(예: unixepoch()) 를 거부함.
+    // → NULL 허용 컬럼으로 추가하고 기존 row 는 UPDATE 로 백필 (created_at 재사용)
+    const gameChatCols = _db!.prepare('PRAGMA table_info(game_chat)').all() as Array<{ name: string }>;
+    const colNames = new Set(gameChatCols.map(c => c.name));
+    if (!colNames.has('status')) {
+      _db!.exec(`
+        ALTER TABLE game_chat ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'
+          CHECK(status IN ('streaming', 'completed', 'aborted', 'failed'));
+      `);
+    }
+    if (!colNames.has('updated_at')) {
+      // Step 1: NULL 허용 컬럼으로 추가
+      _db!.exec(`ALTER TABLE game_chat ADD COLUMN updated_at INTEGER;`);
+      // Step 2: 기존 row 백필 (created_at == updated_at)
+      _db!.exec(`UPDATE game_chat SET updated_at = created_at WHERE updated_at IS NULL;`);
+    }
 
     // persona_generation_members: 세대별 멤버 (채용/해고 상태 + 시스템 프롬프트 스냅샷)
     _db!.exec(`

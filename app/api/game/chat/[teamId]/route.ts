@@ -13,10 +13,11 @@ export async function GET(
   const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0', 10);
 
   const db = getDb();
+  // Phase 1: status/updated_at 반환 → 프론트에서 streaming/failed/aborted/completed 분기
   const messages = db.prepare(
-    'SELECT id, team_id, role, content, created_at FROM game_chat WHERE team_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+    'SELECT id, team_id, role, content, status, created_at, updated_at FROM game_chat WHERE team_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
   ).all(teamId, PAGE_SIZE, offset) as Array<{
-    id: number; team_id: string; role: string; content: string; created_at: number;
+    id: number; team_id: string; role: string; content: string; status: string; created_at: number; updated_at: number;
   }>;
 
   const total = (db.prepare('SELECT COUNT(*) as cnt FROM game_chat WHERE team_id = ?').get(teamId) as { cnt: number }).cnt;
