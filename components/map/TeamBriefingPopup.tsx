@@ -242,21 +242,21 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
               }}>
               {/* Header — hero banner (풀 블리드, 패딩 자체 관리) */}
               <div style={{
-                padding: isMobile ? '20px 16px 20px' : '28px 32px 22px',
+                padding: isMobile ? '12px 16px 14px' : '28px 32px 22px',
                 background: `linear-gradient(135deg, ${teamColorHex}1e 0%, ${teamColorHex}08 50%, transparent 85%)`,
                 borderBottom: `1px solid ${teamColorHex}1a`,
                 borderRadius: isMobile ? 0 : (showTwoCol ? '22px 0 0 0' : '22px 22px 0 0'),
                 position: 'relative',
               }}>
                 {/* Top row: emoji + title + close */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isMobile ? 8 : 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14 }}>
                     <div style={{
-                      fontSize: 44,
+                      fontSize: isMobile ? 28 : 44,
                       background: `linear-gradient(135deg, ${teamColorHex}28, ${teamColorHex}10)`,
                       border: `2px solid ${teamColorHex}55`,
-                      borderRadius: 16,
-                      width: 72, height: 72,
+                      borderRadius: isMobile ? 12 : 16,
+                      width: isMobile ? 52 : 72, height: isMobile ? 52 : 72,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       boxShadow: `0 0 0 6px ${teamColorHex}10, 0 0 32px ${teamColorHex}40`,
                       flexShrink: 0,
@@ -271,7 +271,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                         const npcName = parts[1] || null;
                         return (
                           <>
-                            <div style={{ fontSize: 24, fontWeight: 900, color: '#edf2ff', lineHeight: 1.15, letterSpacing: -0.4 }}>{teamName}</div>
+                            <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 900, color: '#edf2ff', lineHeight: 1.15, letterSpacing: -0.4 }}>{teamName}</div>
                             {npcName && (
                               <div style={{ fontSize: 11, color: teamColorHex, fontWeight: 600, marginTop: 2, opacity: 0.8 }}>
                                 👤 {npcName} 담당
@@ -1174,7 +1174,7 @@ const TeamBriefingPopup = React.memo(function TeamBriefingPopup({
                   display: (isMobile && mobileTab === 'briefing') ? 'none' : 'flex',
                   flexDirection: 'column',
                   borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                  height: isMobile ? '70dvh' : '88vh',
+                  height: isMobile ? 'calc(88dvh - 48px)' : '88vh',
                   minHeight: 0,
                   padding: isMobile ? '0 16px 16px' : '0',
                 }}>
