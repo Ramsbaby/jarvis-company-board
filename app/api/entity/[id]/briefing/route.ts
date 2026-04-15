@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, readdirSync, existsSync } from 'fs';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { GET as presidentBriefingGET } from '@/app/api/president/briefing/route';
@@ -148,6 +148,22 @@ function readSafe(filePath: string): string {
   try { return readFileSync(filePath, 'utf8'); } catch { return ''; }
 }
 
+// ── 크론 로그 캐시 (5초 TTL) — 1.3MB 파일을 같은 요청에서 여러 번 읽지 않음 ──
+let _cronLogCache = '';
+let _cronLogCacheAt = 0;
+function getCronLogCached(): string {
+  const now = Date.now();
+  if (now - _cronLogCacheAt > 5000) {
+    _cronLogCache = readSafe(CRON_LOG);
+    _cronLogCacheAt = now;
+  }
+  return _cronLogCache;
+}
+
+// ── Discord 봇 상태 캐시 (10초 TTL) — pgrep 매 요청마다 blocking 방지 ──
+let _botStatusCache: { running: boolean; pid: string | null } = { running: false, pid: null };
+let _botStatusCacheAt = 0;
+
 function readJsonSafe<T>(filePath: string, fallback: T): T {
   try { return JSON.parse(readFileSync(filePath, 'utf8')) as T; } catch { return fallback; }
 }
@@ -160,10 +176,9 @@ interface CronEntry {
 }
 
 function parseCronLog(keywords: string[], limit = 20): CronEntry[] {
-  // SSoT: lib/map/cron-log-parser.ts
-  const raw = readSafe(CRON_LOG);
+  // SSoT: lib/map/cron-log-parser.ts — 캐시된 로그 사용
+  const raw = getCronLogCached();
   const entries = parseCronLogShared(raw, keywords, { limit });
-  // 기존 CronEntry 필드 호환을 위해 message 길이를 120자로 trim
   return entries.map(e => ({
     time: e.time,
     task: e.task,
@@ -173,14 +188,14 @@ function parseCronLog(keywords: string[], limit = 20): CronEntry[] {
 }
 
 function getCronStats24h(keywords: string[]): { total: number; success: number; failed: number; rate: number } {
-  // SSoT: lib/map/cron-stats.ts
-  const raw = readSafe(CRON_LOG);
+  // SSoT: lib/map/cron-stats.ts — 캐시된 로그 사용
+  const raw = getCronLogCached();
   const s = computeCronStats24h(raw, keywords);
   return { total: s.total, success: s.success, failed: s.failed, rate: s.rate };
 }
 
 function getFailedTaskNames(keywords: string[]): string[] {
-  const raw = readSafe(CRON_LOG);
+  const raw = getCronLogCached();
   if (!raw) return [];
   const lines = raw.split('\n').filter(Boolean).slice(-3000);
   const KST_OFFSET = 9 * 3600_000;
@@ -275,11 +290,17 @@ function getDiskUsage(): { percent: number; used: string; total: string } {
 }
 
 function getDiscordBotStatus(): { running: boolean; pid: string | null } {
+  const now = Date.now();
+  if (now - _botStatusCacheAt < 10000) return _botStatusCache;
   try {
-    const out = execSync('pgrep -f "discord-bot.js" 2>/dev/null || true', { timeout: 3000 }).toString().trim();
-    const pid = out.split('\n')[0];
-    return { running: !!pid, pid: pid || null };
-  } catch { return { running: false, pid: null }; }
+    const r = spawnSync('pgrep', ['-f', 'discord-bot.js'], { timeout: 1500, encoding: 'utf8' });
+    const pid = (r.stdout || '').trim().split('\n')[0];
+    _botStatusCache = { running: !!pid, pid: pid || null };
+  } catch {
+    _botStatusCache = { running: false, pid: null };
+  }
+  _botStatusCacheAt = now;
+  return _botStatusCache;
 }
 
 function getStatusColor(rate: number): 'GREEN' | 'YELLOW' | 'RED' {
