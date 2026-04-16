@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { execFileSync, spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { homedir } from 'os';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
@@ -756,7 +757,7 @@ ${teamContext || '(수집된 데이터 없음)'}
           // ── Claude CLI (Max 구독, API 키 불필요) ────────────────────────────
           const cliPrompt = `${systemPrompt}\n\n---\n\n${userContent}`;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const cliEnv = { ...process.env, HOME: process.env.HOME || '/Users/ramsbaby' } as any;
+          const cliEnv = { ...process.env, HOME: process.env.HOME || homedir() } as any;
           delete cliEnv.NODE_OPTIONS;
           delete cliEnv.ANTHROPIC_API_KEY;
 

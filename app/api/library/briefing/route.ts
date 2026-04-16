@@ -6,7 +6,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
 import { getBriefingSystemMetrics } from '@/lib/map/system-metrics';
-import { RAG_DATA_DIR, RAG_INDEX_LOG } from '@/lib/jarvis-paths';
+import { RAG_DATA_DIR, RAG_INDEX_LOG, CLAUDE_MEMORY_DIR } from '@/lib/jarvis-paths';
 
 /**
  * 라이브러리(library) 브리핑 — 전사 지식 베이스 프론트엔드.
@@ -20,7 +20,8 @@ import { RAG_DATA_DIR, RAG_INDEX_LOG } from '@/lib/jarvis-paths';
  */
 
 const HOME = homedir();
-const MEMORY_DIR = path.join(HOME, '.claude', 'projects', '-Users-ramsbaby-jarvis', 'memory');
+// MEMORY_DIR → jarvis-paths.ts SSoT
+const MEMORY_DIR = CLAUDE_MEMORY_DIR;
 
 interface RichActivity {
   time: string;

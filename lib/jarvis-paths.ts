@@ -15,7 +15,7 @@
  */
 
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, userInfo } from 'os';
 
 /** ~/.jarvis 루트 */
 export const JARVIS_HOME = join(homedir(), '.jarvis');
@@ -47,6 +47,8 @@ export const JARVIS_BIN          = join(JARVIS_HOME, 'bin');
 // ── Wiki ──────────────────────────────────────────────────────────────────────
 export const WIKI_DIR            = join(JARVIS_HOME, 'wiki');
 
-// ── External (Claude CLI / cache) ─────────────────────────────────────────────
+// ── External (Claude CLI / cache / sessions / memory) ─────────────────────────
 export const CLAUDE_CLI          = join(homedir(), '.local', 'bin', 'claude');
 export const CLAUDE_USAGE_CACHE  = join(homedir(), '.claude', 'usage-cache.json');
+export const CLAUDE_SESSIONS_DIR = join(homedir(), '.claude', 'sessions');
+export const CLAUDE_MEMORY_DIR   = join(homedir(), '.claude', 'projects', `-Users-${userInfo().username}-jarvis`, 'memory');
