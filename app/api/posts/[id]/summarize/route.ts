@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import type { Post, Comment } from '@/lib/types';
+import { CLAUDE_HAIKU_4_5 } from '@/lib/chat-cost';
 
 async function callClaude(prompt: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -12,7 +13,7 @@ async function callClaude(prompt: string): Promise<string> {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: CLAUDE_HAIKU_4_5,
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     }),

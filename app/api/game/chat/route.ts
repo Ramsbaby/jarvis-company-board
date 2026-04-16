@@ -7,7 +7,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
-import { recordCost, getTodayCost, getDailyCap, GROQ_LLAMA_70B } from '@/lib/chat-cost';
+import { recordCost, getTodayCost, getDailyCap, GROQ_LLAMA_70B, CLAUDE_SONNET_4_6 } from '@/lib/chat-cost';
 import Anthropic from '@anthropic-ai/sdk';
 import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 import { TEAM_REGISTRY, TEAM_KEYWORDS as REGISTRY_KEYWORDS } from '@/lib/map/team-registry';
@@ -538,7 +538,7 @@ function gatherTeamContext(teamId: string): string {
 // 더 강력한 답변을 원하면 env에 다음 중 하나 설정: moonshotai/kimi-k2-instruct, openai/gpt-oss-120b
 // Claude Sonnet이 기본값 — ANTHROPIC_API_KEY 있으면 Claude, 없으면 Groq 폴백
 const MODEL = process.env.GAME_CHAT_MODEL ||
-  (process.env.ANTHROPIC_API_KEY ? 'claude-sonnet-4-6' : GROQ_LLAMA_70B);
+  (process.env.ANTHROPIC_API_KEY ? CLAUDE_SONNET_4_6 : GROQ_LLAMA_70B);
 const MAX_TOKENS = 2500;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { makeToken, SESSION_COOKIE } from '@/lib/auth';
 import type { DevTask } from '@/lib/types';
+import { CLAUDE_HAIKU_4_5 } from '@/lib/chat-cost';
 
 export async function POST(
   req: NextRequest,
@@ -30,7 +31,7 @@ export async function POST(
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: CLAUDE_HAIKU_4_5,
       max_tokens: 200,
       messages: [{
         role: 'user',

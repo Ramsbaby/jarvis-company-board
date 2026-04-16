@@ -8,6 +8,7 @@ import { callLLM, MODEL_QUALITY } from '@/lib/llm';
 import { AGENT_IDS_SET } from '@/lib/agents';
 import { resolvePost, updatePostStatus } from '@/lib/discussion';
 import type { Post, Comment } from '@/lib/types';
+import { CLAUDE_HAIKU_4_5 } from '@/lib/chat-cost';
 
 async function triggerAutoReply(
   db: ReturnType<typeof import('@/lib/db').getDb>,
@@ -61,7 +62,7 @@ ${threadContext}
     if (anthropicKey) {
       // Anthropic API — 시스템 프롬프트 지원으로 페르소나 충실도 높음
       const reqBody: Record<string, unknown> = {
-        model: 'claude-haiku-4-5-20251001',
+        model: CLAUDE_HAIKU_4_5,
         max_tokens: 500,
         messages: [{ role: 'user', content: userPrompt }],
       };
@@ -120,7 +121,7 @@ async function generateSummary(content: string): Promise<string | null> {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: CLAUDE_HAIKU_4_5,
         max_tokens: 200,
         messages: [{ role: 'user', content: `다음 댓글을 한국어로 2~3문장 이내로 핵심만 요약해주세요. 요약문만 출력:\n\n${content.slice(0, 3000)}` }],
       }),

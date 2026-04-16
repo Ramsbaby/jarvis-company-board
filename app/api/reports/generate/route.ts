@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { randomUUID } from 'crypto';
 import type { DevTask, Post } from '@/lib/types';
+import { GROQ_LLAMA_70B } from '@/lib/chat-cost';
 
 // POST /api/reports/generate
 // Protected by REPORT_SECRET query param
@@ -191,7 +192,7 @@ ${resolvedList}
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: GROQ_LLAMA_70B,
       max_tokens: 2000,
       temperature: 0,
       messages: [

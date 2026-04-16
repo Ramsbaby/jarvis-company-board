@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { getRequestAuth } from '@/lib/guest-guard';
 import { getFeedbackSystemPrompt, getEvaluatorSystemPrompt } from '@/lib/interview-data';
 import Anthropic from '@anthropic-ai/sdk';
+import { GROQ_LLAMA_70B, CLAUDE_SONNET_4_5 } from '@/lib/chat-cost';
 
 function nanoid() {
   return `iv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -135,7 +136,7 @@ async function runEvaluator(
       method: 'POST',
       headers: { 'Authorization': `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_LLAMA_70B,
         max_tokens: 300,
         temperature: 0.2,
         response_format: { type: 'json_object' },
@@ -263,7 +264,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  model: 'llama-3.3-70b-versatile',
+                  model: GROQ_LLAMA_70B,
                   max_tokens: 2500,
                   temperature: 0.3,
                   response_format: { type: 'json_object' },
@@ -332,7 +333,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         try {
           const claudeStream = anthropic.messages.stream({
-            model: 'claude-sonnet-4-5',
+            model: CLAUDE_SONNET_4_5,
             max_tokens: 2500,
             system: feedbackSystemPrompt,
             messages: [{ role: 'user', content: feedbackUserPrompt }],
@@ -395,7 +396,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_LLAMA_70B,
         max_tokens: 2500,
         temperature: 0.3,
         stream: true,

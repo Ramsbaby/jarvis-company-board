@@ -23,12 +23,14 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 // 두 route에서 이 상수를 import해서 사용할 것.
 export const GROQ_LLAMA_70B = 'llama-3.3-70b-versatile';
 export const CLAUDE_SONNET_4_5 = 'claude-sonnet-4-5';
-export const CLAUDE_HAIKU_4_5 = 'claude-haiku-4-5';
+export const CLAUDE_SONNET_4_6 = 'claude-sonnet-4-6';
+export const CLAUDE_HAIKU_4_5 = 'claude-haiku-4-5-20251001';
 export const CLAUDE_OPUS_4_5 = 'claude-opus-4-5';
 
 // USD per million tokens
 const RATES: Record<string, { input: number; output: number }> = {
   [CLAUDE_SONNET_4_5]: { input: 3, output: 15 },
+  [CLAUDE_SONNET_4_6]: { input: 3, output: 15 },
   [CLAUDE_HAIKU_4_5]: { input: 0.8, output: 4 },
   [CLAUDE_OPUS_4_5]: { input: 15, output: 75 },
   // Groq llama-3.3-70b-versatile (Groq 공식 요율)

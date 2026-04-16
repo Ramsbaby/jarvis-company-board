@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import type { Comment } from '@/lib/types';
+import { CLAUDE_HAIKU_4_5 } from '@/lib/chat-cost';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: CLAUDE_HAIKU_4_5,
         max_tokens: 200,
         messages: [{
           role: 'user',
