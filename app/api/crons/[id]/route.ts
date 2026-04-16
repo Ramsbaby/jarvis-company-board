@@ -97,8 +97,17 @@ export async function PATCH(
     return NextResponse.json({ success: true, message: '변경 사항이 없습니다.', task });
   }
 
-  // tasks.json 쓰기 (원본 포맷 유지)
+  // 안전 가드: tasks 배열이 비정상적으로 작으면 쓰기 거부 (파일 오염 방지)
+  if (tasksFile.tasks.length < 10) {
+    return NextResponse.json({
+      error: `안전 가드: tasks 배열이 ${tasksFile.tasks.length}개로 비정상입니다. 쓰기를 거부합니다.`,
+    }, { status: 500 });
+  }
+
+  // tasks.json 쓰기 (원본 포맷 유지) + 백업 생성
   try {
+    const backupPath = TASKS_JSON + '.bak-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '');
+    writeFileSync(backupPath, readFileSync(TASKS_JSON, 'utf-8'));
     writeFileSync(TASKS_JSON, JSON.stringify(tasksFile, null, 2) + '\n', 'utf-8');
   } catch (err) {
     return NextResponse.json({ error: `tasks.json 저장 실패: ${err}` }, { status: 500 });
