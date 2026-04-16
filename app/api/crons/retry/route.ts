@@ -14,6 +14,7 @@ interface TaskDef {
   name?: string;
   script?: string;
   prompt?: string;
+  prompt_file?: string;
   enabled?: boolean;
   discordChannel?: string;
 }
@@ -143,46 +144,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── LLM 프롬프트 전용 태스크: ask-claude.sh 를 detached 실행 ──
-    if (!task.script && task.prompt) {
-      const preview = task.prompt.replace(/\s+/g, ' ').trim().slice(0, 240);
-      const askClaude = path.join(JARVIS, 'bin', 'ask-claude.sh');
+    // ── LLM 태스크 (prompt 또는 prompt_file): jarvis-cron.sh를 detached 실행 ──
+    const isLlmTask = !task.script && (task.prompt || task.prompt_file);
+    if (isLlmTask) {
+      const preview = (task.prompt || `(prompt_file: ${task.prompt_file})`).replace(/\s+/g, ' ').trim().slice(0, 240);
+      // jarvis-cron.sh를 detached spawn (prompt_file 포함 모든 LLM 태스크)
+      const llmRunner = path.join(JARVIS, 'bin', 'jarvis-cron.sh');
 
-      if (!existsSync(askClaude)) {
+      if (!existsSync(llmRunner)) {
         return NextResponse.json<RetryResponse>({
           success: false,
-          message: 'ask-claude.sh 를 찾을 수 없습니다. LLM 태스크 재실행 불가.',
+          message: 'jarvis-cron.sh를 찾을 수 없습니다. LLM 태스크 재실행 불가.',
           alternativeActions: buildLlmAlternatives(task),
-          promptPreview: preview + (task.prompt.length > 240 ? '…' : ''),
+          promptPreview: preview,
           logPath: CRON_LOG,
-          logTailLines: 40,
-          stdout: tailCronLogForTask(cronId, 40),
         });
       }
 
-      // rate limit mark
       lastRetry.set(cronId, now);
 
-      // ask-claude.sh 를 detached + 분리 (stdout/stderr → 전용 파일)
-      // 인자: TASK_ID PROMPT [TOOLS] [TIMEOUT] [MAX_BUDGET]
       let pid: number | null = null;
       let spawnError: string | null = null;
       try {
         const child = spawn(
           'bash',
-          [askClaude, cronId, task.prompt, 'Read', '120'],
+          [llmRunner, cronId],
           {
             detached: true,
             stdio: 'ignore',
-            env: { ...process.env, HOME, PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin' },
+            env: { ...process.env, HOME, TASK_ID: cronId, PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin' },
           },
         );
         pid = child.pid ?? null;
         child.unref();
-        // 에러 핸들러 — 바로 실패하는 경우 (e.g. bash 없음)
-        child.on('error', (err) => {
-          spawnError = err.message;
-        });
+        child.on('error', (err) => { spawnError = err.message; });
       } catch (e) {
         spawnError = e instanceof Error ? e.message : String(e);
       }
@@ -192,18 +187,15 @@ export async function POST(req: NextRequest) {
           success: false,
           message: `백그라운드 실행 시작 실패: ${spawnError || 'PID 없음'}`,
           alternativeActions: buildLlmAlternatives(task),
-          promptPreview: preview + (task.prompt.length > 240 ? '…' : ''),
+          promptPreview: preview,
           logPath: CRON_LOG,
-          logTailLines: 40,
-          stdout: tailCronLogForTask(cronId, 40),
         });
       }
 
       return NextResponse.json<RetryResponse>({
         success: true,
-        message: `🚀 LLM 태스크 백그라운드 실행 시작 (PID ${pid}) — 최대 2분 이내 cron.log에 결과 기록`,
-        runnerCommand: `bash "${askClaude}" ${cronId} "<prompt>" Read 120`,
-        promptPreview: preview + (task.prompt.length > 240 ? '…' : ''),
+        message: `🚀 LLM 태스크 백그라운드 실행 시작 (PID ${pid}) — cron.log에 결과가 기록됩니다`,
+        promptPreview: preview,
         logPath: CRON_LOG,
         logTailLines: 20,
         stdout: tailCronLogForTask(cronId, 10) || '(기존 실행 이력 없음 — 결과가 곧 여기에 기록됩니다)',
