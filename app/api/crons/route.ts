@@ -16,6 +16,7 @@ interface TaskDef {
   name?: string;
   schedule?: string;
   enabled?: boolean;
+  disabled?: boolean;
   prompt?: string;
   script?: string;
   discordChannel?: string;
@@ -47,6 +48,7 @@ interface CronItem {
   priority: string;
   hasLLM: boolean;
   hasScript: boolean;
+  disabled?: boolean;
   recentRuns: RecentRun[];
 }
 
@@ -437,7 +439,8 @@ function buildCrons(): CronsResponse {
     // empty
   }
   const allTasks = tasksData.tasks || [];
-  const scheduled = allTasks.filter(t => t.enabled !== false && t.schedule);
+  // disabled 크론도 목록에 포함 (UI에서 토글 가능하도록)
+  const scheduled = allTasks.filter(t => !!t.schedule);
   const runs = parseLatestRuns();
   // 로그 디렉토리 목록을 1회만 읽어 각 태스크 처리에 재사용 — readdirSync O(n) 방지
   let logDirFiles: string[] | undefined;
@@ -490,6 +493,7 @@ function buildCrons(): CronsResponse {
       priority: task.priority || 'normal',
       hasLLM: !!task.prompt,
       hasScript: !!task.script,
+      disabled: !!task.disabled,
       recentRuns: entry?.history || [],
     };
   });

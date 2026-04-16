@@ -8,7 +8,7 @@ import {
   buildCollisionMap, aStarPath,
 } from '@/lib/map/rooms';
 import type { RoomDef, BriefingData, CronItem, NpcState } from '@/lib/map/rooms';
-import { drawRoomFurniture, drawDecorations } from '@/lib/map/canvas-draw';
+import { drawRoomFurniture, drawDecorations, getTintedShadow } from '@/lib/map/canvas-draw';
 import TeamBriefingPopup, { type ChatMessage } from '@/components/map/TeamBriefingPopup';
 import CronGridPopup from '@/components/map/CronGridPopup';
 import CronDetailPopup from '@/components/map/CronDetailPopup';
@@ -615,10 +615,10 @@ export default function VirtualOffice() {
 
       // 오픈 오피스 파드 — 벽 없음, 러그로 팀 구분 (실제 오피스 카펫 느낌)
       if (r.wallStyle === 'pod') {
-        // ── 1) 바닥 플랫폼 드롭섀도 (방이 바닥에서 떠 있는 느낌) ──
+        // ── 1) 바닥 플랫폼 드롭섀도 (teamColor tinted) ──
         ctx!.save();
         ctx!.shadowBlur = 22;
-        ctx!.shadowColor = 'rgba(0,0,0,0.72)';
+        ctx!.shadowColor = getTintedShadow(r.teamColor, 0.55);
         ctx!.shadowOffsetY = 6;
         ctx!.fillStyle = '#0e141f';
         ctx!.beginPath();
@@ -626,7 +626,7 @@ export default function VirtualOffice() {
         ctx!.fill();
         ctx!.restore();
 
-        // ── 2) 베이스 카펫 직조 패턴 ──
+        // ── 2) 베이스 카펫 직조 패턴 (풍부한 질감) ──
         ctx!.save();
         ctx!.beginPath();
         ctx!.rect(rx, ry, rw, rh);
@@ -637,10 +637,26 @@ export default function VirtualOffice() {
             const ty = ry + gy * T;
             ctx!.fillStyle = (gx + gy) % 2 === 0 ? '#151e2e' : '#111826';
             ctx!.fillRect(tx, ty, T, T);
+            // 십자 직조
             ctx!.fillStyle = 'rgba(60,80,130,0.15)';
             for (let i = 4; i < T; i += 8) {
               ctx!.fillRect(tx, ty + i, T, 1);
               ctx!.fillRect(tx + i, ty, 1, T);
+            }
+            // 대각선 섬유 (교차 직조)
+            ctx!.strokeStyle = 'rgba(80,100,150,0.06)';
+            ctx!.lineWidth = 0.5;
+            for (let d = 0; d < T; d += 8) {
+              ctx!.beginPath();
+              ctx!.moveTo(tx + d, ty);
+              ctx!.lineTo(tx, ty + d);
+              ctx!.stroke();
+            }
+            // 미세 파일 노이즈
+            const ns = (gx * 13 + gy * 29) % 255;
+            if (ns % 4 === 0) {
+              ctx!.fillStyle = 'rgba(70,90,140,0.10)';
+              ctx!.fillRect(tx + (ns % 14) + 3, ty + ((ns * 7) % 12) + 3, 1, 1);
             }
           }
         }
@@ -771,10 +787,10 @@ export default function VirtualOffice() {
       }
 
       // ── Closed room (다크 테마) ──────────────────────────────────
-      // 방 드롭 섀도
+      // 방 드롭 섀도 (teamColor tinted)
       ctx!.save();
       ctx!.shadowBlur = 16;
-      ctx!.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx!.shadowColor = getTintedShadow(r.teamColor, 0.55);
       ctx!.fillStyle = '#21262d';
       ctx!.fillRect(rx, ry, rw, rh);
       ctx!.restore();
@@ -809,17 +825,37 @@ export default function VirtualOffice() {
               // 우측 엣지 라인
               ctx!.fillStyle = 'rgba(0,0,0,0.35)';
               ctx!.fillRect(x + plankW - 1, y, 1, plankH);
-              // 결(grain) 2줄 — warm highlight on dark wood
-              ctx!.strokeStyle = 'rgba(200,150,80,0.18)';
+              // 결(grain) 3줄 — warm highlight on dark wood (다양한 밀도)
+              const grainAlpha = 0.14 + (rowIdx % 3) * 0.04;
+              ctx!.strokeStyle = `rgba(200,150,80,${grainAlpha})`;
               ctx!.lineWidth = 0.5;
               ctx!.beginPath();
-              ctx!.moveTo(x + 2, y + plankH * 0.35);
-              ctx!.bezierCurveTo(x + plankW * 0.3, y + plankH * 0.4, x + plankW * 0.7, y + plankH * 0.28, x + plankW - 2, y + plankH * 0.35);
+              ctx!.moveTo(x + 2, y + plankH * 0.28);
+              ctx!.bezierCurveTo(x + plankW * 0.25, y + plankH * 0.33, x + plankW * 0.75, y + plankH * 0.22, x + plankW - 2, y + plankH * 0.28);
               ctx!.stroke();
               ctx!.beginPath();
-              ctx!.moveTo(x + 2, y + plankH * 0.72);
-              ctx!.bezierCurveTo(x + plankW * 0.35, y + plankH * 0.78, x + plankW * 0.7, y + plankH * 0.68, x + plankW - 2, y + plankH * 0.72);
+              ctx!.moveTo(x + 2, y + plankH * 0.52);
+              ctx!.bezierCurveTo(x + plankW * 0.3, y + plankH * 0.56, x + plankW * 0.7, y + plankH * 0.48, x + plankW - 2, y + plankH * 0.52);
               ctx!.stroke();
+              ctx!.beginPath();
+              ctx!.moveTo(x + 2, y + plankH * 0.76);
+              ctx!.bezierCurveTo(x + plankW * 0.35, y + plankH * 0.82, x + plankW * 0.65, y + plankH * 0.72, x + plankW - 2, y + plankH * 0.76);
+              ctx!.stroke();
+              // 나무 옹이(knot) — deterministic 위치, 드물게
+              const knotSeed = (Math.floor(px / plankW) * 11 + rowIdx * 23) % 100;
+              if (knotSeed < 8) {
+                const kx = x + plankW * 0.3 + (knotSeed % 5) * plankW * 0.08;
+                const ky = y + plankH * 0.4 + (knotSeed % 3) * plankH * 0.1;
+                ctx!.fillStyle = 'rgba(40,25,5,0.35)';
+                ctx!.beginPath();
+                ctx!.ellipse(kx, ky, 3, 2, (knotSeed % 4) * 0.4, 0, Math.PI * 2);
+                ctx!.fill();
+                ctx!.strokeStyle = 'rgba(160,110,50,0.15)';
+                ctx!.lineWidth = 0.5;
+                ctx!.beginPath();
+                ctx!.ellipse(kx, ky, 4.5, 3, (knotSeed % 4) * 0.4, 0, Math.PI * 2);
+                ctx!.stroke();
+              }
             }
           }
           // 샹들리에 warm glow (천장 조명 반사)
@@ -867,6 +903,16 @@ export default function VirtualOffice() {
                   ctx!.arc(tx + px, ty + py, 0.8, 0, Math.PI * 2);
                   ctx!.fill();
                 }
+              }
+              // 미세 스크래치 (금속 바닥 마모 흔적, deterministic)
+              const scrSeed = (gx * 19 + gy * 37) % 100;
+              if (scrSeed < 25) {
+                ctx!.strokeStyle = 'rgba(160,170,190,0.06)';
+                ctx!.lineWidth = 0.5;
+                ctx!.beginPath();
+                ctx!.moveTo(tx + (scrSeed % 10) + 3, ty + ((scrSeed * 3) % 12) + 3);
+                ctx!.lineTo(tx + (scrSeed % 10) + 12, ty + ((scrSeed * 3) % 12) + 6);
+                ctx!.stroke();
               }
             }
           }
@@ -916,6 +962,16 @@ export default function VirtualOffice() {
               ctx!.fillStyle = 'rgba(0,0,0,0.5)';
               ctx!.fillRect(tx + 2, ty + mTile - 3, mTile - 4, 1);
               ctx!.fillRect(tx + mTile - 3, ty + 2, 1, mTile - 4);
+              // 대리석 반짝 (shimmer dots — 천연석 광택 느낌)
+              const mSeed = (gx * 23 + gy * 41) % 100;
+              if (mSeed < 15) {
+                ctx!.fillStyle = `rgba(180,200,255,${0.06 + (mSeed % 5) * 0.02})`;
+                ctx!.fillRect(tx + 6 + (mSeed % 20), ty + 8 + ((mSeed * 3) % 18), 1, 1);
+              }
+              if (mSeed > 60 && mSeed < 75) {
+                ctx!.fillStyle = 'rgba(220,210,180,0.05)';
+                ctx!.fillRect(tx + 12 + (mSeed % 14), ty + 14 + ((mSeed * 5) % 16), 2, 1);
+              }
             }
           }
           // 천장 조명 반사 (무대/프레젠테이션 느낌)
@@ -929,14 +985,14 @@ export default function VirtualOffice() {
           break;
         }
         default: {
-          // 일반 카펫 타일 (다크 오피스 카펫)
+          // 일반 카펫 타일 (다크 오피스 카펫 — 풍부한 직조 패턴)
           ctx!.save();
           ctx!.beginPath();
           ctx!.rect(rx, ry, rw, rh);
           ctx!.clip();
           ctx!.fillStyle = '#111826';
           ctx!.fillRect(rx, ry, rw, rh);
-          // 직조(weave) 패턴 — 체커
+          // 직조(weave) 패턴 — 체커 + 대각선 섬유
           for (let gy = 0; gy < r.h; gy++) {
             for (let gx = 0; gx < r.w; gx++) {
               const tx = rx + gx * T;
@@ -948,6 +1004,26 @@ export default function VirtualOffice() {
               for (let i = 4; i < T; i += 8) {
                 ctx!.fillRect(tx, ty + i, T, 1);
                 ctx!.fillRect(tx + i, ty, 1, T);
+              }
+              // 대각선 섬유 (교차 직조 — 카펫 질감)
+              ctx!.strokeStyle = 'rgba(80,100,150,0.08)';
+              ctx!.lineWidth = 0.5;
+              for (let d = 0; d < T; d += 6) {
+                ctx!.beginPath();
+                ctx!.moveTo(tx + d, ty);
+                ctx!.lineTo(tx, ty + d);
+                ctx!.stroke();
+                ctx!.beginPath();
+                ctx!.moveTo(tx + T - d, ty);
+                ctx!.lineTo(tx + T, ty + d);
+                ctx!.stroke();
+              }
+              // 미세 노이즈 점 (카펫 파일 질감, deterministic seed)
+              const seed = (gx * 17 + gy * 31) % 255;
+              if (seed % 3 === 0) {
+                ctx!.fillStyle = 'rgba(80,100,140,0.12)';
+                ctx!.fillRect(tx + (seed % 12) + 4, ty + ((seed * 7) % 12) + 4, 1, 1);
+                ctx!.fillRect(tx + ((seed * 3) % 16) + 6, ty + ((seed * 5) % 14) + 8, 1, 1);
               }
             }
           }
@@ -994,9 +1070,9 @@ export default function VirtualOffice() {
       const isClosed = r.wallStyle === 'closed';
       if (isClosed) {
         const WALL = 9; // 두꺼운 벽
-        // ── 드롭 섀도 (외부) ──
+        // ── 드롭 섀도 (외부, teamColor tinted) ──
         ctx!.save();
-        ctx!.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx!.shadowColor = getTintedShadow(r.teamColor, 0.55);
         ctx!.shadowBlur = 20;
         ctx!.shadowOffsetX = 4;
         ctx!.shadowOffsetY = 6;
@@ -1020,16 +1096,16 @@ export default function VirtualOffice() {
         ctx!.fillStyle = ceilingGrd;
         ctx!.fillRect(rx, ry, rw, WALL + 4);
 
-        // Top highlight (상단 엣지 — 조명 반사)
-        ctx!.fillStyle = '#30363d';
+        // Top highlight (상단 엣지 — 밝은 림 라이트)
+        ctx!.fillStyle = 'rgba(140,160,200,0.50)';
         ctx!.fillRect(rx + 1, ry, rw - 2, 1);
-        ctx!.fillStyle = 'rgba(80,95,115,0.6)';
+        ctx!.fillStyle = 'rgba(100,120,160,0.35)';
         ctx!.fillRect(rx + 1, ry + 1, rw - 2, 1);
 
-        // Left highlight (조명 왼쪽)
-        ctx!.fillStyle = 'rgba(80,95,115,0.4)';
+        // Left highlight (조명 왼쪽 — 밝은 엣지)
+        ctx!.fillStyle = 'rgba(100,120,160,0.30)';
         ctx!.fillRect(rx, ry + 1, 1, rh - 2);
-        ctx!.fillStyle = 'rgba(70,85,105,0.3)';
+        ctx!.fillStyle = 'rgba(80,100,140,0.20)';
         ctx!.fillRect(rx + 1, ry + 2, 1, rh - 4);
 
         // Right/Bottom shadow
@@ -1057,6 +1133,36 @@ export default function VirtualOffice() {
         ctx!.strokeStyle = 'rgba(180,190,210,0.4)';
         ctx!.lineWidth = 1;
         ctx!.strokeRect(rx + WALL, ry + WALL, rw - WALL * 2, rh - WALL * 2);
+
+        // ── 앰비언트 오클루전 (벽-바닥 경계 어둡게) ──
+        // 상단 벽-바닥 AO (가장 강함 — 천장 그림자)
+        const aoSize = 12;
+        const aoTop = ctx!.createLinearGradient(rx, ry + WALL, rx, ry + WALL + aoSize);
+        aoTop.addColorStop(0, 'rgba(0,0,0,0.22)');
+        aoTop.addColorStop(1, 'transparent');
+        ctx!.fillStyle = aoTop;
+        ctx!.fillRect(rx + WALL, ry + WALL, rw - WALL * 2, aoSize);
+
+        // 좌측 벽-바닥 AO
+        const aoLeft = ctx!.createLinearGradient(rx + WALL, ry, rx + WALL + aoSize, ry);
+        aoLeft.addColorStop(0, 'rgba(0,0,0,0.15)');
+        aoLeft.addColorStop(1, 'transparent');
+        ctx!.fillStyle = aoLeft;
+        ctx!.fillRect(rx + WALL, ry + WALL, aoSize, rh - WALL * 2);
+
+        // 우측 벽-바닥 AO
+        const aoRight = ctx!.createLinearGradient(rx + rw - WALL, ry, rx + rw - WALL - aoSize, ry);
+        aoRight.addColorStop(0, 'rgba(0,0,0,0.15)');
+        aoRight.addColorStop(1, 'transparent');
+        ctx!.fillStyle = aoRight;
+        ctx!.fillRect(rx + rw - WALL - aoSize, ry + WALL, aoSize, rh - WALL * 2);
+
+        // 하단 벽-바닥 AO
+        const aoBottom = ctx!.createLinearGradient(rx, ry + rh - WALL, rx, ry + rh - WALL - aoSize);
+        aoBottom.addColorStop(0, 'rgba(0,0,0,0.18)');
+        aoBottom.addColorStop(1, 'transparent');
+        ctx!.fillStyle = aoBottom;
+        ctx!.fillRect(rx + WALL, ry + rh - WALL - aoSize, rw - WALL * 2, aoSize);
 
         // 유리창 — 상단 벽 (진짜 유리 느낌: 프레임 + 반사)
         if (r.type !== 'cron') {

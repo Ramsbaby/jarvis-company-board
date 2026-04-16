@@ -788,23 +788,26 @@ ${teamContext || '(수집된 데이터 없음)'}
           delete cliEnv.NODE_OPTIONS;
           delete cliEnv.ANTHROPIC_API_KEY;
 
-          // Keepalive: 20초마다 SSE ping (Cloudflare 100s 타임아웃 방지)
+          // Claude CLI stream-json: 실시간 토큰 스트리밍
           const keepaliveTimer = setInterval(() => {
             safeEnqueue(': ping\n\n');
           }, 20000);
 
           try {
-            const cliText = await new Promise<string>((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
               const proc = spawn(CLAUDE_CLI, [
                 '-p',
                 '--model', 'sonnet',
-                '--output-format', 'text',
+                '--output-format', 'stream-json',
+                '--verbose',
                 '--no-session-persistence',
                 '--permission-mode', 'bypassPermissions',
                 '--add-dir', JARVIS_HOME,
               ], { stdio: 'pipe', env: cliEnv, cwd: JARVIS_HOME });
-              let out = '';
               let errOut = '';
+              let lineBuf = '';
+              let lastText = '';
+
               if (proc.stdin) {
                 proc.stdin.write(cliPrompt, 'utf8');
                 proc.stdin.end();
@@ -812,25 +815,50 @@ ${teamContext || '(수집된 데이터 없음)'}
                 reject(new Error('claude CLI stdin is null'));
                 return;
               }
-              proc.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+
+              proc.stdout?.on('data', (chunk: Buffer) => {
+                if (aborted) return;
+                lineBuf += chunk.toString();
+                let nlIdx;
+                while ((nlIdx = lineBuf.indexOf('\n')) !== -1) {
+                  const line = lineBuf.slice(0, nlIdx).trim();
+                  lineBuf = lineBuf.slice(nlIdx + 1);
+                  if (!line) continue;
+                  try {
+                    const evt = JSON.parse(line);
+                    // assistant 메시지에서 텍스트 추출 (incremental diff)
+                    if (evt.type === 'assistant' && evt.message?.content) {
+                      for (const block of evt.message.content) {
+                        if (block.type === 'text' && block.text && block.text !== lastText) {
+                          const newPart = block.text.slice(lastText.length);
+                          if (newPart) {
+                            fullText += newPart;
+                            safeEnqueue(`data: ${JSON.stringify({ token: newPart })}\n\n`);
+                            maybeUpdate();
+                          }
+                          lastText = block.text;
+                        }
+                      }
+                    }
+                    // result 이벤트에서 usage 추출
+                    if (evt.type === 'result') {
+                      inputTokens = evt.usage?.input_tokens ?? Math.ceil(cliPrompt.length / 4);
+                      outputTokens = evt.usage?.output_tokens ?? Math.ceil(fullText.length / 4);
+                    }
+                  } catch { /* 비-JSON 라인 무시 */ }
+                }
+              });
               proc.stderr?.on('data', (chunk: Buffer) => { errOut += chunk.toString(); });
               proc.on('close', (code) => {
                 if (code !== 0) {
-                  console.error('[claude-cli fail]', errOut.slice(0, 500) || out.slice(0, 500));
+                  console.error('[claude-cli fail]', errOut.slice(0, 500));
                   reject(new Error(`claude CLI exit ${code}: ${errOut.slice(0, 200)}`));
                   return;
                 }
-                resolve(out.trim());
+                resolve();
               });
               proc.on('error', reject);
             });
-            fullText = cliText;
-            if (fullText) {
-              safeEnqueue(`data: ${JSON.stringify({ token: fullText })}\n\n`);
-              maybeUpdate();
-              inputTokens = Math.ceil(cliPrompt.length / 4);
-              outputTokens = Math.ceil(fullText.length / 4);
-            }
           } finally {
             clearInterval(keepaliveTimer);
           }

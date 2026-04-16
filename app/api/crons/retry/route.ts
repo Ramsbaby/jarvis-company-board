@@ -243,7 +243,9 @@ export async function POST(req: NextRequest) {
 
     // ── 스크립트 실행 ──
     lastRetry.set(cronId, now);
-    const scriptPath = task.script.startsWith('/') ? task.script : path.join(JARVIS, task.script);
+    // ~ → 절대경로 resolve (tasks.json에 "~/.jarvis/scripts/..." 형태로 저장됨)
+    const rawScript = task.script.startsWith('~') ? task.script.replace(/^~/, HOME) : task.script;
+    const scriptPath = rawScript.startsWith('/') ? rawScript : path.join(JARVIS, rawScript);
     const scriptExists = existsSync(scriptPath);
     if (!scriptExists) {
       return NextResponse.json<RetryResponse>({

@@ -448,6 +448,9 @@ export default function CronDetailPopup({
             );
           })()}
 
+          {/* 크론 제어 + 로그 */}
+          <CronControlBar cronId={cronPopup.id} isDisabled={!!cronPopup.disabled} />
+
           {/* 액션 버튼 바 */}
           <ActionBar cronId={cronPopup.id} status={cronPopup.status} statusColor={statusColor}
             lastMessage={cronPopup.lastMessage} outputSummary={cronPopup.outputSummary}
@@ -767,6 +770,96 @@ function RetryResultCard({ result, onCopy }: { result: RetryFullResponse; onCopy
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 크론 제어 바: 활성화/비활성화 토글 + 로그 보기 ──
+function CronControlBar({ cronId, isDisabled }: { cronId: string; isDisabled: boolean }) {
+  const [enabled, setEnabled] = React.useState(!isDisabled);
+  const [toggling, setToggling] = React.useState(false);
+  const [showLogs, setShowLogs] = React.useState(false);
+  const [logs, setLogs] = React.useState<Array<{ title: string; content: string }> | null>(null);
+  const [loadingLogs, setLoadingLogs] = React.useState(false);
+
+  const handleToggle = async () => {
+    setToggling(true);
+    try {
+      const res = await fetch(`/api/crons/${cronId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEnabled(!enabled);
+      }
+    } catch { /* ignore */ }
+    setToggling(false);
+  };
+
+  const handleLoadLogs = async () => {
+    if (showLogs) { setShowLogs(false); return; }
+    setLoadingLogs(true);
+    try {
+      const res = await fetch(`/api/crons/${cronId}/logs?lines=80`);
+      const data = await res.json();
+      setLogs(data.sections || []);
+      setShowLogs(true);
+    } catch { setLogs([{ title: '오류', content: '로그를 불러올 수 없습니다.' }]); setShowLogs(true); }
+    setLoadingLogs(false);
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* 활성화/비활성화 토글 */}
+        <button
+          onClick={handleToggle}
+          disabled={toggling}
+          style={{
+            flex: 1, padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+            cursor: toggling ? 'wait' : 'pointer',
+            background: enabled ? 'rgba(34,197,94,0.12)' : 'rgba(248,81,73,0.12)',
+            border: `1px solid ${enabled ? '#22c55e40' : '#f8514940'}`,
+            color: enabled ? '#22c55e' : '#f85149',
+            transition: 'all 0.2s',
+          }}
+        >
+          {toggling ? '⏳ 변경 중...' : enabled ? '✅ 활성화됨 — 클릭하여 비활성화' : '⛔ 비활성화됨 — 클릭하여 활성화'}
+        </button>
+        {/* 로그 보기 */}
+        <button
+          onClick={handleLoadLogs}
+          disabled={loadingLogs}
+          style={{
+            padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+            cursor: loadingLogs ? 'wait' : 'pointer',
+            background: showLogs ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${showLogs ? '#60a5fa40' : 'rgba(255,255,255,0.1)'}`,
+            color: showLogs ? '#60a5fa' : '#8094b0',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {loadingLogs ? '⏳' : '📋'} 로그
+        </button>
+      </div>
+      {/* 로그 표시 영역 */}
+      {showLogs && logs && (
+        <div style={{ marginTop: 10, maxHeight: 300, overflowY: 'auto' }}>
+          {logs.map((section, i) => (
+            <div key={i} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{section.title}</div>
+              <pre style={{
+                fontSize: 11, color: '#8b949e', background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8,
+                padding: '10px 12px', overflowX: 'auto', whiteSpace: 'pre-wrap',
+                maxHeight: 200, lineHeight: 1.5,
+              }}>{section.content}</pre>
+            </div>
+          ))}
         </div>
       )}
     </div>

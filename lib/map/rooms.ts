@@ -260,6 +260,7 @@ export interface CronItem {
   priority: string;
   hasLLM: boolean;
   hasScript: boolean;
+  disabled?: boolean;
   recentRuns: RecentRun[];
 }
 

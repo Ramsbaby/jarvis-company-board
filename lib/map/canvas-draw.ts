@@ -14,6 +14,30 @@
 import type { RoomDef, CronItem } from '@/lib/map/rooms';
 import { T, getCronTilePos } from '@/lib/map/rooms';
 
+// ── Helper: teamColor → tinted shadow color ──
+// Warm tones (gold/amber/red/orange) get a warm brown shadow,
+// cool tones (green/blue/teal/purple/slate) get a cool blue shadow.
+export function getTintedShadow(teamColor: string, alpha = 0.18): string {
+  // Parse hex → hue to classify warm vs cool
+  const hex = teamColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0;
+  if (max !== min) {
+    const d = max - min;
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  // Warm: hue 0-60 (red→yellow) or 330-360 (magenta-red)
+  const isWarm = (h >= 0 && h <= 65) || h >= 330;
+  return isWarm
+    ? `rgba(80,40,0,${alpha})`   // warm brown shadow
+    : `rgba(0,30,80,${alpha})`;  // cool blue shadow
+}
+
 // ── Helper: draw a small pixel-art chair ──
 export function drawChair(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string) {
   // Contact shadow
@@ -52,33 +76,78 @@ export function drawChair(ctx: CanvasRenderingContext2D, cx: number, cy: number,
 
 // ── Helper: draw a small monitor ──
 export function drawMonitor(ctx: CanvasRenderingContext2D, mx: number, my: number, screenW: number, screenH: number, screenColor: string, standColor: string) {
-  // Stand shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.fillRect(mx + screenW / 2 - 6, my + screenH + 6, 12, 2);
-  // Outer bezel (dark frame)
+  // Stand shadow (soft ellipse)
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.beginPath();
+  ctx.ellipse(mx + screenW / 2, my + screenH + 7, 7, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Outer bezel (dark frame with subtle bevel)
+  ctx.fillStyle = '#12161f';
+  ctx.fillRect(mx - 2, my - 2, screenW + 4, screenH + 4);
   ctx.fillStyle = '#1a1f2e';
   ctx.fillRect(mx - 1, my - 1, screenW + 2, screenH + 2);
+  // Bezel top highlight (light source from above)
+  ctx.fillStyle = 'rgba(100,120,150,0.25)';
+  ctx.fillRect(mx - 1, my - 2, screenW + 2, 1);
+
   // Screen bezel
   ctx.fillStyle = '#21262d';
   ctx.fillRect(mx, my, screenW, screenH);
-  // Screen content
-  ctx.fillStyle = screenColor;
+
+  // Screen content — gradient background (top brighter, bottom darker)
+  const screenGrd = ctx.createLinearGradient(mx, my + 2, mx, my + screenH - 2);
+  screenGrd.addColorStop(0, screenColor);
+  screenGrd.addColorStop(1, '#0a0e17');
+  ctx.fillStyle = screenGrd;
   ctx.fillRect(mx + 2, my + 2, screenW - 4, screenH - 4);
-  // Screen inner glow
+
+  // Screen center glow (radial bloom — simulates backlight bleed)
   const sw2 = screenW / 2, sh2 = screenH / 2;
   const glowGrd = ctx.createRadialGradient(mx + sw2, my + sh2, 0, mx + sw2, my + sh2, Math.max(sw2, sh2));
-  glowGrd.addColorStop(0, 'rgba(255,255,255,0.08)');
+  glowGrd.addColorStop(0, 'rgba(180,210,255,0.12)');
+  glowGrd.addColorStop(0.5, 'rgba(100,140,200,0.06)');
   glowGrd.addColorStop(1, 'transparent');
   ctx.fillStyle = glowGrd;
   ctx.fillRect(mx + 2, my + 2, screenW - 4, screenH - 4);
-  // Reflection streak
+
+  // Scanlines (subtle CRT/LCD subpixel feel, every 3px)
+  ctx.fillStyle = 'rgba(0,0,0,0.07)';
+  for (let sy = my + 3; sy < my + screenH - 2; sy += 3) {
+    ctx.fillRect(mx + 2, sy, screenW - 4, 1);
+  }
+
+  // Reflection streak — brighter diagonal highlight (upper-left corner)
+  const reflGrd = ctx.createLinearGradient(mx + 2, my + 2, mx + screenW * 0.4, my + screenH * 0.5);
+  reflGrd.addColorStop(0, 'rgba(255,255,255,0.18)');
+  reflGrd.addColorStop(0.3, 'rgba(255,255,255,0.06)');
+  reflGrd.addColorStop(1, 'transparent');
+  ctx.fillStyle = reflGrd;
+  ctx.fillRect(mx + 2, my + 2, screenW - 4, screenH - 4);
+
+  // Edge reflection lines (top + left, simulating glass)
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillRect(mx + 2, my + 2, Math.max(3, screenW * 0.35), 1);
   ctx.fillStyle = 'rgba(255,255,255,0.10)';
-  ctx.fillRect(mx + 2, my + 2, Math.max(3, screenW * 0.3), 1);
-  ctx.fillRect(mx + 2, my + 2, 1, Math.max(2, screenH * 0.5));
-  // Stand
-  ctx.fillStyle = standColor;
+  ctx.fillRect(mx + 2, my + 3, 1, Math.max(2, screenH * 0.4));
+
+  // Bottom screen edge glow (light spill onto bezel)
+  ctx.fillStyle = 'rgba(100,160,255,0.06)';
+  ctx.fillRect(mx + 2, my + screenH - 3, screenW - 4, 2);
+
+  // Stand (metallic gradient)
+  const standGrd = ctx.createLinearGradient(mx + screenW / 2 - 3, my + screenH, mx + screenW / 2 + 3, my + screenH);
+  standGrd.addColorStop(0, standColor);
+  standGrd.addColorStop(0.5, '#4a5568');
+  standGrd.addColorStop(1, standColor);
+  ctx.fillStyle = standGrd;
   ctx.fillRect(mx + screenW / 2 - 2, my + screenH, 4, 5);
+  // Stand base
+  ctx.fillStyle = standColor;
   ctx.fillRect(mx + screenW / 2 - 5, my + screenH + 4, 10, 3);
+  // Base top highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(mx + screenW / 2 - 5, my + screenH + 4, 10, 1);
 }
 
 // ── Helper: draw a potted plant (dark corporate — vivid on dark bg) ──
@@ -124,9 +193,9 @@ function drawSimplePod(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw
   const cx = rx + rw / 2;
   const cy = ry + rh / 2;
 
-  // ── 오브젝트 그림자 ──
+  // ── 오브젝트 그림자 (teamColor tinted) ──
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowColor = getTintedShadow(teamColor, 0.45);
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 3;
 
@@ -163,13 +232,22 @@ function drawSimplePod(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw
   // ── 메인 모니터 ──
   drawMonitor(ctx, cx - T * 0.42, cy - T * 1.05, T * 0.9, T * 0.55, teamColor + '28', '#2d3340');
 
-  // ── 모니터 화면: 코드 라인 시뮬레이션 ──
-  for (let li = 0; li < 4; li++) {
-    const lineW = [T * 0.35, T * 0.55, T * 0.28, T * 0.45][li];
-    const lineColor = li === 0 ? teamColor + '70' : li === 1 ? '#22c55e50' : li === 2 ? '#58a6ff50' : '#c9d1d940';
-    ctx.fillStyle = lineColor;
-    ctx.fillRect(cx - T * 0.35, cy - T * 0.94 + li * 5, lineW, 2);
+  // ── 모니터 화면: IDE 코드 라인 (indent + syntax color) ──
+  const codeLines = [
+    { indent: 0, w: T * 0.35, color: teamColor + '70' },
+    { indent: 2, w: T * 0.50, color: '#22c55e60' },
+    { indent: 2, w: T * 0.22, color: '#58a6ff55' },
+    { indent: 4, w: T * 0.40, color: '#c9d1d950' },
+    { indent: 2, w: T * 0.30, color: teamColor + '50' },
+  ];
+  for (let li = 0; li < codeLines.length; li++) {
+    const cl = codeLines[li];
+    ctx.fillStyle = cl.color;
+    ctx.fillRect(cx - T * 0.35 + cl.indent, cy - T * 0.94 + li * 4, cl.w, 1.5);
   }
+  // Line numbers gutter (very subtle)
+  ctx.fillStyle = 'rgba(100,120,160,0.20)';
+  ctx.fillRect(cx - T * 0.38, cy - T * 0.96, 1, codeLines.length * 4 + 2);
 
   // ── 키보드 (데스크 위) ──
   ctx.fillStyle = '#252d3a';
@@ -222,7 +300,7 @@ function drawExecutiveFurniture(
   teamColor: string, label: string,
 ) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowColor = getTintedShadow(teamColor, 0.50);
   ctx.shadowBlur = 12;
   ctx.shadowOffsetY = 4;
 
@@ -372,7 +450,7 @@ function drawStandardFurniture(
   teamColor: string, variant: 'meeting' | 'server',
 ) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowColor = getTintedShadow(teamColor, 0.45);
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 3;
 
@@ -382,10 +460,10 @@ function drawStandardFurniture(
     const tcy = ry + _rh / 2 - T * 0.2;
     const tR = T * 1.3;
 
-    // 테이블 그림자
+    // 테이블 그림자 (teamColor tinted)
     ctx.restore();
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowColor = getTintedShadow(teamColor, 0.50);
     ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 5;
     // 테이블 상면 (원형)
