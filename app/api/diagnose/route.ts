@@ -5,7 +5,8 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { checkAndConsume, getKey } from '@/lib/rate-limit';
 import { recordCost, getTodayCost, getDailyCap, computeCostUsd, GROQ_LLAMA_70B } from '@/lib/chat-cost';
-import { CRON_LOG, TASKS_JSON } from '@/lib/jarvis-paths';
+import { CRON_LOG } from '@/lib/jarvis-paths';
+import { getTask } from '@/lib/task-types';
 
 // Groq llama-3.3-70b-versatile (OpenAI 호환, JSON 모드 지원)
 // MODEL 문자열은 lib/chat-cost.ts SSoT에서 import — typo 시 price table miss → costUsd=0 방지
@@ -14,17 +15,6 @@ const MAX_TOKENS = 800;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const RATE_LIMIT = { perMin: 10, perDay: 100 };
 
-interface TaskDef {
-  id: string;
-  name?: string;
-  description?: string;
-  prompt?: string;
-  schedule?: string;
-}
-
-interface TasksFile {
-  tasks: TaskDef[];
-}
 
 interface DiagnoseResult {
   causes: string[];
@@ -46,17 +36,8 @@ function readCronTail(maxLines = 500): string[] {
   }
 }
 
-function readTaskDef(cronId: string): TaskDef | null {
-  const file = TASKS_JSON;
-  if (!existsSync(file)) return null;
-  try {
-    const raw = readFileSync(file, 'utf8');
-    const parsed = JSON.parse(raw) as TasksFile;
-    if (!Array.isArray(parsed.tasks)) return null;
-    return parsed.tasks.find((t) => t.id === cronId) ?? null;
-  } catch {
-    return null;
-  }
+function readTaskDef(cronId: string) {
+  return getTask(cronId) ?? null;
 }
 
 function extractCronEntries(lines: string[], cronId: string, max = 20): string[] {

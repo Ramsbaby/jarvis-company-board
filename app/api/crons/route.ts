@@ -6,23 +6,12 @@ import type { CronItem, CronStatus, RecentRun } from '@/lib/map/rooms';
 import { TEAM_REGISTRY } from '@/lib/map/team-registry';
 import path from 'path';
 import { MAP_CACHE_TTL_MS } from '@/lib/cache-config';
-import { TASKS_JSON as TASKS_FILE, CRON_LOG, LOGS_DIR as LOG_DIR } from '@/lib/jarvis-paths';
+import { CRON_LOG, LOGS_DIR as LOG_DIR } from '@/lib/jarvis-paths';
+import { type TaskDef, getTasksFile } from '@/lib/task-types';
 const MAX_LOG_READ_BYTES = 8000;
 
 let cache: { data: CronsResponse; ts: number } | null = null;
 
-interface TaskDef {
-  id: string;
-  name?: string;
-  schedule?: string;
-  enabled?: boolean;
-  disabled?: boolean;
-  prompt?: string;
-  script?: string;
-  discordChannel?: string;
-  priority?: string;
-  description?: string;
-}
 
 interface CronsResponse {
   crons: CronItem[];
@@ -392,13 +381,7 @@ function readStderrExcerpt(taskId: string, logDirFiles?: string[]): string {
 
 // ── 메인 ─────────────────────────────────────────────────────────
 function buildCrons(): CronsResponse {
-  let tasksData: { tasks: TaskDef[] } = { tasks: [] };
-  try {
-    tasksData = JSON.parse(readFileSync(TASKS_FILE, 'utf8'));
-  } catch {
-    // empty
-  }
-  const allTasks = tasksData.tasks || [];
+  const allTasks = getTasksFile().tasks;
   // disabled 크론도 목록에 포함 (UI에서 토글 가능하도록)
   const scheduled = allTasks.filter(t => !!t.schedule);
   const runs = parseLatestRuns();

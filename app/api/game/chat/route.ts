@@ -12,6 +12,7 @@ import { CHAT_CONTEXT_TTL_MS } from '@/lib/cache-config';
 import { TEAM_REGISTRY, TEAM_KEYWORDS as REGISTRY_KEYWORDS } from '@/lib/map/team-registry';
 import { computeCronStats24h } from '@/lib/map/cron-stats';
 import { JARVIS_HOME, CLAUDE_CLI } from '@/lib/jarvis-paths';
+import { type TaskDef, getTasksFile } from '@/lib/task-types';
 
 // 공통 NPC 행동 규칙 — 캐릭터 몰입 유지 + 적극적 대응
 const NPC_RULES = `
@@ -117,36 +118,9 @@ function botStatus(): string {
 
 // ── 팀 뇌를 만드는 도우미들 ─────────────────────────────────────
 
-interface TaskDefFull {
-  id: string;
-  name?: string;
-  description?: string;
-  schedule?: string;
-  prompt?: string;
-  script?: string;
-  discordChannel?: string;
-  priority?: string;
-  enabled?: boolean;
-  disabled?: boolean;
-}
-
-let tasksJsonCache: { data: TaskDefFull[]; ts: number } | null = null;
-function loadTasksJson(): TaskDefFull[] {
-  if (tasksJsonCache && Date.now() - tasksJsonCache.ts < 15_000) return tasksJsonCache.data;
-  try {
-    const raw = readFileSync(path.join(JARVIS_HOME, 'config', 'tasks.json'), 'utf8');
-    const parsed = JSON.parse(raw) as { tasks?: TaskDefFull[] };
-    const list = Array.isArray(parsed.tasks) ? parsed.tasks : [];
-    tasksJsonCache = { data: list, ts: Date.now() };
-    return list;
-  } catch {
-    return [];
-  }
-}
-
-function teamOwnedTasks(keywords: string[]): TaskDefFull[] {
+function teamOwnedTasks(keywords: string[]): TaskDef[] {
   if (keywords.length === 0) return [];
-  const tasks = loadTasksJson();
+  const tasks = getTasksFile().tasks;
   const kwLower = keywords.map(k => k.toLowerCase());
   return tasks.filter(t => {
     if (t.disabled || t.enabled === false) return false;
@@ -232,7 +206,7 @@ function recentResultsFor(taskId: string, maxFiles = 2, maxBytesPerFile = 1500):
 }
 
 // 팀의 여러 태스크 중 최신 산출물이 있는 것만 2~3개 샘플
-function sampleRecentResults(ownedTasks: TaskDefFull[], maxSamples = 2): string {
+function sampleRecentResults(ownedTasks: TaskDef[], maxSamples = 2): string {
   if (ownedTasks.length === 0) return '';
   // results/ 디렉토리가 존재하는 태스크 우선
   const candidates: Array<{ id: string; mtime: number }> = [];
@@ -259,7 +233,7 @@ function sampleRecentResults(ownedTasks: TaskDefFull[], maxSamples = 2): string 
   return sections.join('\n\n');
 }
 
-function upcomingSchedulesFor(ownedTasks: TaskDefFull[]): string {
+function upcomingSchedulesFor(ownedTasks: TaskDef[]): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600_000);
   const hour = kst.getUTCHours();

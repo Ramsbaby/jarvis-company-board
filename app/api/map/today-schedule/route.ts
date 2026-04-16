@@ -1,21 +1,11 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
-
 /**
  * 오늘 남은 예정 크론 목록 (현재 시각 이후 가장 가까운 5개)
  * 출력: tasks.json의 schedule 필드 파싱 → 다음 실행 계산 → 우측 패널 카드
  */
 
-import { TASKS_JSON as TASKS_FILE } from '@/lib/jarvis-paths';
-
-interface TaskDef {
-  id: string;
-  name?: string;
-  schedule?: string;
-  enabled?: boolean;
-  priority?: string;
-}
+import { type TaskDef, getTasksFile } from '@/lib/task-types';
 
 interface UpcomingItem {
   id: string;
@@ -111,9 +101,7 @@ export async function GET() {
   }
 
   try {
-    const raw = readFileSync(TASKS_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as { tasks?: TaskDef[] };
-    const tasks = parsed.tasks || [];
+    const tasks = getTasksFile().tasks;
 
     const KST_OFFSET_MS = 9 * 3600_000;
     const items: UpcomingItem[] = [];

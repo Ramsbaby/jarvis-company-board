@@ -5,19 +5,11 @@ import { exec, spawn } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
 import { TASKS_JSON as TASKS_FILE, CRON_LOG, JARVIS_HOME as JARVIS, JARVIS_BIN } from '@/lib/jarvis-paths';
+import { type TaskDef, getTasksFile } from '@/lib/task-types';
 import { getRequestAuth } from '@/lib/guest-guard';
 
 const HOME = homedir();
 
-interface TaskDef {
-  id: string;
-  name?: string;
-  script?: string;
-  prompt?: string;
-  prompt_file?: string;
-  enabled?: boolean;
-  discordChannel?: string;
-}
 
 interface AltAction {
   label: string;
@@ -43,13 +35,7 @@ interface RetryResponse {
 const lastRetry = new Map<string, number>();
 
 function loadTasks(): TaskDef[] {
-  try {
-    const raw = readFileSync(TASKS_FILE, 'utf-8');
-    const parsed = JSON.parse(raw) as { tasks?: TaskDef[] } | TaskDef[];
-    return Array.isArray(parsed) ? parsed : parsed.tasks ?? [];
-  } catch {
-    return [];
-  }
+  return getTasksFile().tasks;
 }
 
 function tailCronLogForTask(taskId: string, lines = 40): string {

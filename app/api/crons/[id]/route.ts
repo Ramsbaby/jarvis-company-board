@@ -3,22 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { TASKS_JSON } from '@/lib/jarvis-paths';
 import { getRequestAuth } from '@/lib/guest-guard';
-
-interface TaskDef {
-  id: string;
-  name?: string;
-  enabled?: boolean;
-  disabled?: boolean;
-  schedule?: string;
-  script?: string;
-  prompt?: string;
-  [key: string]: unknown;
-}
-
-interface TasksFile {
-  tasks: TaskDef[];
-  [key: string]: unknown;
-}
+import { type TaskDef, type TasksFile, getTask } from '@/lib/task-types';
 
 /**
  * PATCH /api/crons/[id] — 크론 태스크 설정 변경
@@ -130,18 +115,7 @@ export async function GET(
 ) {
   const { id: cronId } = await params;
 
-  if (!existsSync(TASKS_JSON)) {
-    return NextResponse.json({ error: 'tasks.json을 찾을 수 없습니다.' }, { status: 500 });
-  }
-
-  let tasksFile: TasksFile;
-  try {
-    tasksFile = JSON.parse(readFileSync(TASKS_JSON, 'utf-8'));
-  } catch {
-    return NextResponse.json({ error: 'tasks.json 파싱 실패' }, { status: 500 });
-  }
-
-  const task = tasksFile.tasks.find((t) => t.id === cronId);
+  const task = getTask(cronId);
   if (!task) {
     return NextResponse.json({ error: `크론 '${cronId}'를 찾을 수 없습니다.` }, { status: 404 });
   }
