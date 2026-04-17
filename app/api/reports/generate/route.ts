@@ -1,11 +1,14 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { homedir } from 'os';
 import { getDb } from '@/lib/db';
 import { randomUUID } from 'crypto';
 import type { DevTask, Post } from '@/lib/types';
 import { GROQ_LLAMA_70B, getTodayCost, getMonthCost } from '@/lib/chat-cost';
-import { CRON_LOG } from '@/lib/jarvis-paths';
+import { CRON_LOG, LOGS_DIR } from '@/lib/jarvis-paths';
 import { parseCronLogLine } from '@/lib/map/cron-log-parser';
 import { getRequestAuth } from '@/lib/guest-guard';
 
@@ -117,6 +120,15 @@ export async function POST(req: NextRequest) {
   // 8. Claude/LLM 비용 누적
   const costStats = await gatherCostStats();
 
+  // 9. GitHub 커밋 (jarvis + jarvis-board)
+  const gitCommits = gatherGithubCommits(dateStart, dateEnd);
+
+  // 10. RAG 인덱싱
+  const ragStats = gatherRagStats(dateStart, dateEnd);
+
+  // 11. Discord 봇 활동
+  const discordStats = gatherDiscordStats(dateStart, dateEnd);
+
   // ── 프롬프트 구성 ──────────────────────────────────────────────
 
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
@@ -158,6 +170,22 @@ export async function POST(req: NextRequest) {
     ? `[LLM 비용 — 오늘 $${costStats.today.toFixed(2)} · 이번 달 누적 $${costStats.month.toFixed(2)}]`
     : '[비용 통계 수집 실패]';
 
+  const gitCommitsBlock = gitCommits !== null
+    ? `[GitHub 커밋 — ${gitCommits.length}건 (jarvis + jarvis-board)]\n${
+        gitCommits.length > 0
+          ? gitCommits.slice(0, 10).map(c => `- [${c.repo}] ${c.sha} — ${c.subject}`).join('\n')
+          : '기간 내 커밋 없음'
+      }`
+    : '[GitHub 통계 수집 실패]';
+
+  const ragStatsBlock = ragStats
+    ? `[RAG 인덱싱 — 신규/수정 ${ragStats.indexed}개 청크 · 정리 ${ragStats.pruned}개 · 전체 ${ragStats.totalChunks.toLocaleString()}개]`
+    : '[RAG 통계 수집 실패]';
+
+  const discordStatsBlock = discordStats
+    ? `[Discord 봇 — 이벤트 ${discordStats.events.toLocaleString()}건 · 에러/경고 ${discordStats.errors}건]`
+    : '[Discord 통계 수집 실패]';
+
   const prompt = `당신은 Jarvis — 이정우 대표의 AI 집사입니다.
 아래 ${typeLabel} 운영 데이터를 바탕으로 대표님께 드릴 ${typeLabel}보고서를 작성하세요.
 
@@ -197,6 +225,12 @@ ${cronStatsBlock}
 
 ${costStatsBlock}
 
+${gitCommitsBlock}
+
+${ragStatsBlock}
+
+${discordStatsBlock}
+
 === 보고서 형식 (정확히 따를 것) ===
 
 ## ✅ 완료 작업 (${completedTasks.length}건)
@@ -209,10 +243,14 @@ ${costStatsBlock}
 [현재 진행 중인 작업 목록. 없으면 "진행 중인 작업 없음"]
 
 ## 🤖 자비스 운영 지표
-[크론 실행 수치 한 줄(성공/실패/스킵) + 실패 크론이 있으면 심각도를 1~2문장으로 설명 + LLM 비용 한 줄. 수집 실패 섹션은 "통계 수집 실패"로 그대로 표기]
+[아래 4줄을 순서대로, 각 한 줄. 데이터 없으면 "없음" 또는 "수집 실패"]
+- 크론: 성공/실패/스킵 수 + 실패 크론 1~2건 요약
+- LLM 비용: 오늘 + 이번 달 누적
+- GitHub: 기간 내 커밋 수 + 대표 커밋 1~2건 subject
+- RAG·Discord: RAG 신규 청크 수 + Discord 에러 수
 
 ## 📋 ${typeLabel} 요약
-[전체를 3~4문장으로. 수치(완료·실패·크론 성공률·비용) 포함. "오늘 자비스는 ..." 형식으로 시작]`;
+[전체를 3~4문장으로. 완료·실패·크론·커밋·비용 핵심 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
 
   // ── AI 호출 (Groq LLaMA-3.3-70b) ─────────────────────────────
 
@@ -276,6 +314,15 @@ ${costStatsBlock}
       costStats
         ? `- LLM 비용: 오늘 $${costStats.today.toFixed(2)} · 이번 달 $${costStats.month.toFixed(2)}`
         : '- 비용 통계 수집 실패',
+      gitCommits !== null
+        ? `- GitHub 커밋: ${gitCommits.length}건`
+        : '- GitHub 통계 수집 실패',
+      ragStats
+        ? `- RAG: 신규/수정 ${ragStats.indexed}개 · 전체 ${ragStats.totalChunks.toLocaleString()}개`
+        : '- RAG 통계 수집 실패',
+      discordStats
+        ? `- Discord: 이벤트 ${discordStats.events.toLocaleString()}건 · 에러 ${discordStats.errors}건`
+        : '- Discord 통계 수집 실패',
       '',
       '## 📋 요약',
       'AI 생성에 실패하여 원본 데이터만 표시합니다.',
@@ -389,6 +436,83 @@ async function gatherCostStats(): Promise<{ today: number; month: number } | nul
   try {
     const [today, month] = await Promise.all([getTodayCost(), getMonthCost()]);
     return { today, month };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GitHub 커밋 — jarvis + jarvis-board 레포에서 기간 내 커밋 수집.
+ */
+function gatherGithubCommits(dateStart: string, dateEnd: string): Array<{ repo: string; sha: string; subject: string; author: string }> | null {
+  try {
+    const repos = ['jarvis-board', 'jarvis'];
+    const commits: Array<{ repo: string; sha: string; subject: string; author: string }> = [];
+    for (const repo of repos) {
+      try {
+        const out = execSync(
+          `git -C "${path.join(homedir(), repo)}" log --since="${dateStart} 00:00:00" --until="${dateEnd} 23:59:59" --format='%h|%s|%an' -30`,
+          { timeout: 3000, encoding: 'utf8' },
+        ).trim();
+        if (!out) continue;
+        for (const line of out.split('\n')) {
+          const [sha, subject, author] = line.split('|');
+          if (sha) commits.push({ repo, sha, subject, author });
+        }
+      } catch { /* per-repo fail silently */ }
+    }
+    return commits;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * RAG 인덱싱 — rag-index.log에서 기간 내 신규/수정 청크 합산.
+ */
+function gatherRagStats(dateStart: string, dateEnd: string): { indexed: number; pruned: number; totalChunks: number } | null {
+  try {
+    const raw = fs.readFileSync(path.join(LOGS_DIR, 'rag-index.log'), 'utf8');
+    const lines = raw.split('\n').slice(-5000);
+    let indexed = 0;
+    let pruned = 0;
+    let totalChunks = 0;
+    const RAG_LINE_RE = /^\[([^\]]+)\] RAG index: (\d+) new\/modified,\s+\d+ unchanged,\s+(\d+) pruned,.*?(\d+) total chunks/;
+    for (const line of lines) {
+      const m = line.match(RAG_LINE_RE);
+      if (!m) continue;
+      const date = m[1].slice(0, 10);
+      if (date < dateStart || date > dateEnd) continue;
+      indexed += parseInt(m[2], 10);
+      pruned += parseInt(m[3], 10);
+      totalChunks = parseInt(m[4], 10);
+    }
+    return { indexed, pruned, totalChunks };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Discord 봇 — discord-bot.jsonl에서 기간 내 활동(전체 엔트리) + 에러/경고 수.
+ */
+function gatherDiscordStats(dateStart: string, dateEnd: string): { events: number; errors: number } | null {
+  try {
+    const raw = fs.readFileSync(path.join(LOGS_DIR, 'discord-bot.jsonl'), 'utf8');
+    const lines = raw.split('\n').slice(-10000);
+    let events = 0;
+    let errors = 0;
+    for (const line of lines) {
+      if (!line) continue;
+      try {
+        const entry = JSON.parse(line);
+        const date = (entry.ts || '').slice(0, 10);
+        if (date < dateStart || date > dateEnd) continue;
+        events++;
+        if (entry.level === 'error' || entry.level === 'warn') errors++;
+      } catch { /* skip bad line */ }
+    }
+    return { events, errors };
   } catch {
     return null;
   }
