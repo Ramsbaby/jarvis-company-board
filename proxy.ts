@@ -200,8 +200,10 @@ export async function proxy(req: NextRequest) {
   const effectiveGuestToken = guestToken ?? 'public';
   const guestCookie = req.cookies.get(GUEST_COOKIE)?.value;
   if (guestCookie && guestCookie === effectiveGuestToken) {
-    // Block guests from /dev-tasks — internal operational data
-    if (pathname.startsWith('/dev-tasks')) {
+    // Owner-only surfaces: block for guests (redirect to login)
+    // /company (자비스맵) = CEO's Bridge, /dev-tasks = 내부 운영 데이터
+    const ownerOnlyPaths = ['/dev-tasks', '/company'];
+    if (ownerOnlyPaths.some(p => pathname === p || pathname.startsWith(p + '/'))) {
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = '/login';
       loginUrl.searchParams.set('next', pathname);

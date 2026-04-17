@@ -716,28 +716,15 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
             </button>
 
             <button
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  const result = await apiFetch<{ sessionId: string }>('/api/interview/live-coding', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                  });
-                  if (!result.ok) throw new Error(result.message);
-                  router.push(`/interview/live-coding/${result.data.sessionId}`);
-                } catch {
-                  setError('라이브코딩 세션 생성 실패. 다시 시도해 주세요.');
-                  setLoading(false);
-                }
-              }}
-              disabled={loading}
-              className="flex flex-col gap-3 px-4 py-4 rounded-2xl border-2 border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 disabled:opacity-50 transition-all text-left"
+              type="button"
+              disabled
+              title="라이브코딩 API 구현 대기 중"
+              className="flex flex-col gap-3 px-4 py-4 rounded-2xl border-2 border-indigo-100 bg-white/60 opacity-60 cursor-not-allowed text-left"
             >
               <span className="text-xl">💻</span>
               <div>
                 <p className="text-sm font-black text-zinc-800">라이브코딩 드릴</p>
-                <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">30분 · Java · 랜덤 문제</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">30분 · Java · 준비중 🔜</p>
               </div>
             </button>
           </div>
