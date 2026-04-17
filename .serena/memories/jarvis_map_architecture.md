@@ -18,7 +18,6 @@
 | `openBriefing` | 220 | 방 클릭 → 브리핑 API 호출 → 팝업 열기 |
 | `loadStatuses` | 160 | /api/agent-live + /api/crons → NPC 상태 갱신 |
 | `closePopup` | 113 | 팝업 닫기 |
-| `handleTableRowClick` | 105 | 대시보드 테이블 행 클릭 → 브리핑 |
 
 ## components/map/*.tsx — 컴포넌트 맵
 
@@ -28,7 +27,6 @@
 | `CronDetailPopup` | 774 | 크론 상세 (ActionBar + RetryResultCard) | cron, onClose |
 | `MetricDetailModal` | 387 | 디스크/메모리/CPU 드릴다운 | metric, briefingSummary |
 | `CronGridPopup` | 344 | 크론센터 전체 그리드 | cronData, onSelect |
-| `DashboardTable` | 343 | 좌측 방 목록 테이블 | rooms, npcStates, onClick |
 | `RightInfoPanels` | 294 | 우상단 오늘예정/최근커밋 | onClick |
 | `CronToastStack` | 177 | 실시간 크론 이벤트 토스트 | events |
 | `BoardBanner` | 163 | 상단 보드 배너 | title |

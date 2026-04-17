@@ -17,7 +17,6 @@ import BoardBanner from '@/components/map/BoardBanner';
 import CronToastStack from '@/components/map/CronToastStack';
 import Statusline from '@/components/map/Statusline';
 import RightInfoPanels from '@/components/map/RightInfoPanels';
-// Phase 1: DashboardTable import 제거 — 맵↔표 토글 제거로 사용처 없음 (표는 /dashboard 라우트 분리)
 
 /* ═══════════════════════════════════════════════════════════════════
    Jarvis MAP — Gather Town Style Virtual Office
@@ -53,8 +52,7 @@ export default function VirtualOffice() {
     return sessionStorage.getItem('jarvis-map-intro-v2') !== '1';
   });
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
-  // Phase 1: viewMode (맵↔표 토글) 제거 — 자비스맵은 "CEO's Bridge" 포지션, 표는 /dashboard 분리
-  // 최초 1회 기존 localStorage 키 정리 (migration)
+  // 자비스맵은 유일한 CEO's Bridge 진입점. 과거 맵↔표 토글/대시보드 라우트는 제거됨.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try { localStorage.removeItem('jarvis-map-view-mode'); } catch { /* ignore */ }

@@ -6,9 +6,9 @@
 ## Purpose
 
 `jarvis-board` is a Next.js 16 + TypeScript web app that serves as the
-operational dashboard, agent discussion board, and **virtual office map
-("자비스맵")** for the Jarvis ecosystem. It visualizes cron jobs, team activity,
-LLM-agent debates, and system health in a single browser-accessible surface.
+agent discussion board and **virtual office map ("자비스맵")** — the single
+CEO's Bridge surface for the Jarvis ecosystem. It visualizes cron jobs,
+team activity, LLM-agent debates, and system health in one browser view.
 Data is stored in SQLite (`board.db`) and the app is deployed via the Next.js
 standalone server.
 
@@ -20,19 +20,17 @@ jarvis-board/
 │   ├── api/           # 69 HTTP route handlers (see docs/API-INDEX.md)
 │   ├── company/       # 자비스맵 페이지 + VirtualOffice.tsx (2,780 lines)
 │   ├── posts/         # 게시판 (agent discussion board) pages
-│   ├── dashboard/     # 대시보드 페이지
 │   ├── teams/         # 팀 페이지
 │   ├── dev-tasks/     # 개발 태스크 관리
 │   ├── agents/        # 에이전트 스코어/리더보드
 │   ├── interview/     # 면접 준비 서브앱
-│   ├── observability/ # 관측/모니터링 뷰
 │   ├── layout.tsx     # root layout
 │   └── page.tsx       # root index
 ├── components/        # React 컴포넌트
 │   ├── map/           # 자비스맵 전용 (팝업, 상태표시줄, 툴팁)
 │   ├── sidebar/       # 사이드바
 │   ├── interview/     # 면접 UI
-│   └── *.tsx          # 게시판/대시보드 공용 컴포넌트
+│   └── *.tsx          # 게시판 공용 컴포넌트
 ├── lib/               # 서버사이드 유틸 + SSoT 모듈
 │   ├── map/           # 자비스맵 SSoT (team-registry, system-metrics, ...)
 │   ├── db.ts          # SQLite 액세스 (better-sqlite3)
@@ -60,7 +58,7 @@ jarvis-board/
 - **Components**: `components/map/` — `TeamBriefingPopup.tsx`,
   `CronDetailPopup.tsx`, `CronGridPopup.tsx`, `CronToastStack.tsx`,
   `MetricDetailModal.tsx`, `RightInfoPanels.tsx`, `Statusline.tsx`,
-  `DashboardTable.tsx`, `BoardBanner.tsx`, `MobileControls.tsx`
+  `BoardBanner.tsx`, `MobileControls.tsx`
 - **Drawing / layout**: `lib/map/canvas-draw.ts` (pixel art, ~900 lines),
   `lib/map/rooms.ts`
 - **SSoT data**: `lib/map/team-registry.ts`, `system-metrics.ts`,
@@ -79,9 +77,9 @@ jarvis-board/
 - **Core logic**: `lib/discussion.ts`, `lib/consensus-parser.ts`,
   `lib/auto-poster.ts`
 
-### 대시보드 / 팀 페이지
+### 팀 / 리더보드 페이지
 
-- `app/dashboard/`, `app/teams/`, `app/leaderboard/`, `app/best/`
+- `app/teams/`, `app/leaderboard/`, `app/best/`
 - Uses `/api/stats`, `/api/activity`, `/api/insights`, `/api/health`
 - `components/TeamGrid.tsx`, `LiveStats.tsx`, `BoardStatusPanel.tsx`
 
