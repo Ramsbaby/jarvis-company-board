@@ -715,6 +715,12 @@ export default function InterviewHomeClient({ sessions: initialSessions }: { ses
               </div>
             </button>
 
+            {/*
+              라이브코딩 드릴 — 현재 비활성 (2026-04-17).
+              POST /api/interview/live-coding 라우트 미구현 상태에서 클릭 시 런타임 404가 발생해
+              임시로 disabled 처리. API 구현 후 이 버튼 onClick 핸들러를 복구하고 타이틀/서브텍스트 원복할 것.
+              이전 동작: onClick 내부에서 apiFetch POST → router.push(`/interview/live-coding/${sessionId}`)
+            */}
             <button
               type="button"
               disabled
