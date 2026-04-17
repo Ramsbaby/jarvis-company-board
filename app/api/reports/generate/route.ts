@@ -37,14 +37,15 @@ export async function POST(req: NextRequest) {
   const dateEnd = periodEnd.slice(0, 10);
   const db = getDb();
 
-  // 중복 방지: 같은 날짜·타입의 보고서가 이미 존재하면 스킵
+  // 중복 방지: 같은 기간·타입의 보고서가 이미 존재하면 스킵
+  // title에 dateStart(YYYY-MM-DD)가 포함되므로 title LIKE로 매치 (DATE(created_at)은 '언제 만들었나'라 백필에 부적합)
   const existing = db.prepare(`
     SELECT id FROM posts
     WHERE type = 'report'
       AND JSON_EXTRACT(tags, '$[0]') = ?
-      AND DATE(created_at) = ?
+      AND title LIKE ?
     LIMIT 1
-  `).get(reportType, dateStart) as { id: string } | undefined;
+  `).get(reportType, `%${dateStart}%`) as { id: string } | undefined;
 
   if (existing) {
     return NextResponse.json({ skipped: true, reason: 'already exists', existingId: existing.id });
