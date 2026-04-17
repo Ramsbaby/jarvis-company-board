@@ -1,18 +1,23 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
 import { getDb } from '@/lib/db';
 import { randomUUID } from 'crypto';
 import type { DevTask, Post } from '@/lib/types';
-import { GROQ_LLAMA_70B } from '@/lib/chat-cost';
+import { GROQ_LLAMA_70B, getTodayCost, getMonthCost } from '@/lib/chat-cost';
+import { CRON_LOG } from '@/lib/jarvis-paths';
+import { parseCronLogLine } from '@/lib/map/cron-log-parser';
+import { getRequestAuth } from '@/lib/guest-guard';
 
 // POST /api/reports/generate
-// Protected by REPORT_SECRET query param
-// Called by Mac Mini cron at 23:50 daily / weekly / monthly
+// Auth: REPORT_SECRET query param (Mac Mini cron) OR owner session (UI 수동 트리거)
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
   const envSecret = process.env.REPORT_SECRET ?? '';
-  if (!secret || secret !== envSecret) {
-    console.error('[report] auth fail — provided:', secret?.slice(0, 8), 'env:', envSecret.slice(0, 8), 'env_len:', envSecret.length);
+  const secretOk = !!(secret && envSecret && secret === envSecret);
+  const { isOwner } = getRequestAuth(req);
+  if (!secretOk && !isOwner) {
+    console.error('[report] auth fail — secret match:', secretOk, '· isOwner:', isOwner);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -105,6 +110,12 @@ export async function POST(req: NextRequest) {
     LIMIT 10
   `).all(dateStart, dateEnd) as Pick<Post, 'id' | 'title' | 'type' | 'resolved_at'>[];
 
+  // 7. 크론 실행 통계 (cron.log 파싱)
+  const cronStats = gatherCronStats(dateStart, dateEnd);
+
+  // 8. Claude/LLM 비용 누적
+  const costStats = await gatherCostStats();
+
   // ── 프롬프트 구성 ──────────────────────────────────────────────
 
   const typeLabel = { daily: '일일', weekly: '주간', monthly: '월간' }[reportType];
@@ -133,6 +144,18 @@ export async function POST(req: NextRequest) {
   const resolvedList   = resolvedPosts.length > 0
     ? resolvedPosts.map(p => `- ${p.title}`).join('\n')
     : '없음';
+
+  const cronStatsBlock = cronStats
+    ? `[크론 실행 — 성공 ${cronStats.success}건 · 실패 ${cronStats.failed}건 · 스킵 ${cronStats.skipped}건]\n${
+        cronStats.failedTasks.length > 0
+          ? cronStats.failedTasks.map(t => `- ${t.task} (${t.time.slice(11)}) — ${t.message.slice(0, 120)}`).join('\n')
+          : '실패한 크론 없음'
+      }`
+    : '[크론 실행 통계 수집 실패]';
+
+  const costStatsBlock = costStats
+    ? `[LLM 비용 — 오늘 $${costStats.today.toFixed(2)} · 이번 달 누적 $${costStats.month.toFixed(2)}]`
+    : '[비용 통계 수집 실패]';
 
   const prompt = `당신은 Jarvis — 이정우 대표의 AI 집사입니다.
 아래 ${typeLabel} 운영 데이터를 바탕으로 대표님께 드릴 ${typeLabel}보고서를 작성하세요.
@@ -169,6 +192,10 @@ ${issuesList}
 [해결된 결정사항 — ${resolvedPosts.length}건]
 ${resolvedList}
 
+${cronStatsBlock}
+
+${costStatsBlock}
+
 === 보고서 형식 (정확히 따를 것) ===
 
 ## ✅ 완료 작업 (${completedTasks.length}건)
@@ -180,8 +207,11 @@ ${resolvedList}
 ## 🔄 진행 중 (${inProgressTasks.length}건)
 [현재 진행 중인 작업 목록. 없으면 "진행 중인 작업 없음"]
 
+## 🤖 자비스 운영 지표
+[크론 실행 수치 한 줄(성공/실패/스킵) + 실패 크론이 있으면 심각도를 1~2문장으로 설명 + LLM 비용 한 줄. 수집 실패 섹션은 "통계 수집 실패"로 그대로 표기]
+
 ## 📋 ${typeLabel} 요약
-[전체를 3~4문장으로. 수치 포함. "오늘 자비스는 ..." 형식으로 시작]`;
+[전체를 3~4문장으로. 수치(완료·실패·크론 성공률·비용) 포함. "오늘 자비스는 ..." 형식으로 시작]`;
 
   // ── AI 호출 (Groq LLaMA-3.3-70b) ─────────────────────────────
 
@@ -237,6 +267,14 @@ ${resolvedList}
       inProgressTasks.length > 0
         ? inProgressTasks.map(t => `- ${t.title}`).join('\n')
         : '진행 중인 작업 없음',
+      '',
+      '## 🤖 자비스 운영 지표',
+      cronStats
+        ? `- 크론: 성공 ${cronStats.success}건 · 실패 ${cronStats.failed}건 · 스킵 ${cronStats.skipped}건`
+        : '- 크론 통계 수집 실패',
+      costStats
+        ? `- LLM 비용: 오늘 $${costStats.today.toFixed(2)} · 이번 달 $${costStats.month.toFixed(2)}`
+        : '- 비용 통계 수집 실패',
       '',
       '## 📋 요약',
       'AI 생성에 실패하여 원본 데이터만 표시합니다.',
@@ -307,6 +345,52 @@ ${resolvedList}
     issueCount: issuesPosts.length,
     aiGenerated,
   });
+}
+
+/**
+ * cron.log에서 기간 내 실행 통계 집계.
+ * dateStart/dateEnd: 'YYYY-MM-DD' 형식 (KST).
+ */
+function gatherCronStats(dateStart: string, dateEnd: string): {
+  success: number;
+  failed: number;
+  skipped: number;
+  failedTasks: Array<{ task: string; time: string; message: string }>;
+} | null {
+  try {
+    const raw = fs.readFileSync(CRON_LOG, 'utf8');
+    const lines = raw.split('\n').slice(-10000);
+    let success = 0;
+    let failed = 0;
+    let skipped = 0;
+    const failedTasks: Array<{ task: string; time: string; message: string }> = [];
+    for (const line of lines) {
+      const entry = parseCronLogLine(line);
+      if (!entry) continue;
+      const date = entry.time.slice(0, 10);
+      if (date < dateStart || date > dateEnd) continue;
+      if (entry.result === 'SUCCESS') success++;
+      else if (entry.result === 'FAILED') {
+        failed++;
+        failedTasks.push({ task: entry.task, time: entry.time, message: entry.message });
+      } else if (entry.result === 'SKIPPED') skipped++;
+    }
+    return { success, failed, skipped, failedTasks: failedTasks.slice(-8) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Claude/LLM 비용 조회 (chat-cost 원장).
+ */
+async function gatherCostStats(): Promise<{ today: number; month: number } | null> {
+  try {
+    const [today, month] = await Promise.all([getTodayCost(), getMonthCost()]);
+    return { today, month };
+  } catch {
+    return null;
+  }
 }
 
 function formatPeriodLabel(type: 'daily' | 'weekly' | 'monthly', start: string, end: string): string {
