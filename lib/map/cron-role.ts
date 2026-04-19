@@ -45,7 +45,8 @@ export function inferCronRole(id: string): string {
     [/blog/,                            '기술 블로그 포스트 관리'],
     [/oss|openclaw/,                    '오픈소스(openclaw) 기여 모니터링'],
     [/brand/,                           '브랜드 성장 지표 추적'],
-    [/github.*star/,                    'GitHub 스타 트래킹'],
+    // NOTE: /github.*star/ 는 36행(`[/github.*star|star.*tracker/]`)에서 이미 먼저 매치되므로
+    //       여기 두지 않는다. 중복 등록은 dead branch가 되어 혼란만 유발했다.
     [/disk/,                            '디스크 사용량 모니터링 및 알림'],
     [/memory.*cleanup/,                 '메모리 캐시 정리 및 최적화'],
     [/log.*cleanup/,                    '로그 파일 정리 (오래된 로그 삭제)'],

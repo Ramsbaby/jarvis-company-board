@@ -59,12 +59,20 @@ export default function WikiBrowserPage() {
   }, []);
 
   const fetchPage = async (path: string) => {
+    setError(null);
     try {
       const res = await fetch(`/api/wiki/page?path=${encodeURIComponent(path)}`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        throw new Error(res.status === 403 ? '접근 권한 없음' : `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setSelectedPage(data.page);
-    } catch {}
+    } catch (err) {
+      // 빈 catch였던 자리 — 실패 시 사용자에게 피드백을 주고
+      // 기존 선택 상태는 유지하지 않는다 (잘못된 본문 잔상 방지).
+      setSelectedPage(null);
+      setError(`위키 페이지를 불러오지 못했습니다: ${(err as Error).message}`);
+    }
   };
 
   useEffect(() => { fetchPages(); }, [fetchPages]);
@@ -138,8 +146,23 @@ export default function WikiBrowserPage() {
         {/* 페이지 목록 */}
         <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
           {loading && <p style={{ textAlign: 'center', color: '#8b949e', padding: 16 }}>로딩 중...</p>}
-          {error && <p style={{ textAlign: 'center', color: '#f85149', padding: 16 }}>{error}</p>}
-          {!loading && pages.length === 0 && <p style={{ textAlign: 'center', color: '#8b949e', padding: 16 }}>페이지 없음</p>}
+          {error && !loading && (
+            <div style={{ textAlign: 'center', padding: 16 }}>
+              <p style={{ color: '#f85149', margin: '0 0 8px', fontSize: 13 }}>
+                위키를 불러오지 못했습니다
+              </p>
+              <p style={{ color: '#8b949e', margin: '0 0 12px', fontSize: 11 }}>{error}</p>
+              <button
+                type="button"
+                onClick={() => fetchPages(selectedDomain || undefined, searchQuery || undefined)}
+                style={{
+                  padding: '6px 12px', borderRadius: 6, border: '1px solid #30363d',
+                  background: '#21262d', color: '#c9d1d9', fontSize: 12, cursor: 'pointer',
+                }}
+              >재시도</button>
+            </div>
+          )}
+          {!loading && !error && pages.length === 0 && <p style={{ textAlign: 'center', color: '#8b949e', padding: 16 }}>페이지 없음</p>}
           {pages.map(p => (
             <div
               key={p.path}
