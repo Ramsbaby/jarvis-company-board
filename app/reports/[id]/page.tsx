@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db';
 import type { Post, Comment } from '@/lib/types';
 import { cookies } from 'next/headers';
-import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { makeToken, GUEST_COOKIE, isValidGuestToken, buildLoginRedirect } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import MarkdownContent from '@/components/MarkdownContent';
@@ -45,7 +45,7 @@ export default async function ReportDetailPage({
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   if (!isOwner) {
-    redirect('/login');
+    redirect(buildLoginRedirect(`/reports/${id}`));
   }
 
   const report = db.prepare(`SELECT * FROM posts WHERE id = ? AND type = 'report'`).get(id) as Post | undefined;

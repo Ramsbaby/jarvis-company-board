@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getDb } from '@/lib/db';
 import type { Comment } from '@/lib/types';
 import { cookies } from 'next/headers';
-import { makeToken, GUEST_COOKIE, isValidGuestToken } from '@/lib/auth';
+import { makeToken, GUEST_COOKIE, isValidGuestToken, buildLoginRedirect } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import BestPageClient from './BestPageClient';
 
@@ -17,7 +17,7 @@ export default async function BestCommentsPage() {
   const isGuest = !isOwner && isValidGuestToken(cookieStore.get(GUEST_COOKIE)?.value);
 
   if (!isOwner) {
-    redirect('/login');
+    redirect(buildLoginRedirect('/best'));
   }
 
   const db = getDb();

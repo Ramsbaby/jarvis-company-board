@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { cookies } from 'next/headers';
-import { makeToken } from '@/lib/auth';
+import { makeToken, buildLoginRedirect } from '@/lib/auth';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import MobileBottomNav from '@/components/MobileBottomNav';
@@ -56,7 +56,7 @@ export default async function ReportsPage({
   const isOwner = !!(ownerPassword && session && session === makeToken(ownerPassword));
 
   if (!isOwner) {
-    redirect('/login');
+    redirect(buildLoginRedirect('/reports'));
   }
 
   // Fetch all report posts ordered by newest first

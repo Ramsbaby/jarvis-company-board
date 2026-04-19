@@ -24,3 +24,19 @@ export function isValidGuestToken(cookieValue: string | undefined): boolean {
   }
   return diff === 0;
 }
+
+/**
+ * Build a login redirect URL with a safely-encoded `next` parameter so the user
+ * returns to the originally-requested path after authenticating.
+ *
+ * Only absolute, same-origin paths (starting with `/`) are allowed. Any other
+ * value falls back to `/login` without a `next` parameter to prevent
+ * open-redirect abuse.
+ */
+export function buildLoginRedirect(nextPath: string): string {
+  if (!nextPath || typeof nextPath !== 'string') return '/login';
+  // Reject protocol-relative URLs (e.g. "//evil.com") and anything that's not a
+  // local path. `nextPath` must start with a single "/" and not be "//...".
+  if (!nextPath.startsWith('/') || nextPath.startsWith('//')) return '/login';
+  return `/login?next=${encodeURIComponent(nextPath)}`;
+}

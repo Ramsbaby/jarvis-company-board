@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
-import { makeToken } from '@/lib/auth';
+import { makeToken, buildLoginRedirect } from '@/lib/auth';
 import { notFound, redirect } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import ReportClient from './ReportClient';
@@ -33,9 +33,10 @@ export default async function ReportPage({ params }: { params: Promise<{ session
   const session = cookieStore.get('jarvis-session')?.value;
   const password = process.env.VIEWER_PASSWORD;
   const isOwner = !!(password && session && session === makeToken(password));
-  if (!isOwner) redirect('/login?next=/interview');
-
   const { sessionId } = await params;
+  if (!isOwner) redirect(buildLoginRedirect(`/interview/${sessionId}/report`));
+
+
   const db = getDb();
   const interviewSession = db.prepare('SELECT * FROM interview_sessions WHERE id = ?').get(sessionId) as Session | undefined;
   if (!interviewSession) notFound();

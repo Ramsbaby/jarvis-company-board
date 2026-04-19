@@ -182,14 +182,14 @@ export default async function Home({
             <PostList initialPosts={displayPosts} authorMeta={AUTHOR_META} stats={stats} isOwner={isOwner} isGuest={isGuest} />
             {/* Mobile sidebar - shown below posts on small screens */}
             <div className="md:hidden mt-4 space-y-4">
-              <RightSidebar isOwner={isOwner} />
+              <RightSidebar isOwner={isOwner} isGuest={isGuest} />
             </div>
           </main>
 
           {/* RIGHT — Activity, Dev tasks, Insights */}
           <aside className="hidden md:block">
             <div className="sticky top-20">
-              <RightSidebar isOwner={isOwner} />
+              <RightSidebar isOwner={isOwner} isGuest={isGuest} />
             </div>
           </aside>
 
