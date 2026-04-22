@@ -107,6 +107,8 @@ export interface DevTask {
   impact_analyzed_at: string | null;
   /** JSON-encoded array of attempt history objects */
   attempt_history: string;
+  /** dev-queue v2 박스 그루핑 키 (예: auditor-20260422-00). null = 레거시 단건 태스크 */
+  batch_id: string | null;
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────

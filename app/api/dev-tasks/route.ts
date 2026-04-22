@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval', post_title = '' } = body;
+  const { id, title, detail = '', priority = 'medium', source = '', assignee = 'council', status = 'awaiting_approval', post_title = '', batch_id = null } = body;
   if (!id || !title) return NextResponse.json({ error: 'id and title required' }, { status: 400 });
 
   const validStatuses = ['awaiting_approval', 'approved', 'in-progress', 'done', 'rejected'];
@@ -50,9 +50,9 @@ export async function POST(req: NextRequest) {
 
   // INSERT OR IGNORE: duplicate id는 기존 태스크(진행 중 상태/로그 포함) 보존
   const info = db.prepare(
-    `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, post_title)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, title, detail, priority, source, assignee, insertStatus, post_title);
+    `INSERT OR IGNORE INTO dev_tasks (id, title, detail, priority, source, assignee, status, post_title, batch_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, title, detail, priority, source, assignee, insertStatus, post_title, batch_id);
 
   const task = db.prepare('SELECT * FROM dev_tasks WHERE id = ?').get(id);
   // 신규 삽입된 경우에만 SSE 브로드캐스트

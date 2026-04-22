@@ -173,6 +173,9 @@ export function getDb(): Database.Database {
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN attempt_history TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
     // source post title for display (avoid re-fetching the post)
     try { _db!.exec("ALTER TABLE dev_tasks ADD COLUMN post_title TEXT NOT NULL DEFAULT ''"); } catch { /* already exists */ }
+    // batch_id: dev-queue v2 박스 그루핑 키 (예: auditor-20260422-00, bot-cron-20260422)
+    try { _db!.exec('ALTER TABLE dev_tasks ADD COLUMN batch_id TEXT'); } catch { /* already exists */ }
+    try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_dev_tasks_batch ON dev_tasks(batch_id)'); } catch { /* already exists */ }
     // board-level settings (key-value store)
     _db!.exec(`
       CREATE TABLE IF NOT EXISTS board_settings (

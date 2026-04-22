@@ -189,8 +189,12 @@ function parseImpactAreas(raw?: string): string[] {
 /* ─── 그룹 타입 ─── */
 interface TaskGroup {
   key: string;
+  /** 'batch' = dev-queue 배치(batch_id), 'post' = 게시글 논의(post_title) */
+  kind: 'batch' | 'post';
   postTitle: string | null;
   postId: string | null;
+  batchId: string | null;
+  source: string | null;
   tasks: DevTask[];
 }
 
@@ -430,12 +434,38 @@ function TaskGroupCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] text-indigo-500 font-medium">🔗 논의</span>
-            <span className="text-[10px] text-zinc-300">·</span>
-            <span className="text-[10px] text-zinc-500 font-medium">{group.tasks.length}개 태스크</span>
+            {group.kind === 'batch' ? (
+              <>
+                <span className="text-[10px] text-indigo-500 font-medium">
+                  📦 {group.source ?? 'batch'}
+                </span>
+                {group.batchId && (
+                  <>
+                    <span className="text-[10px] text-zinc-300">·</span>
+                    <span className="text-[10px] text-zinc-400 font-mono truncate">
+                      {group.batchId}
+                    </span>
+                  </>
+                )}
+                <span className="text-[10px] text-zinc-300">·</span>
+                <span className="text-[10px] text-zinc-500 font-medium">
+                  {group.tasks.length}개 태스크
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] text-indigo-500 font-medium">🔗 논의</span>
+                <span className="text-[10px] text-zinc-300">·</span>
+                <span className="text-[10px] text-zinc-500 font-medium">
+                  {group.tasks.length}개 태스크
+                </span>
+              </>
+            )}
           </div>
           <h3 className="text-sm font-bold text-zinc-900 leading-snug truncate">
-            {group.postTitle}
+            {group.kind === 'batch'
+              ? (group.tasks[0]?.title ?? group.batchId ?? '배치 태스크')
+              : group.postTitle}
           </h3>
           <div className="mt-1.5">
             <GroupStatusSummary tasks={group.tasks} />
@@ -627,34 +657,57 @@ export default function DevTasksClient({ initialTasks }: { initialTasks: DevTask
 
   const filtered = grouped[tab] ?? tasks;
 
-  /* ─── post_title 기준 그루핑 ─── */
+  /* ─── batch_id 우선, post_title fallback 그루핑 ─── */
   const taskGroups = useMemo(() => {
     const groupMap = new Map<string, TaskGroup>();
     const singles: DevTask[] = [];
 
-    // 먼저 post_title별 태스크 수를 세어서 2개 이상인 것만 그루핑
+    // post_title 카운트 (batch_id 없는 태스크만 대상)
     const titleCounts = new Map<string, number>();
     for (const t of filtered) {
-      if (t.post_title) {
+      if (!t.batch_id && t.post_title) {
         titleCounts.set(t.post_title, (titleCounts.get(t.post_title) ?? 0) + 1);
       }
     }
 
     for (const t of filtered) {
-      if (t.post_title && (titleCounts.get(t.post_title) ?? 0) >= 2) {
-        const key = t.post_title;
+      // 1순위: batch_id — dev-queue v2 배치는 1개여도 박스로 표시
+      if (t.batch_id) {
+        const key = `batch:${t.batch_id}`;
         if (!groupMap.has(key)) {
           groupMap.set(key, {
             key,
-            postTitle: t.post_title,
-            postId: t.post_id ?? null,
+            kind: 'batch',
+            postTitle: null,
+            postId: null,
+            batchId: t.batch_id,
+            source: t.source ?? null,
             tasks: [],
           });
         }
         groupMap.get(key)!.tasks.push(t);
-      } else {
-        singles.push(t);
+        continue;
       }
+
+      // 2순위: post_title (2개 이상일 때만 그룹)
+      if (t.post_title && (titleCounts.get(t.post_title) ?? 0) >= 2) {
+        const key = `post:${t.post_title}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            key,
+            kind: 'post',
+            postTitle: t.post_title,
+            postId: t.post_id ?? null,
+            batchId: null,
+            source: null,
+            tasks: [],
+          });
+        }
+        groupMap.get(key)!.tasks.push(t);
+        continue;
+      }
+
+      singles.push(t);
     }
 
     return { groups: Array.from(groupMap.values()), singles };
